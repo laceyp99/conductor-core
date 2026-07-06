@@ -1,0 +1,680 @@
+{
+    "models": {
+        "OpenAI": {
+            "gpt-5.5": {
+                "extended_thinking": true,
+                "effort_options": ["none", "low", "medium", "high", "xhigh"],
+                "max_tokens": 128000,
+                "cost": {
+                    "input": 5.00,
+                    "cached input": 0.50,
+                    "output": 30.00
+                }
+            },
+            "gpt-5.4-nano": {
+                "extended_thinking": true,
+                "effort_options": ["none", "low", "medium", "high", "xhigh"],
+                "max_tokens": 128000,
+                "cost": {
+                    "input": 0.20,
+                    "cached input": 0.02,
+                    "output": 1.25
+                },
+                "rate_limits": {
+                    "TPM": 4000000,
+                    "RPM": 10000,
+                    "TPD": 200000000
+                }
+            },
+            "gpt-5.4-mini": {
+                "extended_thinking": true,
+                "effort_options": ["none", "low", "medium", "high", "xhigh"],
+                "max_tokens": 128000,
+                "cost": {
+                    "input": 0.75,
+                    "cached input": 0.075,
+                    "output": 4.50
+                },
+                "rate_limits": {
+                    "TPM": 4000000,
+                    "RPM": 10000,
+                    "TPD": 200000000
+                }
+            },
+            "gpt-5.4": {
+                "extended_thinking": true,
+                "effort_options": ["none", "low", "medium", "high", "xhigh"],
+                "max_tokens": 128000,
+                "cost": {
+                    "input": 2.50,
+                    "cached input": 0.25,
+                    "output": 15.00
+                },
+                "rate_limits": {
+                    "TPM": 4000000,
+                    "RPM": 10000,
+                    "TPD": 200000000
+                }
+            },
+            "gpt-5.2": {
+                "extended_thinking": true,
+                "effort_options": ["none", "low", "medium", "high", "xhigh"],
+                "max_tokens": 128000,
+                "cost": {
+                    "input": 1.75,
+                    "cached input": 0.175,
+                    "output": 14.00
+                },
+                "rate_limits": {
+                    "TPM": 4000000,
+                    "RPM": 10000,
+                    "TPD": 200000000
+                }
+            },
+            "gpt-5.1": {
+                "extended_thinking": true,
+                "effort_options": ["none", "low", "medium", "high"],
+                "max_tokens": 128000,
+                "cost": {
+                    "input": 1.25,
+                    "cached input": 0.125,
+                    "output": 10.00
+                },
+                "rate_limits": {
+                    "TPM": 4000000,
+                    "RPM": 10000,
+                    "TPD": 200000000
+                }
+            },
+            "gpt-5": {
+                "extended_thinking": true,
+                "effort_options": ["minimal", "low", "medium", "high"],
+                "max_tokens": 128000,
+                "cost": {
+                    "input": 1.25,
+                    "cached input": 0.125,
+                    "output": 10.00
+                },
+                "rate_limits": {
+                    "TPM": 2000000,
+                    "RPM": 10000,
+                    "TPD": 200000000
+                }
+            },
+            "gpt-5-mini": {
+                "extended_thinking": true,
+                "effort_options": ["minimal", "low", "medium", "high"],
+                "max_tokens": 128000,
+                "cost": {
+                    "input": 0.25,
+                    "cached input": 0.025,
+                    "output": 2.00
+                },
+                "rate_limits": {
+                    "TPM": 10000000,
+                    "RPM": 10000,
+                    "TPD": 1000000000
+                }
+            },
+            "gpt-5-nano": {
+                "extended_thinking": true,
+                "effort_options": ["minimal", "low", "medium", "high"],
+                "max_tokens": 128000,
+                "cost": {
+                    "input": 0.05,
+                    "cached input": 0.005,
+                    "output": 0.40
+                },
+                "rate_limits": {
+                    "TPM": 10000000,
+                    "RPM": 10000,
+                    "TPD": 1000000000
+                }
+            },
+            "o4-mini": {
+                "extended_thinking": true,
+                "effort_options": ["low", "medium", "high"],
+                "max_tokens": 100000,
+                "cost": {
+                    "input": 1.10,
+                    "cached input": 0.275,
+                    "output": 4.40
+                },
+                "rate_limits": {
+                    "TPM": 10000000,
+                    "RPM": 10000,
+                    "TPD": 1000000000
+                }
+            },
+            "o3": {
+                "extended_thinking": true,
+                "effort_options": ["low", "medium", "high"],
+                "max_tokens": 100000,
+                "cost": {
+                    "input": 2.00,
+                    "cached input": 0.50,
+                    "output": 8.00
+                },
+                "rate_limits": {
+                    "TPM": 20000000,
+                    "RPM": 10000,
+                    "TPD": 200000000
+                }
+            },
+            "o3-mini": {
+                "extended_thinking": true,
+                "effort_options": ["low", "medium", "high"],
+                "max_tokens": 100000,
+                "cost": {
+                    "input": 1.10,
+                    "cached input": 0.55,
+                    "output": 4.40
+                },
+                "rate_limits": {
+                    "TPM": 2000000,
+                    "RPM": 10000,
+                    "TPD": 200000000
+                }
+            },
+            "o1": {
+                "extended_thinking": true,
+                "effort_options": ["low", "medium", "high"],
+                "max_tokens": 100000,
+                "cost": {
+                    "input": 15.00,
+                    "cached input": 7.50,
+                    "output": 60.00
+                },
+                "rate_limits": {
+                    "TPM": 2000000,
+                    "RPM": 10000,
+                    "TPD": 200000000
+                }
+            },
+            "gpt-4.1": {
+                "extended_thinking": false,
+                "max_tokens": 32768,
+                "cost": {
+                    "input": 2.00,
+                    "cached input": 0.50,
+                    "output": 8.00
+                },
+                "rate_limits": {
+                    "TPM": 2000000,
+                    "RPM": 10000,
+                    "TPD": 200000000
+                }
+            },
+            "gpt-4.1-mini": {
+                "extended_thinking": false,
+                "max_tokens": 32768,
+                "cost": {
+                    "input": 0.40,
+                    "cached input": 0.10,
+                    "output": 1.60
+                },
+                "rate_limits": {
+                    "TPM": 10000000,
+                    "RPM": 10000,
+                    "TPD": 1000000000
+                }
+            },
+            "gpt-4.1-nano": {
+                "extended_thinking": false,
+                "max_tokens": 32768,
+                "cost": {
+                    "input": 0.10,
+                    "cached input": 0.025,
+                    "output": 0.40
+                },
+                "rate_limits": {
+                    "TPM": 100000000,
+                    "RPM": 10000,
+                    "TPD": 1000000000
+                }
+            },
+            "gpt-4o-2024-11-20": {
+                "extended_thinking": false,
+                "max_tokens": 16384,
+                "cost": {
+                    "input": 2.50,
+                    "cached input": 1.25,
+                    "output": 10.00
+                },
+                "rate_limits": {
+                    "TPM": 2000000,
+                    "RPM": 10000,
+                    "TPD": 200000000
+                }
+            },
+            "gpt-4o-2024-08-06": {
+                "extended_thinking": false,
+                "max_tokens": 16384,
+                "cost": {
+                    "input": 2.50,
+                    "cached input": 1.25,
+                    "output": 10.00
+                },
+                "rate_limits": {
+                    "TPM": 2000000,
+                    "RPM": 10000,
+                    "TPD": 200000000
+                }
+            },
+            "gpt-4o-mini": {
+                "extended_thinking": false,
+                "max_tokens": 16384,
+                "cost": {
+                    "input": 0.15,
+                    "cached input": 0.075,
+                    "output": 0.60
+                },
+                "rate_limits": {
+                    "TPM": 10000000,
+                    "RPM": 10000,
+                    "TPD": 1000000000
+                }
+            }
+        },
+        "Anthropic": {
+            "claude-fable-5":{
+                "extended_thinking": false,
+                "effort_options": ["low", "medium", "high", "xhigh", "max"],
+                "max_tokens": 128000,
+                "cost": {
+                    "input": 10.00,
+                    "5m cache input": 12.50,
+                    "1h cache input": 20.00,
+                    "cache hits/refreshes": 1.00,
+                    "output": 50.00
+                }
+            },
+            "claude-sonnet-5":{
+                "extended_thinking": false,
+                "effort_options": ["low", "medium", "high", "xhigh", "max"],
+                "max_tokens": 128000,
+                "cost": {
+                    "input": 3.00,
+                    "5m cache input": 3.75,
+                    "1h cache input": 6.00,
+                    "cache hits/refreshes": 0.30,
+                    "output": 15.00
+                }
+            },
+            "claude-opus-4-8":{
+                "extended_thinking": true,
+                "effort_options": ["low", "medium", "high", "xhigh", "max"],
+                "max_tokens": 128000,
+                "cost": {
+                    "input": 5.00,
+                    "5m cache input": 6.25,
+                    "1h cache input": 10.00,
+                    "cache hits/refreshes": 0.50,
+                    "output": 25.00
+                }
+            },
+            "claude-opus-4-7":{
+                "extended_thinking": true,
+                "effort_options": ["low", "medium", "high", "xhigh", "max"],
+                "max_tokens": 128000,
+                "cost": {
+                    "input": 5.00,
+                    "5m cache input": 6.25,
+                    "1h cache input": 10.00,
+                    "cache hits/refreshes": 0.50,
+                    "output": 25.00
+                },
+                "rate_limits": {
+                    "RPM": 50,
+                    "ITPM": 30000,
+                    "OTPM": 8000
+                }
+            },
+            "claude-sonnet-4-6":{
+                "extended_thinking": true,
+                "effort_options": ["low", "medium", "high"],
+                "max_tokens": 64000,
+                "cost": {
+                    "input": 3.00,
+                    "5m cache input": 6.25,
+                    "1h cache input": 10.00,
+                    "cache hits/refreshes": 0.50,
+                    "output": 15.00
+                },
+                "rate_limits": {
+                    "RPM": 50,
+                    "ITPM": 30000,
+                    "OTPM": 8000
+                }
+            },
+            "claude-opus-4-6":{
+                "extended_thinking": true,
+                "effort_options": ["low", "medium", "high", "max"],
+                "max_tokens": 128000,
+                "cost": {
+                    "input": 5.00,
+                    "5m cache input": 6.25,
+                    "1h cache input": 10.00,
+                    "cache hits/refreshes": 0.50,
+                    "output": 25.00
+                },
+                "rate_limits": {
+                    "RPM": 50,
+                    "ITPM": 30000,
+                    "OTPM": 8000
+                }
+            },
+            "claude-opus-4-5":{
+                "extended_thinking": true,
+                "max_tokens": 64000,
+                "max_thinking_budget": 59000,
+                "cost": {
+                    "input": 5.00,
+                    "5m cache input": 6.25,
+                    "1h cache input": 10.00,
+                    "cache hits/refreshes": 0.50,
+                    "output": 25.00
+                },
+                "rate_limits": {
+                    "RPM": 50,
+                    "ITPM": 30000,
+                    "OTPM": 8000
+                }
+            },
+            "claude-haiku-4-5":{
+                "extended_thinking": true,
+                "max_tokens": 64000,
+                "max_thinking_budget": 59000,
+                "cost": {
+                    "input": 1.00,
+                    "5m cache input": 1.25,
+                    "1h cache input": 2.00,
+                    "cache hits/refreshes": 0.10,
+                    "output": 5.00
+                },
+                "rate_limits": {
+                    "RPM": 50,
+                    "ITPM": 30000,
+                    "OTPM": 8000
+                }
+            },
+            "claude-sonnet-4-5":{
+                "extended_thinking": true,
+                "max_tokens": 64000,
+                "max_thinking_budget": 59000,
+                "cost": {
+                    "input": 3.00,
+                    "output": 15.00,
+                    "5m cache input": 3.75,
+                    "1h cache input": 6.00,
+                    "cache hits/refreshes": 0.30
+                },
+                "rate_limits": {
+                    "RPM": 50,
+                    "ITPM": 30000,
+                    "OTPM": 8000
+                }
+            },
+            "claude-opus-4-1-20250805": {
+                "extended_thinking": true,
+                "max_tokens": 32000,
+                "max_thinking_budget": 27000,
+                "cost": {
+                    "input": 15.00,
+                    "5m cache input": 18.75,
+                    "1h cache input": 30.00,
+                    "cache hits/refreshes": 1.50,
+                    "output": 75.00
+                },
+                "rate_limits": {
+                    "RPM": 50,
+                    "ITPM": 30000,
+                    "OTPM": 8000
+                }
+            },
+            "claude-opus-4-0": {
+                "extended_thinking": true,
+                "max_tokens": 32000,
+                "max_thinking_budget": 27000,
+                "cost": {
+                    "input": 15.00,
+                    "5m cache input": 18.75,
+                    "1h cache input": 30.00,
+                    "cache hits/refreshes": 1.50,
+                    "output": 75.00
+                },
+                "rate_limits": {
+                    "RPM": 50,
+                    "ITPM": 30000,
+                    "OTPM": 8000
+                }
+            },
+            "claude-sonnet-4-0": {
+                "extended_thinking": true,
+                "max_tokens": 64000,
+                "max_thinking_budget": 59000,
+                "cost": {
+                    "input": 3.00,
+                    "5m cache input": 3.75,
+                    "1h cache input": 6.00,
+                    "cache hits/refreshes": 0.30,
+                    "output": 15.00
+                },
+                "rate_limits": {
+                    "RPM": 50,
+                    "ITPM": 30000,
+                    "OTPM": 8000
+                }
+            },
+            "claude-3-5-haiku-latest": {
+                "extended_thinking": false,
+                "max_tokens": 8192,
+                "cost": {
+                    "input": 0.80,
+                    "5m cache input": 1.00,
+                    "1h cache input": 1.60,
+                    "cache hits/refreshes": 0.08,
+                    "output": 4.00
+                },
+                "rate_limits": {
+                    "RPM": 50,
+                    "ITPM": 50000,
+                    "OTPM": 10000
+                }
+            },
+            "claude-3-haiku-20240307": {
+                "extended_thinking": false,
+                "max_tokens": 4096,
+                "cost": {
+                    "input": 0.25,
+                    "5m cache input": 0.30,
+                    "1h cache input": 0.50,
+                    "cache hits/refreshes": 0.03,
+                    "output": 1.25
+                },
+                "rate_limits": {
+                    "RPM": 50,
+                    "ITPM": 50000,
+                    "OTPM": 10000
+                }
+            }
+        },
+        "Google": {
+            "gemini-3.5-flash": {
+                "extended_thinking": true,
+                "effort_options": ["minimal", "low", "medium", "high"],
+                "max_tokens": 65536,
+                "cost": {
+                    "input": 1.50,
+                    "cache": {
+                        "text": 0.15,
+                        "storage hour": 1.00
+                    },
+                    "output": 9.00
+                },
+                "rate_limits": {
+                    "RPM": 5,
+                    "TPM": 250000,
+                    "RPD": 20
+                }
+            },
+            "gemini-3.1-flash-lite": {
+                "extended_thinking": true,
+                "effort_options": ["minimal", "low", "medium", "high"],
+                "max_tokens": 65536,
+                "cost": {
+                    "input": 0.25,
+                    "cache": {
+                        "text": 0.025,
+                        "storage hour": 1.00
+                    },
+                    "output": 1.50
+                },
+                "rate_limits": {
+                    "RPM": 15,
+                    "TPM": 250000,
+                    "RPD": 500
+                }
+            },
+            "gemini-3.1-pro-preview": {
+                "extended_thinking": true,
+                "effort_options": ["low", "medium", "high"],
+                "max_tokens": 65536,
+                "cost": {
+                    "input": {
+                        "<=200k": 2.00,
+                        ">200k": 4.00
+                    },
+                    "cache": {
+                        "<=200k": 0.20,
+                        ">200k": 0.40,
+                        "storage hour": 4.50
+                    },
+                    "output": {
+                        "<=200k": 12.00,
+                        ">200k": 18.00
+                    }
+                },
+                "rate_limits": {
+                    "RPM": 25,
+                    "TPM": 2000000,
+                    "RPD": 250
+                }
+            },
+            "gemini-3-flash-preview": {
+                "extended_thinking": true,
+                "effort_options": ["minimal", "low", "medium", "high"],
+                "max_tokens": 65536,
+                "cost": {
+                    "input": 0.50,
+                    "cache": {
+                        "text": 0.05,
+                        "storage hour": 1.00
+                    },
+                    "output": 3.00
+                },
+                "rate_limits": {
+                    "RPM": 5,
+                    "TPM": 250000,
+                    "RPD": 20
+                }
+            },
+            "gemini-2.5-pro": {
+                "extended_thinking": true,
+                "min_thinking_budget": 128,
+                "max_thinking_budget": 32768,
+                "max_tokens": 65536,
+                "cost": {
+                    "input": {
+                        "<=200k": 1.25,
+                        ">200k": 2.50
+                    },
+                    "cache": {
+                        "<=200k": 0.125,
+                        ">200k": 0.25,
+                        "storage hour": 4.50
+                    },
+                    "output": {
+                        "<=200k": 10.00,
+                        ">200k": 15.00
+                    }
+                },
+                "rate_limits": {
+                    "RPM": 150,
+                    "TPM": 2000000,
+                    "RPD": 1000
+                }
+            },
+            "gemini-2.5-flash": {
+                "extended_thinking": true,
+                "min_thinking_budget": 0,
+                "max_thinking_budget": -1,
+                "max_tokens": 65536,
+                "cost": {
+                    "input": 0.30,
+                    "cache": {
+                        "text": 0.03,
+                        "storage hour": 1.00
+                    },
+                    "output": 2.50
+                },
+                "rate_limits": {
+                    "RPM": 5,
+                    "TPM": 250000,
+                    "RPD": 20
+                }
+            },
+            "gemini-2.5-flash-lite": {
+                "extended_thinking": true,
+                "min_thinking_budget": 0,
+                "max_thinking_budget": -1,
+                "max_tokens": 65536,
+                "cost": {
+                    "input": 0.10,
+                    "cache": {
+                        "text": 0.01,
+                        "storage hour": 1.00
+                    },
+                    "output": 0.40
+                },
+                "rate_limits": {
+                    "RPM": 10,
+                    "TPM": 250000,
+                    "RPD": 20
+                }
+            },
+            "gemini-2.0-flash": {
+                "extended_thinking": false,
+                "min_thinking_budget": 0,
+                "max_thinking_budget": 0,
+                "max_tokens": 8192,
+                "cost": {
+                    "input": 0.10,
+                    "cache": {
+                        "text": 0.025,
+                        "storage hour": 1.00
+                    },
+                    "output": 0.40
+                },
+                "rate_limits": {
+                    "RPM": 2000,
+                    "TPM": 4000000
+                }
+            },
+            "gemini-2.0-flash-lite": {
+                "extended_thinking": false,
+                "min_thinking_budget": 0,
+                "max_thinking_budget": 0,
+                "max_tokens": 8192,
+                "cost": {
+                    "input": 0.075,
+                    "output": 0.30
+                },
+                "rate_limits": {
+                    "RPM": 4000,
+                    "TPM": 4000000
+                }
+            }
+        }
+    }
+}
