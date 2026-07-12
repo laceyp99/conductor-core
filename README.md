@@ -7,22 +7,23 @@ package.
 
 Core owns:
 
-- provider routing for OpenAI, Anthropic, Google, and Ollama;
-- validated four-bar loop models and provider response parsing;
-- prompt assembly and model capability metadata;
-- loop-to-MIDI and MIDI-to-loop conversion;
-- generation workspaces, messages, metadata, and history persistence;
-- optional SoundFont discovery and MIDI-to-audio rendering;
-- structured generation results and progress events.
+- provider routing for OpenAI, Anthropic, Google, and Ollama
+- validated four-bar loop models and provider response parsing
+- prompt assembly and model capability metadata
+- loop-to-MIDI and MIDI-to-loop conversion
+- generation workspaces, messages, metadata, and history persistence
+- optional SoundFont discovery and MIDI-to-audio rendering
+- structured generation results and progress events
 
 ## Installation
 
 From the `conductor-core` project directory on Windows:
 
-```powershell
+```
 py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\python.exe -m pip install -e .
+.\.venv\Scripts\activate
+pip install --upgrade pip
+pip install -e .
 ```
 
 The base install supports deterministic music models and MIDI operations. Add
@@ -38,15 +39,15 @@ only the capabilities your consumer needs:
 | `playback` | MIDI synthesis and MP3 helpers | Audio previews |
 | `dev` | Pytest | Core development |
 
-```powershell
+```
 # All providers
-.\.venv\Scripts\python.exe -m pip install -e ".[providers]"
+pip install -e ".[providers]"
 
 # One provider plus playback
-.\.venv\Scripts\python.exe -m pip install -e ".[google,playback]"
+pip install -e ".[google,playback]"
 
 # Complete local development install
-.\.venv\Scripts\python.exe -m pip install -e ".[providers,playback,dev]"
+pip install -e ".[providers,playback,dev]"
 ```
 
 Using the venv interpreter explicitly is intentional. `py -3.12 -m pip`
@@ -312,8 +313,8 @@ logging.getLogger("conductor_core").addHandler(my_handler)
 
 ## Validate Core independently
 
-```powershell
-.\.venv\Scripts\python.exe -m pytest -q
+```
+python -m pytest -q
 ```
 
 The tests are deterministic and do not make live provider calls or require the
