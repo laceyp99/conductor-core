@@ -328,11 +328,22 @@ def convert_sixteenth(sixteenth_g):
         sixteenth_g (SixteenthNote_G): A SixteenthNote_G enum value.
 
     Returns:
-        int: The integer corresponding to the sixteenth note (1-16).
+        int: The integer corresponding to the sixteenth position or duration.
     """
-    return objects.SIXTEENTH_NOTE_G_TO_INT[sixteenth_g.value.lower()]
+    return (
+        objects.SIXTEENTH_NOTE_G_TO_INT.get(sixteenth_g.value.lower())
+        or objects.DURATION_SIXTEENTH_G_TO_INT[sixteenth_g.value.lower()]
+    )
 
 
 def int_to_sixteenth_g(sixteenth):
     """Convert an integer sixteenth-note position into a SixteenthNote_G enum."""
     return objects.SixteenthNote_G.from_int(sixteenth)
+
+
+def int_to_duration_sixteenth_g(duration):
+    """Convert an integer duration into Gemini's duration enum."""
+    try:
+        return objects.DurationSixteenth_G(objects.DURATION_SIXTEENTH_INT_TO_G[duration])
+    except KeyError as exc:
+        raise ValueError(f"Invalid duration sixteenth value: {duration}") from exc
