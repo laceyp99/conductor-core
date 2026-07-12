@@ -125,6 +125,8 @@ def midi_to_loop(midi_filename, times_as_string=True):
 
     Returns:
         The constructed loop object (either Loop_G if times_as_string is True, or Loop otherwise).
+        Imported notes longer than one bar are clamped to 16 sixteenth notes because the
+        loop timing schema cannot represent longer single-note durations.
     """
     # Load the MIDI file and set some basic time parameters.
     midi = MidiFile(midi_filename)
@@ -166,6 +168,13 @@ def midi_to_loop(midi_filename, times_as_string=True):
         # Determine the sixteenth-note position (1-based indexing).
         start_sixteenth = (start_tick // ticks_per_16th) + 1
         duration_sixteenth = max(1, math.ceil((end_tick - start_tick) / ticks_per_16th))
+        if duration_sixteenth > 16:
+            logger.warning(
+                "[MIDI] Imported note duration clamped from %s to 16 sixteenth notes; "
+                "the sustained portion was discarded.",
+                duration_sixteenth,
+            )
+            duration_sixteenth = 16
 
         # Determine the bar (each bar has 16 sixteenth notes).
         bar_index = (start_sixteenth - 1) // 16

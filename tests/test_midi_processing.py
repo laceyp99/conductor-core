@@ -1,3 +1,4 @@
+import pytest
 from mido import Message, MetaMessage, MidiFile, MidiTrack
 
 from conductor_core.midi import loop_to_midi, midi_to_loop
@@ -154,3 +155,28 @@ def test_midi_to_loop_skips_notes_beyond_the_first_four_bars(tmp_path):
     assert loop.Bar_2.notes == []
     assert loop.Bar_3.notes == []
     assert loop.Bar_4.notes == []
+
+
+@pytest.mark.parametrize("times_as_string", [False, True])
+@pytest.mark.parametrize("duration_sixteenths", [17, 64])
+def test_midi_to_loop_clamps_long_note_durations(
+    tmp_path, caplog, times_as_string, duration_sixteenths
+):
+    midi = MidiFile(ticks_per_beat=480)
+    track = MidiTrack()
+    track.append(Message("note_on", note=60, velocity=96, time=0))
+    track.append(Message("note_off", note=60, velocity=96, time=duration_sixteenths * 120))
+    track.append(MetaMessage("end_of_track", time=0))
+    midi.tracks.append(track)
+
+    midi_path = tmp_path / f"long_{duration_sixteenths}.mid"
+    midi.save(midi_path)
+
+    loop = midi_to_loop(str(midi_path), times_as_string=times_as_string)
+
+    duration = loop.Bar_1.notes[0].time.duration
+    assert duration.value == "sixteen" if times_as_string else duration == 16
+    assert (
+        f"Imported note duration clamped from {duration_sixteenths} to 16 sixteenth notes"
+        in caplog.text
+    )
