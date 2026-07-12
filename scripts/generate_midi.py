@@ -15,13 +15,13 @@ from conductor_core import EngineConfig, GenerationRequest, LoopGenerationEngine
 
 # --- Edit these values before running the example. ---
 MODEL = "gpt-5.6-terra"
-KEY = "C"
-SCALE = "Major"
+KEY = "A"
+SCALE = "minor"
 DESCRIPTION = (
     "warm neo-soul electric piano chords with syncopated upper extensions "
     "and a simple bass movement"
 )
-TEMPERATURE = 0.3
+TEMPERATURE = 0.0
 USE_THINKING = True
 EFFORT = "medium"
 ARTIFACT_ROOT = Path("generations")
