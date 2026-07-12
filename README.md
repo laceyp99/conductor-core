@@ -79,6 +79,11 @@ print(result.cost)
 `generate()` is synchronous. It calls the selected provider, converts the
 validated loop to MIDI, and persists the resulting artifacts before returning.
 
+For a complete editable workflow—including prompt customization, progress
+events, persisted result fields, and optional audio rendering—see
+[`scripts/generate_midi.py`](scripts/generate_midi.py). Running that example
+makes a real provider call and may incur usage charges.
+
 ## Credentials and provider selection
 
 Credentials can be injected by the calling application:
@@ -109,27 +114,11 @@ OLLAMA_API_HOST_ADDRESS="http://localhost:11434"
 
 The `model` normally determines the provider from packaged model metadata. Set
 `provider` on `GenerationRequest` when a caller needs to record or override the
-provider label explicitly.
+provider label explicitly. To inspect available providers, models, and
+capabilities without contacting a provider, run
+[`scripts/inspect_models.py`](scripts/inspect_models.py).
 
 ## Generation request options
-
-```python
-from conductor_core import GenerationRequest
-
-request = GenerationRequest(
-    key="F#",
-    scale="minor",
-    description="dark sixteenth-note synth arpeggio",
-    model="gpt-5-mini",
-    provider="OpenAI",
-    temperature=0.2,
-    use_thinking=False,
-    effort="low",
-    prompt_override=None,
-    render_audio=False,
-    soundfont_path=None,
-)
-```
 
 | Field | Purpose |
 |---|---|
@@ -144,92 +133,38 @@ request = GenerationRequest(
 | `soundfont_path` | SoundFont name or path for this request |
 
 Model capabilities differ. Consumers can inspect
-`conductor_core.music.get_model_info()` to build compatible controls instead of
-assuming every model accepts temperature or the same reasoning settings.
+`conductor_core.music.get_model_info()` or run
+[`scripts/inspect_models.py`](scripts/inspect_models.py) instead of assuming
+every model accepts temperature or the same reasoning settings.
 
 ## Prompt customization
 
-Core ships with a default loop-generation prompt. Override it for every request
-made by an engine:
-
-```python
-config = EngineConfig.from_defaults(
-    prompt_override="Generate sparse four-bar loops using the required schema."
-)
-```
-
-Or override it for one request:
-
-```python
-request = GenerationRequest(
-    key="D",
-    scale="Major",
-    description="bright piano ostinato",
-    model="gemini-3.1-flash-lite",
-    prompt_override="Generate piano-only material using the required schema.",
-)
-```
-
-The request override takes precedence over the engine override, which takes
-precedence over the packaged prompt.
+Core ships with a default loop-generation prompt. Set `prompt_override` on
+`EngineConfig` for every request made by an engine or on `GenerationRequest`
+for one request. The request override takes precedence over the engine override,
+which takes precedence over the packaged prompt. The generation script contains
+a commented prompt override ready to edit.
 
 ## Progress reporting
 
-Use a callback to adapt synchronous Core work to logs, a progress bar, a queue,
-or an asynchronous UI wrapper:
-
-```python
-def report_progress(event):
-    print(f"[{event.stage}] {event.message}")
-
-result = engine.generate(request, progress_callback=report_progress)
-```
-
+Pass a callback to `generate(..., progress_callback=...)` to adapt synchronous
+Core work to logs, a progress bar, a queue, or an asynchronous UI wrapper.
 Current stages include provider generation, MIDI processing, and audio
 rendering. The callback reports progress but does not cancel an in-flight
-provider request.
+provider request. The generation script prints each event as it arrives.
 
 ## Audio rendering
 
-```python
-config = EngineConfig.from_defaults(
-    artifact_root="generations",
-    default_soundfont_path="FM-Piano1 20190916.sf2",
-)
-engine = LoopGenerationEngine(config)
-
-result = engine.generate(
-    GenerationRequest(
-        key="A",
-        scale="minor",
-        description="soft felt-piano progression",
-        model="gemini-3.1-flash-lite",
-        render_audio=True,
-    )
-)
-
-print(result.audio_path)
-print(result.warnings)
-```
-
+Set `render_audio=True` on a request to render an MP3 after MIDI generation.
 Install the `playback` extra and provide FluidSynth and FFmpeg on the system
-`PATH`. Audio failure does not discard a successful MIDI generation; Core
+`PATH`. Leaving `soundfont_path` unset uses Core's default packaged SoundFont;
+set it on the request or `default_soundfont_path` on `EngineConfig` to choose
+another. Audio failure does not discard a successful MIDI generation: Core
 returns the MIDI with a warning and `audio_path=None`.
 
-Useful lower-level playback helpers live in `conductor_core.playback`:
-
-```python
-from conductor_core.playback import (
-    get_default_soundfont,
-    is_playback_available,
-    list_soundfonts,
-    midi_to_mp3,
-)
-
-print(list_soundfonts())
-print(get_default_soundfont())
-print(is_playback_available())
-```
+Lower-level discovery and rendering helpers live in `conductor_core.playback`.
+The generation script enables audio with the default SoundFont and reports both
+the MIDI and audio result paths.
 
 ## Results and persisted artifacts
 
@@ -247,36 +182,19 @@ print(is_playback_available())
 | `warnings` | Non-fatal issues such as skipped audio |
 
 Each generation workspace contains `loop.mid`, `messages.json`,
-`metadata.json`, and optionally `loop.mp3`. Bind history operations to a custom
-root with `FilesystemArtifactStore`:
-
-```python
-from conductor_core.storage import FilesystemArtifactStore
-
-store = FilesystemArtifactStore("service-data/generations")
-engine = LoopGenerationEngine(config, store=store)
-
-recent = store.load_history()
-saved = store.get_generation(result.generation_id)
-```
-
-The store also supports deleting generations and updating saved audio metadata.
-By default, history retains the newest 20 generations.
+`metadata.json`, and optionally `loop.mp3`. Use `FilesystemArtifactStore` for
+custom history roots, loading saved generations, deleting generations, and
+updating saved audio metadata. By default, history retains the newest 20
+generations. The generation script shows the most commonly consumed result
+fields after a run.
 
 ## Direct MIDI and music utilities
 
-Consumers that already have loop data can use Core without a provider call:
-
-```python
-from mido import MidiFile
-from conductor_core.midi import loop_to_midi, midi_to_loop
-
-midi = MidiFile()
-loop_to_midi(midi, loop, times_as_string=False)
-midi.save("loop.mid")
-
-restored_loop = midi_to_loop("loop.mid", times_as_string=False)
-```
+Consumers can convert existing MIDI into Core's four-bar loop model and write it
+back without a provider call. See
+[`scripts/midi_loop_roundtrip.py`](scripts/midi_loop_roundtrip.py) for an
+offline example that normalizes note starts and durations to sixteenth-note
+integer positions.
 
 Additional packaged utilities and models are available from:
 
