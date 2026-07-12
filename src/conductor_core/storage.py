@@ -1,4 +1,4 @@
-"""Generation history management for LoopGPT.
+"""Generation history management for Conductor.
 
 This module provides functionality to save, load, and manage
 the history of MIDI loop generations. Each generation is stored
