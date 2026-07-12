@@ -112,10 +112,10 @@ ANTHROPIC_API_KEY="..."
 OLLAMA_API_HOST_ADDRESS="http://localhost:11434"
 ```
 
-The `model` normally determines the provider from packaged model metadata. Set
-`provider` on `GenerationRequest` when a caller needs to record or override the
-provider label explicitly. To inspect available providers, models, and
-capabilities without contacting a provider, run
+The provider is derived from the route actually used for `model`. The
+`GenerationRequest.provider` field is deprecated, ignored, and retained only
+for temporary compatibility with existing callers. To inspect available
+providers, models, and capabilities without contacting a provider, run
 [`scripts/inspect_models.py`](scripts/inspect_models.py).
 
 ## Generation request options
@@ -124,7 +124,7 @@ capabilities without contacting a provider, run
 |---|---|
 | `key`, `scale`, `description` | Musical request added to the model prompt |
 | `model` | Packaged model identifier used for routing and response handling |
-| `provider` | Optional explicit provider metadata override |
+| `provider` | Deprecated compatibility field; ignored |
 | `temperature` | Sampling temperature for models that support it |
 | `use_thinking` | Toggle-style reasoning control for supported models |
 | `effort` | Model-specific reasoning effort such as `minimal`, `low`, or `high` |

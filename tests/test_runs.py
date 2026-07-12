@@ -10,7 +10,7 @@ def test_generate_midi_routes_to_ollama_and_forwards_temperature(monkeypatch):
     monkeypatch.setattr(
         runs,
         "get_model_info",
-        lambda: {"models": {"OpenAI": {}, "Google": {}, "Anthropic": {}}},
+        lambda: {"models": {"OpenAI": {"llama3": {}}, "Google": {}, "Anthropic": {}}},
     )
     monkeypatch.setattr(
         runs.ollama_api,
@@ -38,9 +38,10 @@ def test_generate_midi_routes_to_ollama_and_forwards_temperature(monkeypatch):
         temp=0.7,
         provider_credentials=ProviderCredentials(ollama_host="http://ollama.test"),
         system_prompt="system",
+        _return_provider=True,
     )
 
-    assert result == ("loop", ["message"], 0)
+    assert result == ("loop", ["message"], 0, "Ollama")
     assert captured == {
         "prompt": "write a loop",
         "model": "llama3",

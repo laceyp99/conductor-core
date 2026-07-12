@@ -16,6 +16,7 @@ def generate_midi(
     effort="low",
     provider_credentials: ProviderCredentials | None = None,
     system_prompt: str | None = None,
+    _return_provider: bool = False,
 ):
     """Generate MIDI loop data by routing a prompt to the selected provider."""
     credentials = provider_credentials or ProviderCredentials()
@@ -28,6 +29,7 @@ def generate_midi(
     ollama_models = ollama_status["models"]
 
     if model_choice in ollama_models:
+        provider = "Ollama"
         loop, messages, loop_cost = ollama_api.loop_gen(
             prompt,
             model_choice,
@@ -36,6 +38,7 @@ def generate_midi(
             system_prompt=system_prompt,
         )
     elif model_choice in model_info["models"]["OpenAI"]:
+        provider = "OpenAI"
         loop, messages, loop_cost = openai_api.loop_gen(
             prompt=prompt,
             model=model_choice,
@@ -45,6 +48,7 @@ def generate_midi(
             system_prompt=system_prompt,
         )
     elif model_choice in model_info["models"]["Google"]:
+        provider = "Google"
         loop, messages, loop_cost = gemini_api.loop_gen(
             prompt=prompt,
             model=model_choice,
@@ -55,6 +59,7 @@ def generate_midi(
             system_prompt=system_prompt,
         )
     elif model_choice in model_info["models"]["Anthropic"]:
+        provider = "Anthropic"
         loop, messages, loop_cost = claude_api.loop_gen(
             prompt=prompt,
             model=model_choice,
@@ -71,4 +76,6 @@ def generate_midi(
             )
         raise ValueError("Invalid Model Selected")
 
+    if _return_provider:
+        return loop, messages, loop_cost, provider
     return loop, messages, loop_cost
