@@ -22,7 +22,7 @@ def test_engine_generates_persisted_artifacts_with_mocked_provider(
 
     def fake_generate_midi(**kwargs):
         captured.update(kwargs)
-        return sample_loop, [{"role": "user", "content": "prompt"}], 0.25
+        return sample_loop, [{"role": "user", "content": "prompt"}], 0.25, "OpenAI"
 
     def fake_midi_to_mp3(midi_path, output_path=None, soundfont_name=None):
         Path(output_path).write_bytes(b"audio")
@@ -71,6 +71,7 @@ def test_engine_generates_persisted_artifacts_with_mocked_provider(
     assert captured["prompt"] == "C Major warm rhodes loop."
     assert captured["provider_credentials"].openai_api_key == "openai-key"
     assert captured["system_prompt"] == "config prompt"
+    assert captured["_return_provider"] is True
     assert captured["audio"]["soundfont_name"] == "custom.sf2"
     assert [event.stage for event in progress_events] == [
         "provider_call",
@@ -86,7 +87,7 @@ def test_engine_cleans_unfinalized_workspace_when_processing_fails(
     monkeypatch.setattr(
         engine_module.routing,
         "generate_midi",
-        lambda **kwargs: (None, [], 0),
+        lambda **kwargs: (None, [], 0, "OpenAI"),
     )
 
     engine = LoopGenerationEngine(
@@ -105,3 +106,32 @@ def test_engine_cleans_unfinalized_workspace_when_processing_fails(
 
     generations_root = tmp_path / "generations"
     assert not generations_root.exists() or list(generations_root.iterdir()) == []
+
+
+def test_engine_ignores_deprecated_provider_and_records_actual_route(
+    monkeypatch,
+    tmp_path,
+    sample_loop,
+):
+    monkeypatch.setattr(
+        engine_module.routing,
+        "generate_midi",
+        lambda **kwargs: (sample_loop, [], 0, "OpenAI"),
+    )
+
+    engine = LoopGenerationEngine(
+        EngineConfig.from_defaults(artifact_root=tmp_path / "generations")
+    )
+
+    with pytest.warns(DeprecationWarning, match="provider is deprecated and ignored"):
+        request = GenerationRequest(
+            key="C",
+            scale="Major",
+            description="provider conflict",
+            model="gpt-4o-mini",
+            provider="Anthropic",
+        )
+
+    result = engine.generate(request)
+
+    assert result.metadata.provider == "OpenAI"

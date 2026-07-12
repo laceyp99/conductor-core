@@ -1,5 +1,6 @@
 """Public configuration and request/result contracts for Conductor Core."""
 
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -56,6 +57,15 @@ class GenerationRequest:
     prompt_override: str | None = None
     render_audio: bool = False
     soundfont_path: str | Path | None = None
+
+    def __post_init__(self) -> None:
+        if self.provider is not None:
+            warnings.warn(
+                "GenerationRequest.provider is deprecated and ignored; "
+                "the provider is derived from the route actually used.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
 
 
 @dataclass(frozen=True)
