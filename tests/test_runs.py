@@ -40,7 +40,7 @@ def test_generate_midi_routes_to_ollama_and_forwards_temperature(monkeypatch):
         system_prompt="system",
     )
 
-    assert result == ("loop", ["message"], 0)
+    assert result == ("loop", ["message"], 0, "Ollama")
     assert captured == {
         "prompt": "write a loop",
         "model": "llama3",
@@ -94,7 +94,7 @@ def test_generate_midi_routes_to_openai_and_forwards_effort(monkeypatch):
         system_prompt="system",
     )
 
-    assert result == ("loop", ["message"], 1.25)
+    assert result == ("loop", ["message"], 1.25, "OpenAI")
     assert captured == {
         "prompt": "write a loop",
         "model": "gpt-4o-mini",
@@ -159,7 +159,7 @@ def test_generate_midi_routes_to_gemini_and_forwards_reasoning_options(monkeypat
         system_prompt="system",
     )
 
-    assert result == ("loop", ["message"], 2.5)
+    assert result == ("loop", ["message"], 2.5, "Google")
     assert captured == {
         "prompt": "write a loop",
         "model": "gemini-2.5-pro",
@@ -225,7 +225,7 @@ def test_generate_midi_routes_to_claude_and_forwards_reasoning_options(monkeypat
         system_prompt="system",
     )
 
-    assert result == ("loop", ["message"], 3.75)
+    assert result == ("loop", ["message"], 3.75, "Anthropic")
     assert captured == {
         "prompt": "write a loop",
         "model": "claude-sonnet-4-5",
@@ -235,6 +235,90 @@ def test_generate_midi_routes_to_claude_and_forwards_reasoning_options(monkeypat
         "api_key": "anthropic-key",
         "system_prompt": "system",
     }
+
+
+def test_generate_midi_rejects_provider_model_mismatch_before_provider_call(monkeypatch):
+    monkeypatch.setattr(
+        runs,
+        "get_model_info",
+        lambda: {
+            "models": {
+                "OpenAI": {"gpt-4o-mini": {}},
+                "Google": {},
+                "Anthropic": {},
+            }
+        },
+    )
+    monkeypatch.setattr(
+        runs.ollama_api,
+        "get_ollama_status",
+        lambda force_refresh=True, host_address=None: {"available": True, "models": []},
+    )
+    monkeypatch.setattr(
+        runs.openai_api,
+        "loop_gen",
+        lambda **kwargs: pytest.fail("provider adapter should not be called"),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Model 'gpt-4o-mini' is not available from provider 'Anthropic'",
+    ):
+        runs.generate_midi(
+            "gpt-4o-mini",
+            "write a loop",
+            provider="Anthropic",
+        )
+
+
+@pytest.mark.parametrize(
+    ("provider", "expected_provider"),
+    [("Google", "Google"), ("Ollama", "Ollama")],
+)
+def test_generate_midi_uses_provider_to_disambiguate_model_collision(
+    monkeypatch,
+    provider,
+    expected_provider,
+):
+    calls = []
+    monkeypatch.setattr(
+        runs,
+        "get_model_info",
+        lambda: {
+            "models": {
+                "OpenAI": {},
+                "Google": {"gemma-4": {}},
+                "Anthropic": {},
+            }
+        },
+    )
+    monkeypatch.setattr(
+        runs.ollama_api,
+        "get_ollama_status",
+        lambda force_refresh=True, host_address=None: {
+            "available": True,
+            "models": ["gemma-4"],
+        },
+    )
+    monkeypatch.setattr(
+        runs.ollama_api,
+        "loop_gen",
+        lambda *args, **kwargs: (calls.append("Ollama") or "loop", [], 0),
+    )
+    monkeypatch.setattr(
+        runs.gemini_api,
+        "loop_gen",
+        lambda **kwargs: (calls.append("Google") or "loop", [], 0),
+    )
+
+    result = runs.generate_midi(
+        "gemma-4",
+        "write a loop",
+        provider=provider,
+    )
+
+    assert result == ("loop", [], 0, expected_provider)
+    assert calls == [expected_provider]
 
 
 def test_generate_midi_rejects_unknown_models_when_ollama_is_unavailable(monkeypatch):

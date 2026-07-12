@@ -14,7 +14,7 @@ from conductor_core.config import (
     ProgressEvent,
 )
 from conductor_core.midi import loop_to_midi
-from conductor_core.storage import FilesystemArtifactStore, get_provider_for_model
+from conductor_core.storage import FilesystemArtifactStore
 
 ProgressCallback = Callable[[ProgressEvent], None]
 
@@ -56,7 +56,7 @@ class LoopGenerationEngine:
 
         try:
             self._emit(progress_callback, "provider_call", "Generating MIDI...")
-            loop, messages, total_cost = routing.generate_midi(
+            loop, messages, total_cost, provider = routing.generate_midi(
                 model_choice=request.model,
                 prompt=prompt,
                 temp=request.temperature,
@@ -64,6 +64,7 @@ class LoopGenerationEngine:
                 effort=request.effort,
                 provider_credentials=self.config.provider_credentials,
                 system_prompt=system_prompt,
+                provider=request.provider,
             )
 
             self._emit(progress_callback, "midi", "Processing MIDI...")
@@ -92,7 +93,6 @@ class LoopGenerationEngine:
             with open(workspace.messages_path, "w", encoding="utf-8") as messages_file:
                 json.dump(messages, messages_file, indent=2)
 
-            provider = request.provider or get_provider_for_model(request.model, model_info)
             metadata = self.store.finalize_generation(
                 workspace=workspace,
                 prompt=request.description,

@@ -16,6 +16,7 @@ def generate_midi(
     effort="low",
     provider_credentials: ProviderCredentials | None = None,
     system_prompt: str | None = None,
+    provider: str | None = None,
 ):
     """Generate MIDI loop data by routing a prompt to the selected provider."""
     credentials = provider_credentials or ProviderCredentials()
@@ -27,7 +28,38 @@ def generate_midi(
     )
     ollama_models = ollama_status["models"]
 
-    if model_choice in ollama_models:
+    model_providers = [
+        candidate for candidate, models in model_info["models"].items() if model_choice in models
+    ]
+    available_providers = {*model_info["models"], "Ollama"}
+
+    if provider is not None and provider not in available_providers:
+        choices = ", ".join(sorted(available_providers))
+        raise ValueError(f"Invalid provider {provider!r}. Expected one of: {choices}.")
+
+    if provider == "Ollama":
+        if model_choice not in ollama_models:
+            detail = " Ollama is currently unavailable." if not ollama_status["available"] else ""
+            raise ValueError(
+                f"Model {model_choice!r} is not available from provider 'Ollama'.{detail}"
+            )
+        resolved_provider = "Ollama"
+    elif provider is not None:
+        if provider not in model_providers:
+            raise ValueError(f"Model {model_choice!r} is not available from provider {provider!r}.")
+        resolved_provider = provider
+    elif model_choice in ollama_models:
+        resolved_provider = "Ollama"
+    elif model_providers:
+        resolved_provider = model_providers[0]
+    else:
+        if not ollama_status["available"]:
+            raise ValueError(
+                "Invalid Model Selected. If you intended to use Ollama, it is currently unavailable."
+            )
+        raise ValueError("Invalid Model Selected")
+
+    if resolved_provider == "Ollama":
         loop, messages, loop_cost = ollama_api.loop_gen(
             prompt,
             model_choice,
@@ -35,7 +67,7 @@ def generate_midi(
             host_address=credentials.ollama_host,
             system_prompt=system_prompt,
         )
-    elif model_choice in model_info["models"]["OpenAI"]:
+    elif resolved_provider == "OpenAI":
         loop, messages, loop_cost = openai_api.loop_gen(
             prompt=prompt,
             model=model_choice,
@@ -44,7 +76,7 @@ def generate_midi(
             api_key=credentials.openai_api_key,
             system_prompt=system_prompt,
         )
-    elif model_choice in model_info["models"]["Google"]:
+    elif resolved_provider == "Google":
         loop, messages, loop_cost = gemini_api.loop_gen(
             prompt=prompt,
             model=model_choice,
@@ -54,7 +86,7 @@ def generate_midi(
             api_key=credentials.google_api_key,
             system_prompt=system_prompt,
         )
-    elif model_choice in model_info["models"]["Anthropic"]:
+    elif resolved_provider == "Anthropic":
         loop, messages, loop_cost = claude_api.loop_gen(
             prompt=prompt,
             model=model_choice,
@@ -64,11 +96,4 @@ def generate_midi(
             api_key=credentials.anthropic_api_key,
             system_prompt=system_prompt,
         )
-    else:
-        if not ollama_status["available"]:
-            raise ValueError(
-                "Invalid Model Selected. If you intended to use Ollama, it is currently unavailable."
-            )
-        raise ValueError("Invalid Model Selected")
-
-    return loop, messages, loop_cost
+    return loop, messages, loop_cost, resolved_provider
