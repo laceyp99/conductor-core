@@ -1,3 +1,5 @@
+from unittest.mock import Mock
+
 import pytest
 
 from conductor_core import ProviderCredentials
@@ -10,7 +12,7 @@ def test_generate_midi_routes_to_ollama_and_forwards_temperature(monkeypatch):
     monkeypatch.setattr(
         runs,
         "get_model_info",
-        lambda: {"models": {"OpenAI": {"llama3": {}}, "Google": {}, "Anthropic": {}}},
+        lambda: {"models": {"OpenAI": {}, "Google": {}, "Anthropic": {}}},
     )
     monkeypatch.setattr(
         runs.ollama_api,
@@ -65,11 +67,8 @@ def test_generate_midi_routes_to_openai_and_forwards_effort(monkeypatch):
             }
         },
     )
-    monkeypatch.setattr(
-        runs.ollama_api,
-        "get_ollama_status",
-        lambda force_refresh=True, host_address=None: {"available": True, "models": []},
-    )
+    ollama_status = Mock()
+    monkeypatch.setattr(runs.ollama_api, "get_ollama_status", ollama_status)
 
     def fake_loop_gen(prompt, model, temp=0.0, effort=None, api_key=None, system_prompt=None):
         captured.update(
@@ -104,6 +103,7 @@ def test_generate_midi_routes_to_openai_and_forwards_effort(monkeypatch):
         "api_key": "openai-key",
         "system_prompt": "system",
     }
+    ollama_status.assert_not_called()
 
 
 def test_generate_midi_routes_to_gemini_and_forwards_reasoning_options(monkeypatch):
@@ -120,11 +120,8 @@ def test_generate_midi_routes_to_gemini_and_forwards_reasoning_options(monkeypat
             }
         },
     )
-    monkeypatch.setattr(
-        runs.ollama_api,
-        "get_ollama_status",
-        lambda force_refresh=True, host_address=None: {"available": True, "models": []},
-    )
+    ollama_status = Mock()
+    monkeypatch.setattr(runs.ollama_api, "get_ollama_status", ollama_status)
 
     def fake_loop_gen(
         prompt,
@@ -170,6 +167,7 @@ def test_generate_midi_routes_to_gemini_and_forwards_reasoning_options(monkeypat
         "api_key": "google-key",
         "system_prompt": "system",
     }
+    ollama_status.assert_not_called()
 
 
 def test_generate_midi_routes_to_claude_and_forwards_reasoning_options(monkeypatch):
@@ -186,11 +184,8 @@ def test_generate_midi_routes_to_claude_and_forwards_reasoning_options(monkeypat
             }
         },
     )
-    monkeypatch.setattr(
-        runs.ollama_api,
-        "get_ollama_status",
-        lambda force_refresh=True, host_address=None: {"available": True, "models": []},
-    )
+    ollama_status = Mock()
+    monkeypatch.setattr(runs.ollama_api, "get_ollama_status", ollama_status)
 
     def fake_loop_gen(
         prompt,
@@ -236,6 +231,7 @@ def test_generate_midi_routes_to_claude_and_forwards_reasoning_options(monkeypat
         "api_key": "anthropic-key",
         "system_prompt": "system",
     }
+    ollama_status.assert_not_called()
 
 
 def test_generate_midi_rejects_unknown_models_when_ollama_is_unavailable(monkeypatch):
