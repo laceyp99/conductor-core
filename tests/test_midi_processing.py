@@ -1,4 +1,6 @@
+import pytest
 from mido import Message, MetaMessage, MidiFile, MidiTrack
+from pydantic import ValidationError
 
 from conductor_core.midi import loop_to_midi, midi_to_loop
 
@@ -76,15 +78,13 @@ def test_loop_to_midi_allows_notes_to_cross_early_bar_boundaries(loop_factory, n
     ]
 
 
-def test_loop_to_midi_clamps_notes_at_four_bar_boundary(loop_factory, note_factory, caplog):
-    loop = loop_factory(
-        bars=[
-            [],
-            [],
-            [],
-            [note_factory(pitch="C", start_beat=16, duration=4)],
-        ]
-    )
+def test_loop_rejects_notes_past_four_bar_boundary(loop_factory, note_factory):
+    with pytest.raises(ValidationError, match="four-bar loop boundary"):
+        loop_factory(bars=[[], [], [], [note_factory(pitch="C", start_beat=16, duration=4)]])
+
+
+def test_loop_to_midi_preserves_note_at_exact_four_bar_boundary(loop_factory, note_factory):
+    loop = loop_factory(bars=[[], [], [], [note_factory(pitch="C", start_beat=16, duration=1)]])
     midi = MidiFile(ticks_per_beat=480)
 
     loop_to_midi(midi, loop, times_as_string=False)
@@ -93,7 +93,6 @@ def test_loop_to_midi_clamps_notes_at_four_bar_boundary(loop_factory, note_facto
         ("note_on", 60, 7560),
         ("note_off", 60, 7680),
     ]
-    assert "clamped to the 4-bar loop boundary" in caplog.text
 
 
 def test_midi_to_loop_round_trips_integer_timing(sample_loop, midi_builder):
@@ -154,3 +153,68 @@ def test_midi_to_loop_skips_notes_beyond_the_first_four_bars(tmp_path):
     assert loop.Bar_2.notes == []
     assert loop.Bar_3.notes == []
     assert loop.Bar_4.notes == []
+
+
+@pytest.mark.parametrize(
+    ("times_as_string", "expected_duration"),
+    [(False, 17), (True, "seventeen")],
+)
+def test_midi_to_loop_imports_seventeen_sixteenth_sustains(
+    tmp_path, times_as_string, expected_duration
+):
+    midi = MidiFile(ticks_per_beat=480)
+    track = MidiTrack(
+        [
+            Message("note_on", note=60, velocity=96, time=0),
+            Message("note_off", note=60, velocity=0, time=2040),
+        ]
+    )
+    midi.tracks.append(track)
+    path = tmp_path / "seventeen.mid"
+    midi.save(path)
+
+    loop = midi_to_loop(str(path), times_as_string=times_as_string)
+
+    duration = loop.Bar_1.notes[0].time.duration
+    assert duration.value == expected_duration if times_as_string else duration == expected_duration
+
+
+@pytest.mark.parametrize("times_as_string", [False, True])
+def test_midi_long_note_round_trips_across_multiple_bars(tmp_path, times_as_string):
+    midi = MidiFile(ticks_per_beat=480)
+    track = MidiTrack(
+        [
+            Message("note_on", note=60, velocity=96, time=0),
+            Message("note_off", note=60, velocity=0, time=5760),
+        ]
+    )
+    midi.tracks.append(track)
+    source = tmp_path / "three_bars.mid"
+    midi.save(source)
+
+    loop = midi_to_loop(str(source), times_as_string=times_as_string)
+    exported = MidiFile(ticks_per_beat=480)
+    loop_to_midi(exported, loop, times_as_string=times_as_string)
+
+    assert _note_events_with_absolute_times(exported) == [
+        ("note_on", 60, 0),
+        ("note_off", 60, 5760),
+    ]
+
+
+def test_midi_to_loop_clips_note_at_exact_four_bar_boundary(tmp_path):
+    midi = MidiFile(ticks_per_beat=480)
+    track = MidiTrack(
+        [
+            Message("note_on", note=60, velocity=96, time=7560),
+            Message("note_off", note=60, velocity=0, time=480),
+        ]
+    )
+    midi.tracks.append(track)
+    path = tmp_path / "boundary.mid"
+    midi.save(path)
+
+    loop = midi_to_loop(str(path), times_as_string=False)
+
+    assert loop.Bar_4.notes[0].time.start_beat == 16
+    assert loop.Bar_4.notes[0].time.duration == 1

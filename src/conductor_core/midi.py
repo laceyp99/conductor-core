@@ -130,6 +130,7 @@ def midi_to_loop(midi_filename, times_as_string=True):
     midi = MidiFile(midi_filename)
     ticks_per_beat = midi.ticks_per_beat
     ticks_per_16th = int(ticks_per_beat / 4)
+    loop_end_tick = 4 * 16 * ticks_per_16th
 
     # Merge all tracks and compute absolute time for each message.
     merged = merge_tracks(midi.tracks)
@@ -163,6 +164,12 @@ def midi_to_loop(midi_filename, times_as_string=True):
 
     # Process each note event and assign it to the appropriate bar.
     for note_number, start_tick, end_tick, velocity in note_events:
+        # The public Loop model is exactly four bars. Preserve sustained notes
+        # within that window and clip a MIDI note-off beyond it, matching the
+        # export boundary policy. Notes that begin after the window are skipped.
+        if start_tick >= loop_end_tick:
+            continue
+        end_tick = min(end_tick, loop_end_tick)
         # Determine the sixteenth-note position (1-based indexing).
         start_sixteenth = (start_tick // ticks_per_16th) + 1
         duration_sixteenth = max(1, math.ceil((end_tick - start_tick) / ticks_per_16th))
@@ -182,7 +189,7 @@ def midi_to_loop(midi_filename, times_as_string=True):
         if times_as_string:
             time_info = objects.TimeInformation_G(
                 start_beat=utils.int_to_sixteenth_g(relative_start),
-                duration=utils.int_to_sixteenth_g(duration_sixteenth),
+                duration=utils.int_to_duration_sixteenth_g(duration_sixteenth),
             )
             note_obj = objects.Note_G(
                 pitch=pitch_name, octave=octave, velocity=velocity, time=time_info
