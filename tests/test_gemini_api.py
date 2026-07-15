@@ -41,3 +41,14 @@ def test_calc_cost_handles_models_without_cache_pricing():
 
     expected = (1000 * 0.075 / 1_000_000) + (200 * 0.30 / 1_000_000)
     assert cost == pytest.approx(expected)
+
+
+@pytest.mark.parametrize("model", ["gemini-2.5-flash", "gemini-2.5-pro"])
+def test_calc_cost_treats_missing_token_counts_as_zero(model):
+    usage = SimpleNamespace(
+        prompt_token_count=None,
+        candidates_token_count=None,
+        cached_content_token_count=None,
+    )
+
+    assert gemini_api.calc_cost(model, usage) == 0
