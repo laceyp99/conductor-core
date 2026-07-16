@@ -1,4 +1,5 @@
 import json
+import logging
 from types import SimpleNamespace
 
 import pytest
@@ -252,7 +253,7 @@ def test_openai_loop_gen_does_not_write_message_log(monkeypatch):
     assert cost == 0
 
 
-def test_gemini_loop_gen_does_not_write_message_log(monkeypatch):
+def test_gemini_loop_gen_logs_unsupported_effort(monkeypatch, caplog, capsys):
     response = SimpleNamespace(
         candidates=[
             SimpleNamespace(
@@ -276,14 +277,18 @@ def test_gemini_loop_gen_does_not_write_message_log(monkeypatch):
     monkeypatch.setattr(gemini_api.utils, "get_loop_prompt", lambda: "system prompt")
     monkeypatch.setattr(gemini_api.utils, "save_messages_to_json", _fail_save_messages)
 
-    midi_loop, messages, cost = gemini_api.loop_gen(
-        "write a loop",
-        "gemini-3.1-flash-lite",
-    )
+    with caplog.at_level(logging.WARNING, logger=gemini_api.__name__):
+        midi_loop, messages, cost = gemini_api.loop_gen(
+            "write a loop",
+            "gemini-3.1-flash-lite",
+            effort="bogus",
+        )
 
     assert isinstance(midi_loop, objects.Loop_G)
     assert messages[-1]["content"] == json.dumps(_loop_g_payload())
     assert cost == 0
+    assert capsys.readouterr().out == ""
+    assert "Effort 'bogus' is not supported by model gemini-3.1-flash-lite" in caplog.text
 
 
 def test_ollama_loop_gen_rejects_missing_content(monkeypatch):
