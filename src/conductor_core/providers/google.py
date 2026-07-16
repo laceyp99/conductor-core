@@ -123,7 +123,11 @@ def loop_gen(
                 }
             )
         else:
-            print("No effort level specified; using default thinking configuration.")
+            logger.warning(
+                "Effort %r is not supported by model %s; using default thinking configuration.",
+                effort,
+                model,
+            )
     elif model_with_thinking and use_thinking:
         config.update(
             {
