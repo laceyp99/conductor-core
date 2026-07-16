@@ -31,14 +31,16 @@ def initialize_anthropic_client(api_key: str | None = None):
 def calc_price(model, output):
     """Calculate the cost for a completion based on token usage."""
     model_info = utils.get_model_info()
-    if model not in model_info["models"]["Anthropic"].keys():
+    anthropic_models = model_info["models"]["Anthropic"]
+    if model not in anthropic_models:
         logger.warning("Model %s not found in model info.", model)
-        return False
+        return None
 
-    input_cost = model_info["models"]["Anthropic"][model]["cost"]["input"] / 1000000
-    output_cost = model_info["models"]["Anthropic"][model]["cost"]["output"] / 1000000
-    cached_5min = model_info["models"]["Anthropic"][model]["cost"]["5m cache input"] / 1000000
-    cache_hits = model_info["models"]["Anthropic"][model]["cost"]["cache hits/refreshes"] / 1000000
+    model_cost = anthropic_models[model]["cost"]
+    input_cost = model_cost["input"] / 1000000
+    output_cost = model_cost["output"] / 1000000
+    cached_5min = model_cost.get("5m cache input", 0) / 1000000
+    cache_hits = model_cost.get("cache hits/refreshes", 0) / 1000000
 
     return (
         output["input_tokens"] * input_cost

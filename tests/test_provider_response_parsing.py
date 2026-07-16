@@ -122,6 +122,38 @@ def test_claude_calc_price_uses_reported_cache_creation_and_reads():
     assert cost == pytest.approx(expected)
 
 
+def test_claude_calc_price_returns_none_for_unknown_model():
+    output = {
+        "input_tokens": 1,
+        "output_tokens": 1,
+        "cache_creation": 0,
+        "cache_read": 0,
+    }
+
+    assert claude_api.calc_price("not-a-model", output) is None
+
+
+def test_claude_calc_price_tolerates_missing_cache_pricing(monkeypatch):
+    monkeypatch.setattr(
+        claude_api.utils,
+        "get_model_info",
+        lambda: {
+            "models": {"Anthropic": {"test-model": {"cost": {"input": 3.00, "output": 15.00}}}}
+        },
+    )
+    output = {
+        "input_tokens": 1000,
+        "output_tokens": 200,
+        "cache_creation": 300,
+        "cache_read": 400,
+    }
+
+    cost = claude_api.calc_price("test-model", output)
+
+    expected = (1000 * 3.00 / 1_000_000) + (200 * 15.00 / 1_000_000)
+    assert cost == pytest.approx(expected)
+
+
 def test_gemini_process_output_rejects_empty_candidates():
     response = SimpleNamespace(candidates=[])
 

@@ -32,10 +32,12 @@ def calc_cost(model, usage):
     """Calculate the cost for a Gemini completion based on token usage."""
     model_info = utils.get_model_info()
     model_cost = model_info["models"]["Google"][model]["cost"]
+    prompt_tokens = usage.prompt_token_count or 0
+    output_tokens = usage.candidates_token_count or 0
     cached = usage.cached_content_token_count or 0
 
     if isinstance(model_cost["input"], dict):
-        if usage.prompt_token_count <= 200000:
+        if prompt_tokens <= 200000:
             input_cost = model_cost["input"]["<=200k"] / 1000000
             output_cost = model_cost["output"]["<=200k"] / 1000000
             cache_cost = model_cost["cache"]["<=200k"] / 1000000
@@ -52,14 +54,10 @@ def calc_cost(model, usage):
             cache_cost = 0
 
     new_input_tokens, cached = utils.split_reported_cache_tokens(
-        usage.prompt_token_count,
+        prompt_tokens,
         cached,
     )
-    return (
-        new_input_tokens * input_cost
-        + usage.candidates_token_count * output_cost
-        + cached * cache_cost
-    )
+    return new_input_tokens * input_cost + output_tokens * output_cost + cached * cache_cost
 
 
 def process_output(response):
