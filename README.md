@@ -58,9 +58,7 @@ selects the registered global Python even when a virtual environment exists.
 ```python
 from conductor_core import EngineConfig, GenerationRequest, LoopGenerationEngine
 
-engine = LoopGenerationEngine(
-    EngineConfig.from_defaults(artifact_root="generations")
-)
+engine = LoopGenerationEngine(EngineConfig.from_defaults())
 result = engine.generate(
     GenerationRequest(
         key="C",
@@ -167,6 +165,58 @@ The generation script enables audio with the default SoundFont and reports both
 the MIDI and audio result paths.
 
 ## Results and persisted artifacts
+
+### Data directory
+
+Core stores durable generation history under one predictable Conductor suite
+root. The default layout is:
+
+```text
+~/.conductor/
+  core/
+    generations/
+      gen_<id>/
+        loop.mid
+        loop.mp3          # only when audio rendering succeeds
+        messages.json     # when provider messages are available
+        metadata.json
+```
+
+On Windows, `~/.conductor/core` is
+`%USERPROFILE%\.conductor\core`. Path selection has this precedence:
+
+1. `CONDUCTOR_CORE_DATA_DIR` selects Core's complete project data directory.
+2. `CONDUCTOR_HOME` selects the shared suite root; Core appends `core`.
+3. Otherwise Core uses `Path.home() / ".conductor" / "core"`.
+
+Both environment variables support `~` expansion. PowerShell examples:
+
+```powershell
+# Relocate every participating Conductor project under one suite root.
+$env:CONDUCTOR_HOME = "D:\ConductorData"
+
+# Relocate only Core; this takes precedence over CONDUCTOR_HOME.
+$env:CONDUCTOR_CORE_DATA_DIR = "D:\ConductorData\custom-core"
+```
+
+An explicit `EngineConfig.artifact_root` or `FilesystemArtifactStore` root still
+overrides the default generation location. Request- and engine-specific prompt
+or SoundFont choices keep their existing precedence, and caller-added SoundFont
+search directories remain separate from Core's packaged read-only resources.
+Packaged prompts, model metadata, and the bundled SoundFont are not copied or
+moved into the data directory. Core currently owns no persistent configuration
+or disposable disk cache.
+
+Resolving or importing these paths does not create directories. Core creates
+`generations/` only when a generation workspace is written. It does not migrate,
+overwrite, or delete an existing project-local `generations/` directory. To keep
+using that portable layout, pass `artifact_root="generations"`; to migrate data,
+copy it manually after reviewing destination contents.
+
+Generation history can grow through MIDI, JSON, and especially optional MP3
+files. Core retains the newest 20 generations by default, but custom artifact
+stores and manually retained files still consume space at their selected
+location.
 
 `GenerationResult` contains:
 

@@ -7,7 +7,6 @@ htmlcov/
 build/
 dist/
 *.egg-info/
-generations/
 *.mid
 *.mp3
 [.]env
