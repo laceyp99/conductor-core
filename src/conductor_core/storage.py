@@ -5,7 +5,7 @@ the history of MIDI loop generations. Each generation is stored
 with its MIDI file, audio file (if available), and metadata.
 
 Storage structure:
-    generations/
+    ~/.conductor/core/generations/
         gen_<timestamp>/
             loop.mid        # Generated MIDI file
             loop.mp3        # Rendered audio (if available)
@@ -23,10 +23,13 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from conductor_core.paths import resolve_default_artifact_root
+
 logger = logging.getLogger(__name__)
 
-# Directory for storing generations when using module-level compatibility helpers.
-GENERATIONS_DIR = "generations"
+# Resolved default used by module-level compatibility helpers. Resolution is
+# side-effect free; directories are still created only by workspace writes.
+GENERATIONS_DIR = str(resolve_default_artifact_root())
 
 # Maximum number of generations to keep
 MAX_GENERATIONS = 20
@@ -35,8 +38,8 @@ MAX_GENERATIONS = 20
 class FilesystemArtifactStore:
     """Filesystem generation store bound to a caller-provided artifact root."""
 
-    def __init__(self, artifact_root: str | Path = GENERATIONS_DIR):
-        self.artifact_root = str(artifact_root)
+    def __init__(self, artifact_root: str | Path | None = None):
+        self.artifact_root = _resolve_artifact_root(artifact_root)
 
     def create_generation_workspace(self) -> "GenerationWorkspace":
         return _create_generation_workspace(self.artifact_root)
@@ -111,7 +114,8 @@ class GenerationWorkspace(BaseModel):
 
 
 def _resolve_artifact_root(artifact_root: str | Path | None = None) -> str:
-    return str(artifact_root if artifact_root is not None else GENERATIONS_DIR)
+    selected_root = artifact_root if artifact_root is not None else GENERATIONS_DIR
+    return str(selected_root)
 
 
 def _ensure_generations_dir(artifact_root: str | Path | None = None) -> None:
@@ -374,15 +378,17 @@ def load_history() -> list[GenerationMetadata]:
 
 def _load_history(artifact_root: str | Path) -> list[GenerationMetadata]:
     """Load generation history from an explicit artifact root."""
-    _ensure_generations_dir(artifact_root)
+    root = _resolve_artifact_root(artifact_root)
+    if not os.path.isdir(root):
+        return []
 
     generations = []
 
-    for item in os.listdir(artifact_root):
+    for item in os.listdir(root):
         if not item.startswith("gen_"):
             continue
 
-        gen_dir = os.path.join(str(artifact_root), item)
+        gen_dir = os.path.join(root, item)
         if not os.path.isdir(gen_dir):
             continue
 

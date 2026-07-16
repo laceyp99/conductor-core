@@ -302,6 +302,7 @@ def test_history_count_and_clear_history_reflect_saved_generations(isolated_hist
 def test_filesystem_artifact_store_uses_instance_root_without_global_mutation(
     tmp_path, monkeypatch
 ):
+    default_generations_dir = history.GENERATIONS_DIR
     first_root = tmp_path / "first"
     second_root = tmp_path / "second"
     first_store = history.FilesystemArtifactStore(first_root)
@@ -337,7 +338,7 @@ def test_filesystem_artifact_store_uses_instance_root_without_global_mutation(
     assert second_metadata.id == "two"
     assert [entry.id for entry in first_store.load_history()] == ["one"]
     assert [entry.id for entry in second_store.load_history()] == ["two"]
-    assert history.GENERATIONS_DIR == "generations"
+    assert history.GENERATIONS_DIR == default_generations_dir
 
 
 def test_get_provider_for_model_returns_matching_provider_or_ollama_default():

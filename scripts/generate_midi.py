@@ -9,8 +9,6 @@ Edit the constants below, then run ``python scripts/generate_midi.py`` from the
 repository root. Importing this module does not make a provider call.
 """
 
-from pathlib import Path
-
 from conductor_core import EngineConfig, GenerationRequest, LoopGenerationEngine
 
 # --- Edit these values before running the example. ---
@@ -24,7 +22,6 @@ DESCRIPTION = (
 TEMPERATURE = 0.0
 USE_THINKING = True
 EFFORT = "medium"
-ARTIFACT_ROOT = Path("generations")
 RENDER_AUDIO = True
 
 # None uses Conductor Core's packaged default prompt. To customize the system
@@ -45,7 +42,7 @@ def report_progress(event):
 def main(engine=None):
     """Run the configured generation and return its result."""
     if engine is None:
-        config = EngineConfig.from_defaults(artifact_root=ARTIFACT_ROOT)
+        config = EngineConfig.from_defaults()
         engine = LoopGenerationEngine(config)
 
     request = GenerationRequest(

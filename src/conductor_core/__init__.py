@@ -10,6 +10,11 @@ from conductor_core.config import (
     ProviderCredentials,
 )
 from conductor_core.engine import LoopGenerationEngine
+from conductor_core.paths import (
+    resolve_conductor_home,
+    resolve_data_dir,
+    resolve_default_artifact_root,
+)
 
 # Library logging: Core emits records under the "conductor_core" namespace and
 # never configures handlers itself. Consumers attach handlers (for example via
@@ -23,4 +28,7 @@ __all__ = [
     "LoopGenerationEngine",
     "ProgressEvent",
     "ProviderCredentials",
+    "resolve_conductor_home",
+    "resolve_data_dir",
+    "resolve_default_artifact_root",
 ]
