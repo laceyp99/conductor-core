@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from conductor_core.paths import resolve_default_artifact_root
+
 
 @dataclass(frozen=True)
 class ProviderCredentials:
@@ -20,7 +22,7 @@ class ProviderCredentials:
 class EngineConfig:
     """Environment, resource, and storage configuration for the core engine."""
 
-    artifact_root: str | Path = "generations"
+    artifact_root: str | Path = field(default_factory=resolve_default_artifact_root)
     provider_credentials: ProviderCredentials = field(default_factory=ProviderCredentials)
     prompt_override: str | None = None
     default_soundfont_path: str | Path | None = None
@@ -28,14 +30,16 @@ class EngineConfig:
     @classmethod
     def from_defaults(
         cls,
-        artifact_root: str | Path = "generations",
+        artifact_root: str | Path | None = None,
         provider_credentials: ProviderCredentials | None = None,
         prompt_override: str | None = None,
         default_soundfont_path: str | Path | None = None,
     ) -> "EngineConfig":
         """Create a config using Core defaults plus caller-provided overrides."""
         return cls(
-            artifact_root=artifact_root,
+            artifact_root=(
+                artifact_root if artifact_root is not None else resolve_default_artifact_root()
+            ),
             provider_credentials=provider_credentials or ProviderCredentials(),
             prompt_override=prompt_override,
             default_soundfont_path=default_soundfont_path,

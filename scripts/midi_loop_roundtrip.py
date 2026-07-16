@@ -10,11 +10,12 @@ from pathlib import Path
 
 from mido import MidiFile
 
+from conductor_core import resolve_default_artifact_root
 from conductor_core.midi import loop_to_midi, midi_to_loop
 
 # --- Edit these paths before running the example. ---
-INPUT_MIDI_PATH = Path("generations\\<gen_id>\\loop.mid")
-OUTPUT_MIDI_PATH = Path("generations\\<gen_id>\\roundtrip.mid")
+INPUT_MIDI_PATH = resolve_default_artifact_root() / "gen_<id>" / "loop.mid"
+OUTPUT_MIDI_PATH = resolve_default_artifact_root() / "gen_<id>" / "roundtrip.mid"
 
 
 def roundtrip_midi(input_path, output_path):
