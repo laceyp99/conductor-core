@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from conductor_core.paths import resolve_default_artifact_root
+from conductor_core.storage import MAX_GENERATIONS
 
 
 @dataclass(frozen=True)
@@ -26,6 +27,7 @@ class EngineConfig:
     provider_credentials: ProviderCredentials = field(default_factory=ProviderCredentials)
     prompt_override: str | None = None
     default_soundfont_path: str | Path | None = None
+    max_generations: int | None = MAX_GENERATIONS
 
     @classmethod
     def from_defaults(
@@ -34,6 +36,7 @@ class EngineConfig:
         provider_credentials: ProviderCredentials | None = None,
         prompt_override: str | None = None,
         default_soundfont_path: str | Path | None = None,
+        max_generations: int | None = MAX_GENERATIONS,
     ) -> "EngineConfig":
         """Create a config using Core defaults plus caller-provided overrides."""
         return cls(
@@ -43,6 +46,7 @@ class EngineConfig:
             provider_credentials=provider_credentials or ProviderCredentials(),
             prompt_override=prompt_override,
             default_soundfont_path=default_soundfont_path,
+            max_generations=max_generations,
         )
 
 

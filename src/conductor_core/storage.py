@@ -31,21 +31,33 @@ logger = logging.getLogger(__name__)
 # side-effect free; directories are still created only by workspace writes.
 GENERATIONS_DIR = str(resolve_default_artifact_root())
 
-# Maximum number of generations to keep
+# Default maximum number of generations retained by module-level helpers.
 MAX_GENERATIONS = 20
+
+_DEFAULT_MAX_GENERATIONS = object()
 
 
 class FilesystemArtifactStore:
     """Filesystem generation store bound to a caller-provided artifact root."""
 
-    def __init__(self, artifact_root: str | Path | None = None):
+    def __init__(
+        self,
+        artifact_root: str | Path | None = None,
+        max_generations: int | None = MAX_GENERATIONS,
+    ):
         self.artifact_root = _resolve_artifact_root(artifact_root)
+        self.max_generations = max_generations
 
     def create_generation_workspace(self) -> "GenerationWorkspace":
         return _create_generation_workspace(self.artifact_root)
 
     def finalize_generation(self, *args, **kwargs) -> "GenerationMetadata":
-        return _finalize_generation(self.artifact_root, *args, **kwargs)
+        return _finalize_generation(
+            self.artifact_root,
+            *args,
+            max_generations=self.max_generations,
+            **kwargs,
+        )
 
     def cleanup_generation_workspace(self, workspace: "GenerationWorkspace") -> bool:
         return _cleanup_generation_workspace(workspace)
@@ -243,6 +255,7 @@ def finalize_generation(
         temperature=temperature,
         cost=cost,
         soundfont=soundfont,
+        max_generations=MAX_GENERATIONS,
     )
 
 
@@ -257,6 +270,7 @@ def _finalize_generation(
     temperature: float,
     cost: Optional[float] = None,
     soundfont: Optional[str] = None,
+    max_generations: int | None = MAX_GENERATIONS,
 ) -> GenerationMetadata:
     """Finalize a generation using an explicit artifact root."""
     if not os.path.exists(workspace.midi_path):
@@ -285,7 +299,7 @@ def _finalize_generation(
         f.write(metadata.model_dump_json(indent=2))
 
     logger.info(f"Finalized generation {workspace.id} in history")
-    _enforce_limit(artifact_root)
+    _enforce_limit(artifact_root, max_generations=max_generations)
 
     return metadata
 
@@ -470,16 +484,24 @@ def _delete_generation(artifact_root: str | Path, gen_id: str) -> bool:
         return False
 
 
-def _enforce_limit(artifact_root: str | Path | None = None) -> None:
+def _enforce_limit(
+    artifact_root: str | Path | None = None,
+    max_generations: int | None | object = _DEFAULT_MAX_GENERATIONS,
+) -> None:
     """Delete oldest generations if over the limit."""
+    if max_generations is _DEFAULT_MAX_GENERATIONS:
+        max_generations = MAX_GENERATIONS
+    if max_generations is None:
+        return
+
     root = _resolve_artifact_root(artifact_root)
     generations = _load_history(root)
 
-    if len(generations) <= MAX_GENERATIONS:
+    if len(generations) <= max_generations:
         return
 
     # Delete oldest generations (they're at the end since list is sorted newest first)
-    generations_to_delete = generations[MAX_GENERATIONS:]
+    generations_to_delete = generations[max_generations:]
 
     for gen in generations_to_delete:
         logger.info(f"Removing old generation {gen.id} to enforce limit")

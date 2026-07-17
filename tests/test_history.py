@@ -288,6 +288,50 @@ def test_enforce_limit_removes_oldest_generations(isolated_history_dir, monkeypa
     assert remaining == {"gen_middle", "gen_newest"}
 
 
+def test_filesystem_artifact_store_enforces_its_own_limit(tmp_path, monkeypatch):
+    root = tmp_path / "generations"
+    store = history.FilesystemArtifactStore(root, max_generations=2)
+    ids = iter(["oldest", "middle", "newest"])
+    monkeypatch.setattr(history, "_generate_id", lambda: next(ids))
+
+    for index in range(3):
+        workspace = store.create_generation_workspace()
+        _write_binary_file(Path(workspace.midi_path), b"midi")
+        store.finalize_generation(
+            workspace=workspace,
+            prompt=f"prompt {index}",
+            key="C",
+            scale="major",
+            model="model",
+            provider="OpenAI",
+            temperature=0.0,
+        )
+
+    assert {path.name for path in root.iterdir()} == {"gen_middle", "gen_newest"}
+
+
+def test_filesystem_artifact_store_allows_unlimited_history(tmp_path, monkeypatch):
+    root = tmp_path / "generations"
+    store = history.FilesystemArtifactStore(root, max_generations=None)
+    ids = iter(["one", "two", "three"])
+    monkeypatch.setattr(history, "_generate_id", lambda: next(ids))
+
+    for index in range(3):
+        workspace = store.create_generation_workspace()
+        _write_binary_file(Path(workspace.midi_path), b"midi")
+        store.finalize_generation(
+            workspace=workspace,
+            prompt=f"prompt {index}",
+            key="C",
+            scale="major",
+            model="model",
+            provider="OpenAI",
+            temperature=0.0,
+        )
+
+    assert {path.name for path in root.iterdir()} == {"gen_one", "gen_two", "gen_three"}
+
+
 def test_history_count_and_clear_history_reflect_saved_generations(isolated_history_dir):
     _write_generation_metadata(
         isolated_history_dir, gen_id="one", timestamp=datetime.now() - timedelta(minutes=1)
