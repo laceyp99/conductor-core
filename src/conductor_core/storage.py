@@ -365,15 +365,18 @@ def _update_generation_audio(
     metadata_path = os.path.join(gen_dir, "metadata.json")
 
     dest_audio_path = metadata.audio_path
+    audio_updated = False
     if audio_path and os.path.exists(audio_path):
         dest_audio_path = os.path.join(gen_dir, "loop.mp3")
         if os.path.abspath(audio_path) != os.path.abspath(dest_audio_path):
             shutil.copy2(audio_path, dest_audio_path)
         else:
             dest_audio_path = audio_path
+        audio_updated = True
 
     metadata.audio_path = dest_audio_path
-    metadata.soundfont = soundfont
+    if audio_updated:
+        metadata.soundfont = soundfont
 
     with open(metadata_path, "w") as f:
         f.write(metadata.model_dump_json(indent=2))
