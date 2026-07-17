@@ -6,6 +6,37 @@ from conductor_core import ProviderCredentials
 from conductor_core import routing as runs
 
 
+@pytest.mark.parametrize(
+    ("provider", "adapter_name"),
+    [
+        ("OpenAI", "openai_api"),
+        ("Google", "gemini_api"),
+        ("Anthropic", "claude_api"),
+    ],
+)
+def test_generate_midi_rejects_unsupported_effort_before_provider_call(
+    monkeypatch, provider, adapter_name
+):
+    model_choice = f"{provider.lower()}-model"
+    model_info = {"models": {"OpenAI": {}, "Google": {}, "Anthropic": {}}}
+    model_info["models"][provider][model_choice] = {"effort_options": ["low", "medium"]}
+    monkeypatch.setattr(runs, "get_model_info", lambda: model_info)
+
+    loop_gen = Mock()
+    monkeypatch.setattr(getattr(runs, adapter_name), "loop_gen", loop_gen)
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            rf"Effort 'high' is not supported by {model_choice}; "
+            r"supported values: low, medium"
+        ),
+    ):
+        runs.generate_midi(model_choice, "write a loop", effort="high")
+
+    loop_gen.assert_not_called()
+
+
 def test_generate_midi_routes_to_ollama_and_forwards_temperature(monkeypatch):
     captured = {}
 

@@ -8,6 +8,17 @@ from conductor_core.providers import ollama as ollama_api
 from conductor_core.providers import openai as openai_api
 
 
+def _validate_effort(model_choice, model_config, effort):
+    """Ensure the requested effort is supported by the selected model."""
+    effort_options = model_config.get("effort_options") or []
+    if effort_options and effort not in effort_options:
+        supported_values = ", ".join(effort_options)
+        raise ValueError(
+            f"Effort {effort!r} is not supported by {model_choice}; "
+            f"supported values: {supported_values}"
+        )
+
+
 def generate_midi(
     model_choice,
     prompt,
@@ -23,6 +34,11 @@ def generate_midi(
     model_info = get_model_info()
 
     if model_choice in model_info["models"]["OpenAI"]:
+        _validate_effort(
+            model_choice,
+            model_info["models"]["OpenAI"][model_choice],
+            effort,
+        )
         provider = "OpenAI"
         loop, messages, loop_cost = openai_api.loop_gen(
             prompt=prompt,
@@ -33,6 +49,11 @@ def generate_midi(
             system_prompt=system_prompt,
         )
     elif model_choice in model_info["models"]["Google"]:
+        _validate_effort(
+            model_choice,
+            model_info["models"]["Google"][model_choice],
+            effort,
+        )
         provider = "Google"
         loop, messages, loop_cost = gemini_api.loop_gen(
             prompt=prompt,
@@ -44,6 +65,11 @@ def generate_midi(
             system_prompt=system_prompt,
         )
     elif model_choice in model_info["models"]["Anthropic"]:
+        _validate_effort(
+            model_choice,
+            model_info["models"]["Anthropic"][model_choice],
+            effort,
+        )
         provider = "Anthropic"
         loop, messages, loop_cost = claude_api.loop_gen(
             prompt=prompt,
