@@ -195,6 +195,41 @@ def test_update_generation_audio_copies_audio_and_updates_soundfont(
     assert metadata.soundfont == "new.sf2"
 
 
+@pytest.mark.parametrize("audio_path", [None, "missing.mp3"])
+def test_update_generation_audio_preserves_soundfont_when_audio_update_is_skipped(
+    isolated_history_dir, monkeypatch, tmp_path, audio_path
+):
+    monkeypatch.setattr(history, "_generate_id", lambda: "fixed_id")
+
+    workspace = history.create_generation_workspace()
+    _write_binary_file(Path(workspace.midi_path), b"midi")
+    _write_binary_file(Path(workspace.audio_path), b"old-audio")
+    metadata = history.finalize_generation(
+        workspace=workspace,
+        prompt="warm rhodes loop",
+        key="D",
+        scale="minor",
+        model="gpt-4o-mini",
+        provider="OpenAI",
+        temperature=0.3,
+        soundfont="old.sf2",
+    )
+
+    attempted_audio_path = str(tmp_path / audio_path) if audio_path else None
+    updated = history.update_generation_audio(
+        metadata.id,
+        attempted_audio_path,
+        soundfont="new.sf2",
+    )
+    persisted = history.get_generation(metadata.id)
+
+    assert updated is not None
+    assert updated.audio_path == str(isolated_history_dir / "gen_fixed_id" / "loop.mp3")
+    assert updated.soundfont == "old.sf2"
+    assert (isolated_history_dir / "gen_fixed_id" / "loop.mp3").read_bytes() == b"old-audio"
+    assert persisted == updated
+
+
 def test_load_history_allows_older_entries_without_soundfont(isolated_history_dir):
     now = datetime.now()
     _write_generation_metadata(
