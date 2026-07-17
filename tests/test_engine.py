@@ -80,6 +80,17 @@ def test_engine_generates_persisted_artifacts_with_mocked_provider(
     ]
 
 
+def test_engine_config_passes_storage_limit_to_default_store(tmp_path):
+    engine = LoopGenerationEngine(
+        EngineConfig.from_defaults(
+            artifact_root=tmp_path / "generations",
+            max_generations=None,
+        )
+    )
+
+    assert engine.store.max_generations is None
+
+
 def test_engine_cleans_unfinalized_workspace_when_processing_fails(
     monkeypatch,
     tmp_path,

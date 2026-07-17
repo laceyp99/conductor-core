@@ -28,7 +28,10 @@ class LoopGenerationEngine:
         store: FilesystemArtifactStore | None = None,
     ):
         self.config = config or EngineConfig.from_defaults()
-        self.store = store or FilesystemArtifactStore(self.config.artifact_root)
+        self.store = store or FilesystemArtifactStore(
+            self.config.artifact_root,
+            max_generations=self.config.max_generations,
+        )
 
     def _emit(
         self,
