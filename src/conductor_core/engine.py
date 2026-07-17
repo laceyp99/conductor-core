@@ -83,12 +83,15 @@ class LoopGenerationEngine:
 
             audio_path = None
             selected_soundfont = request.soundfont_path or self.config.default_soundfont_path
+            requested_soundfont = str(selected_soundfont) if selected_soundfont else None
+            resolved_soundfont = None
             if request.render_audio:
                 self._emit(progress_callback, "audio", "Rendering Audio...")
+                resolved_soundfont = playback.resolve_soundfont(requested_soundfont)
                 audio_path = playback.midi_to_mp3(
                     workspace.midi_path,
                     output_path=workspace.audio_path,
-                    soundfont_name=str(selected_soundfont) if selected_soundfont else None,
+                    soundfont_name=resolved_soundfont or requested_soundfont,
                 )
                 if audio_path is None:
                     warnings.append("Audio rendering was skipped or failed.")
@@ -105,8 +108,8 @@ class LoopGenerationEngine:
                 provider=provider,
                 temperature=request.temperature,
                 cost=total_cost,
-                soundfont=os.path.basename(str(selected_soundfont))
-                if audio_path and selected_soundfont
+                soundfont=os.path.basename(resolved_soundfont)
+                if audio_path and resolved_soundfont
                 else None,
             )
             finalized = True

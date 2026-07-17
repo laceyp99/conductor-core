@@ -33,8 +33,14 @@ def test_engine_generates_persisted_artifacts_with_mocked_provider(
         }
         return output_path
 
+    soundfont_path = tmp_path / "custom.sf2"
     monkeypatch.setattr(engine_module.routing, "generate_midi", fake_generate_midi)
     monkeypatch.setattr(engine_module.playback, "midi_to_mp3", fake_midi_to_mp3)
+    monkeypatch.setattr(
+        engine_module.playback,
+        "resolve_soundfont",
+        lambda soundfont_name: str(soundfont_path),
+    )
     monkeypatch.setattr(engine_module.music, "get_loop_prompt", lambda: "default prompt")
 
     engine = LoopGenerationEngine(
@@ -72,12 +78,59 @@ def test_engine_generates_persisted_artifacts_with_mocked_provider(
     assert captured["provider_credentials"].openai_api_key == "openai-key"
     assert captured["system_prompt"] == "config prompt"
     assert captured["_return_provider"] is True
-    assert captured["audio"]["soundfont_name"] == "custom.sf2"
+    assert captured["audio"]["soundfont_name"] == str(soundfont_path)
     assert [event.stage for event in progress_events] == [
         "provider_call",
         "midi",
         "audio",
     ]
+
+
+def test_engine_records_resolved_default_soundfont(
+    monkeypatch,
+    tmp_path,
+    sample_loop,
+):
+    captured = {}
+    default_soundfont = tmp_path / "FM-Piano1 20190916.sf2"
+
+    def fake_midi_to_mp3(midi_path, output_path=None, soundfont_name=None):
+        Path(output_path).write_bytes(b"audio")
+        captured["soundfont_name"] = soundfont_name
+        return output_path
+
+    def fake_resolve_soundfont(soundfont_name):
+        captured["requested_soundfont"] = soundfont_name
+        return str(default_soundfont) if soundfont_name is None else None
+
+    monkeypatch.setattr(
+        engine_module.routing,
+        "generate_midi",
+        lambda **kwargs: (sample_loop, [], 0.25, "OpenAI"),
+    )
+    monkeypatch.setattr(engine_module.playback, "midi_to_mp3", fake_midi_to_mp3)
+    monkeypatch.setattr(
+        engine_module.playback,
+        "resolve_soundfont",
+        fake_resolve_soundfont,
+    )
+
+    engine = LoopGenerationEngine(
+        EngineConfig.from_defaults(artifact_root=tmp_path / "generations")
+    )
+    result = engine.generate(
+        GenerationRequest(
+            key="C",
+            scale="Major",
+            description="warm rhodes loop",
+            model="gpt-4o-mini",
+            render_audio=True,
+        )
+    )
+
+    assert captured["requested_soundfont"] is None
+    assert captured["soundfont_name"] == str(default_soundfont)
+    assert result.metadata.soundfont == default_soundfont.name
 
 
 def test_engine_config_passes_storage_limit_to_default_store(tmp_path):
