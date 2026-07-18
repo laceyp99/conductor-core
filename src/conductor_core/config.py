@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from conductor_core.paths import resolve_default_artifact_root
-from conductor_core.storage import MAX_GENERATIONS
+from conductor_core.storage import MAX_GENERATIONS, _validate_max_generations
 
 
 @dataclass(frozen=True)
@@ -28,6 +28,9 @@ class EngineConfig:
     prompt_override: str | None = None
     default_soundfont_path: str | Path | None = None
     max_generations: int | None = MAX_GENERATIONS
+
+    def __post_init__(self) -> None:
+        _validate_max_generations(self.max_generations)
 
     @classmethod
     def from_defaults(
