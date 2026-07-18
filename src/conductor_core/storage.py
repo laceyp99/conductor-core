@@ -60,7 +60,7 @@ class FilesystemArtifactStore:
         )
 
     def cleanup_generation_workspace(self, workspace: "GenerationWorkspace") -> bool:
-        return _cleanup_generation_workspace(workspace)
+        return _cleanup_generation_workspace(self.artifact_root, workspace)
 
     def update_generation_audio(
         self,
@@ -156,7 +156,28 @@ def _get_generation_dir(gen_id: str, artifact_root: str | Path | None = None) ->
     Returns:
         str: Path to the generation's directory.
     """
-    return os.path.join(_resolve_artifact_root(artifact_root), f"gen_{gen_id}")
+    _validate_generation_id(gen_id)
+
+    root = Path(_resolve_artifact_root(artifact_root)).resolve()
+    generation_name = f"gen_{gen_id}"
+    candidate = (root / generation_name).resolve()
+    if candidate.parent != root or candidate.name != generation_name:
+        raise ValueError("generation path must be a direct child of the artifact root")
+
+    return str(candidate)
+
+
+def _validate_generation_id(gen_id: str) -> None:
+    """Reject generation IDs that can be interpreted as filesystem paths."""
+    if (
+        not isinstance(gen_id, str)
+        or not gen_id
+        or gen_id in {".", ".."}
+        or "/" in gen_id
+        or "\\" in gen_id
+        or "\x00" in gen_id
+    ):
+        raise ValueError("generation ID must be a non-empty path component")
 
 
 def _build_workspace(gen_id: str, artifact_root: str | Path | None = None) -> GenerationWorkspace:
@@ -170,6 +191,29 @@ def _build_workspace(gen_id: str, artifact_root: str | Path | None = None) -> Ge
         messages_path=os.path.join(gen_dir, "messages.json"),
         metadata_path=os.path.join(gen_dir, "metadata.json"),
     )
+
+
+def _validate_workspace(
+    artifact_root: str | Path, workspace: GenerationWorkspace
+) -> GenerationWorkspace:
+    """Require every workspace path to match the store's canonical path set."""
+    canonical = _build_workspace(workspace.id, artifact_root)
+    for field_name in (
+        "directory",
+        "midi_path",
+        "audio_path",
+        "messages_path",
+        "metadata_path",
+    ):
+        supplied_path = Path(getattr(workspace, field_name)).resolve()
+        canonical_path = Path(getattr(canonical, field_name)).resolve()
+        if supplied_path != canonical_path:
+            raise ValueError(
+                f"workspace {field_name} does not match generation {workspace.id!r} "
+                "under this artifact root"
+            )
+
+    return canonical
 
 
 def get_provider_for_model(model: str, model_info: dict) -> str:
@@ -274,6 +318,7 @@ def _finalize_generation(
 ) -> GenerationMetadata:
     """Finalize a generation using an explicit artifact root."""
     max_generations = _validate_max_generations(max_generations)
+    workspace = _validate_workspace(artifact_root, workspace)
 
     if not os.path.exists(workspace.midi_path):
         raise FileNotFoundError(f"Missing MIDI file for generation: {workspace.midi_path}")
@@ -318,11 +363,15 @@ def cleanup_generation_workspace(workspace: GenerationWorkspace) -> bool:
     Returns:
         bool: True if the workspace was removed, False otherwise.
     """
-    return _cleanup_generation_workspace(workspace)
+    return _cleanup_generation_workspace(GENERATIONS_DIR, workspace)
 
 
-def _cleanup_generation_workspace(workspace: GenerationWorkspace) -> bool:
+def _cleanup_generation_workspace(
+    artifact_root: str | Path, workspace: GenerationWorkspace
+) -> bool:
     """Remove an unfinalized generation workspace."""
+    workspace = _validate_workspace(artifact_root, workspace)
+
     if os.path.exists(workspace.metadata_path):
         return False
 
@@ -407,7 +456,11 @@ def _load_history(artifact_root: str | Path) -> list[GenerationMetadata]:
         if not item.startswith("gen_"):
             continue
 
-        gen_dir = os.path.join(root, item)
+        try:
+            gen_dir = _get_generation_dir(item.removeprefix("gen_"), root)
+        except ValueError as exc:
+            logger.warning(f"Skipping unsafe generation path {item}: {exc}")
+            continue
         if not os.path.isdir(gen_dir):
             continue
 
