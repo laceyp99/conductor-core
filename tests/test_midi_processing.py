@@ -95,6 +95,16 @@ def test_loop_to_midi_preserves_note_at_exact_four_bar_boundary(loop_factory, no
     ]
 
 
+@pytest.mark.parametrize("ticks_per_beat", [0, 1, 2, 3, 5, -24])
+def test_loop_to_midi_rejects_ppq_without_an_exact_sixteenth_grid(sample_loop, ticks_per_beat):
+    midi = MidiFile(ticks_per_beat=ticks_per_beat)
+
+    with pytest.raises(ValueError, match="positive ticks_per_beat divisible by 4"):
+        loop_to_midi(midi, sample_loop, times_as_string=False)
+
+    assert midi.tracks == []
+
+
 def test_midi_to_loop_round_trips_integer_timing(sample_loop, midi_builder):
     midi_path = midi_builder(sample_loop, times_as_string=False)
 
@@ -113,6 +123,38 @@ def test_midi_to_loop_round_trips_integer_timing(sample_loop, midi_builder):
     assert all(
         bar.notes[0].time.duration == 16 for bar in [loop.Bar_1, loop.Bar_2, loop.Bar_3, loop.Bar_4]
     )
+
+
+@pytest.mark.parametrize("ticks_per_beat", [1, 2, 3, 5])
+def test_midi_to_loop_quantizes_low_ppq_timing_to_sixteenths(tmp_path, ticks_per_beat):
+    midi = MidiFile(ticks_per_beat=ticks_per_beat)
+    track = MidiTrack(
+        [
+            Message("note_on", note=60, velocity=96, time=4 * ticks_per_beat),
+            Message("note_off", note=60, velocity=0, time=ticks_per_beat),
+        ]
+    )
+    midi.tracks.append(track)
+    path = tmp_path / f"ppq-{ticks_per_beat}.mid"
+    midi.save(path)
+
+    loop = midi_to_loop(str(path), times_as_string=False)
+
+    assert loop.Bar_1.notes == []
+    assert len(loop.Bar_2.notes) == 1
+    assert loop.Bar_2.notes[0].time.start_beat == 1
+    assert loop.Bar_2.notes[0].time.duration == 4
+
+
+@pytest.mark.parametrize("ticks_per_beat", [0, -24])
+def test_midi_to_loop_rejects_non_ppq_time_divisions(tmp_path, ticks_per_beat):
+    midi = MidiFile(ticks_per_beat=ticks_per_beat)
+    midi.tracks.append(MidiTrack())
+    path = tmp_path / f"division-{ticks_per_beat}.mid"
+    midi.save(path)
+
+    with pytest.raises(ValueError, match="positive PPQ time division"):
+        midi_to_loop(str(path), times_as_string=False)
 
 
 def test_midi_to_loop_round_trips_string_timing(sample_loop_g, midi_builder):
