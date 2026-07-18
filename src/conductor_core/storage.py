@@ -46,7 +46,7 @@ class FilesystemArtifactStore:
         max_generations: int | None = MAX_GENERATIONS,
     ):
         self.artifact_root = _resolve_artifact_root(artifact_root)
-        self.max_generations = max_generations
+        self.max_generations = _validate_max_generations(max_generations)
 
     def create_generation_workspace(self) -> "GenerationWorkspace":
         return _create_generation_workspace(self.artifact_root)
@@ -273,6 +273,8 @@ def _finalize_generation(
     max_generations: int | None = MAX_GENERATIONS,
 ) -> GenerationMetadata:
     """Finalize a generation using an explicit artifact root."""
+    max_generations = _validate_max_generations(max_generations)
+
     if not os.path.exists(workspace.midi_path):
         raise FileNotFoundError(f"Missing MIDI file for generation: {workspace.midi_path}")
 
@@ -494,6 +496,7 @@ def _enforce_limit(
     """Delete oldest generations if over the limit."""
     if max_generations is _DEFAULT_MAX_GENERATIONS:
         max_generations = MAX_GENERATIONS
+    max_generations = _validate_max_generations(max_generations)
     if max_generations is None:
         return
 
@@ -509,6 +512,18 @@ def _enforce_limit(
     for gen in generations_to_delete:
         logger.info(f"Removing old generation {gen.id} to enforce limit")
         _delete_generation(root, gen.id)
+
+
+def _validate_max_generations(max_generations: int | None) -> int | None:
+    """Validate the maximum number of retained generations."""
+    if max_generations is not None and (
+        isinstance(max_generations, bool)
+        or not isinstance(max_generations, int)
+        or max_generations <= 0
+    ):
+        raise ValueError("max_generations must be None or a positive integer")
+
+    return max_generations
 
 
 def get_history_count() -> int:
