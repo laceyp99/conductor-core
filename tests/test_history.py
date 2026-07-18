@@ -156,6 +156,45 @@ def test_cleanup_generation_workspace_removes_only_unfinalized_directories(
     assert (isolated_history_dir / "gen_fixed_id").exists()
 
 
+def test_store_rejects_workspace_from_another_artifact_root(tmp_path, monkeypatch):
+    first_store = history.FilesystemArtifactStore(tmp_path / "first")
+    second_store = history.FilesystemArtifactStore(tmp_path / "second")
+    monkeypatch.setattr(history, "_generate_id", lambda: "fixed_id")
+    workspace = first_store.create_generation_workspace()
+    _write_binary_file(Path(workspace.midi_path), b"midi")
+
+    with pytest.raises(ValueError, match="does not match generation"):
+        second_store.finalize_generation(
+            workspace=workspace,
+            prompt="prompt",
+            key="C",
+            scale="major",
+            model="model",
+            provider="OpenAI",
+            temperature=0.0,
+        )
+
+    with pytest.raises(ValueError, match="does not match generation"):
+        second_store.cleanup_generation_workspace(workspace)
+
+    assert Path(workspace.directory).exists()
+
+
+def test_store_rejects_workspace_with_mixed_canonical_paths(tmp_path, monkeypatch):
+    store = history.FilesystemArtifactStore(tmp_path / "generations")
+    monkeypatch.setattr(history, "_generate_id", lambda: "fixed_id")
+    workspace = store.create_generation_workspace()
+    victim = tmp_path / "victim"
+    victim.mkdir()
+    mixed_workspace = workspace.model_copy(update={"metadata_path": str(victim / "metadata.json")})
+
+    with pytest.raises(ValueError, match="metadata_path does not match generation"):
+        store.cleanup_generation_workspace(mixed_workspace)
+
+    assert Path(workspace.directory).exists()
+    assert victim.exists()
+
+
 def test_update_generation_audio_copies_audio_and_updates_soundfont(
     isolated_history_dir, monkeypatch, tmp_path
 ):
@@ -303,6 +342,49 @@ def test_delete_generation_removes_directory_and_handles_missing_id(isolated_his
     assert history.delete_generation("delete_me") is True
     assert not (isolated_history_dir / "gen_delete_me").exists()
     assert history.delete_generation("delete_me") is False
+
+
+@pytest.mark.parametrize(
+    "gen_id",
+    [
+        ".",
+        "..",
+        "anchor/../../victim",
+        "anchor\\..\\..\\victim",
+    ],
+)
+def test_store_rejects_generation_ids_with_path_components(tmp_path, gen_id):
+    store = history.FilesystemArtifactStore(tmp_path / "generations")
+    victim = tmp_path / "victim"
+    victim.mkdir()
+    (victim / "keep.txt").write_text("keep", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="non-empty path component"):
+        store.get_generation(gen_id)
+
+    with pytest.raises(ValueError, match="non-empty path component"):
+        store.delete_generation(gen_id)
+
+    assert (victim / "keep.txt").read_text(encoding="utf-8") == "keep"
+
+
+def test_store_rejects_generation_symlink_that_escapes_root(tmp_path):
+    root = tmp_path / "generations"
+    root.mkdir()
+    victim = tmp_path / "victim"
+    victim.mkdir()
+    (victim / "keep.txt").write_text("keep", encoding="utf-8")
+
+    try:
+        (root / "gen_escape").symlink_to(victim, target_is_directory=True)
+    except OSError as exc:
+        pytest.skip(f"directory symlinks are unavailable: {exc}")
+
+    store = history.FilesystemArtifactStore(root)
+    with pytest.raises(ValueError, match="direct child"):
+        store.delete_generation("escape")
+
+    assert (victim / "keep.txt").read_text(encoding="utf-8") == "keep"
 
 
 def test_enforce_limit_removes_oldest_generations(isolated_history_dir, monkeypatch):
