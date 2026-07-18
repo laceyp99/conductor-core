@@ -214,6 +214,8 @@ def midi_to_mp3(
         base_name = os.path.splitext(midi_path)[0]
         output_path = f"{base_name}.mp3"
 
+    output_directory = os.path.dirname(os.path.abspath(output_path))
+
     # Find the soundfont
     soundfont_path = find_soundfont(soundfont_name)
     if soundfont_path is None:
@@ -236,6 +238,14 @@ def midi_to_mp3(
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_wav:
             temp_wav_path = temp_wav.name
 
+        with tempfile.NamedTemporaryFile(
+            prefix=f".{os.path.basename(output_path)}.",
+            suffix=".tmp",
+            dir=output_directory,
+            delete=False,
+        ) as temp_mp3:
+            temp_mp3_path = temp_mp3.name
+
         # Use FluidSynth to render MIDI to WAV
         logger.info(f"Rendering MIDI to WAV using SoundFont: {soundfont_path}")
         fs = FluidSynth(soundfont_path)
@@ -244,7 +254,8 @@ def midi_to_mp3(
         # Convert WAV to MP3 using pydub
         logger.info(f"Converting WAV to MP3: {output_path}")
         audio = AudioSegment.from_wav(temp_wav_path)
-        audio.export(output_path, format="mp3", bitrate="192k")
+        audio.export(temp_mp3_path, format="mp3", bitrate="192k")
+        os.replace(temp_mp3_path, output_path)
 
         logger.info(f"Successfully created MP3: {output_path}")
         return output_path
@@ -258,6 +269,11 @@ def midi_to_mp3(
         if "temp_wav_path" in locals() and os.path.exists(temp_wav_path):
             try:
                 os.remove(temp_wav_path)
+            except OSError:
+                pass
+        if "temp_mp3_path" in locals() and os.path.exists(temp_mp3_path):
+            try:
+                os.remove(temp_mp3_path)
             except OSError:
                 pass
 
