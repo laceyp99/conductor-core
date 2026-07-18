@@ -4,7 +4,6 @@ It supports converting a loop into MIDI (with proper absolute and delta timing) 
 """
 
 import logging
-import math
 
 from mido import Message, MetaMessage, MidiFile, MidiTrack, merge_tracks
 
@@ -12,6 +11,25 @@ from conductor_core import models as objects
 from conductor_core import music as utils
 
 logger = logging.getLogger(__name__)
+
+
+def _export_ticks_per_sixteenth(ticks_per_beat):
+    """Return an exact sixteenth-note tick size for a target MIDI file."""
+    if ticks_per_beat <= 0 or ticks_per_beat % 4:
+        raise ValueError(
+            "MIDI export requires a positive ticks_per_beat divisible by 4 "
+            f"to represent the sixteenth-note grid exactly; got {ticks_per_beat}."
+        )
+    return ticks_per_beat // 4
+
+
+def _validate_import_ppq(ticks_per_beat):
+    """Reject unsupported SMPTE or invalid MIDI time divisions."""
+    if ticks_per_beat <= 0:
+        raise ValueError(
+            "MIDI import requires a positive PPQ time division; "
+            f"SMPTE timing is not supported (ticks_per_beat={ticks_per_beat})."
+        )
 
 
 def loop_to_midi(midi, loop, times_as_string=True):
@@ -42,8 +60,8 @@ def loop_to_midi(midi, loop, times_as_string=True):
     # Create a new track to hold the MIDI messages of the Loop
     track = MidiTrack()
     # Calculated ticks per sixteenth note, based on provided ticks per beat (quarter note).
-    ticks_per_beat = int(midi.ticks_per_beat / 4)
-    bar_length = 16 * ticks_per_beat
+    ticks_per_sixteenth = _export_ticks_per_sixteenth(midi.ticks_per_beat)
+    bar_length = 16 * ticks_per_sixteenth
     final_bar_ticks = 4 * bar_length
 
     # Initialize a list to hold all note events (on and off).
@@ -63,8 +81,8 @@ def loop_to_midi(midi, loop, times_as_string=True):
                 duration = note.time.duration
 
             # Convert the note's time information to absolute ticks.
-            note_start_tick = bar_offset + (start_beat - 1) * ticks_per_beat
-            note_duration_ticks = duration * ticks_per_beat
+            note_start_tick = bar_offset + (start_beat - 1) * ticks_per_sixteenth
+            note_duration_ticks = duration * ticks_per_sixteenth
             note_end_tick = note_start_tick + note_duration_ticks
             if note_end_tick > final_bar_ticks:
                 logger.warning("[MIDI] Note output clamped to the 4-bar loop boundary.")
@@ -129,8 +147,8 @@ def midi_to_loop(midi_filename, times_as_string=True):
     # Load the MIDI file and set some basic time parameters.
     midi = MidiFile(midi_filename)
     ticks_per_beat = midi.ticks_per_beat
-    ticks_per_16th = int(ticks_per_beat / 4)
-    loop_end_tick = 4 * 16 * ticks_per_16th
+    _validate_import_ppq(ticks_per_beat)
+    loop_end_tick = objects.BARS_PER_LOOP * 4 * ticks_per_beat
 
     # Merge all tracks and compute absolute time for each message.
     merged = merge_tracks(midi.tracks)
@@ -171,8 +189,9 @@ def midi_to_loop(midi_filename, times_as_string=True):
             continue
         end_tick = min(end_tick, loop_end_tick)
         # Determine the sixteenth-note position (1-based indexing).
-        start_sixteenth = (start_tick // ticks_per_16th) + 1
-        duration_sixteenth = max(1, math.ceil((end_tick - start_tick) / ticks_per_16th))
+        start_sixteenth = (start_tick * 4 // ticks_per_beat) + 1
+        duration_ticks = (end_tick - start_tick) * 4
+        duration_sixteenth = max(1, (duration_ticks + ticks_per_beat - 1) // ticks_per_beat)
 
         # Determine the bar (each bar has 16 sixteenth notes).
         bar_index = (start_sixteenth - 1) // 16
