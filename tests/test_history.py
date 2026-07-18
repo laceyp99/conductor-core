@@ -367,6 +367,50 @@ def test_filesystem_artifact_store_allows_unlimited_history(tmp_path, monkeypatc
     assert {path.name for path in root.iterdir()} == {"gen_one", "gen_two", "gen_three"}
 
 
+@pytest.mark.parametrize("max_generations", [0, -1])
+def test_filesystem_artifact_store_rejects_non_positive_limit(tmp_path, max_generations):
+    with pytest.raises(ValueError, match="max_generations must be None or a positive integer"):
+        history.FilesystemArtifactStore(
+            tmp_path / "generations",
+            max_generations=max_generations,
+        )
+
+
+@pytest.mark.parametrize("max_generations", [None, 1])
+def test_filesystem_artifact_store_accepts_supported_limits(tmp_path, max_generations):
+    store = history.FilesystemArtifactStore(
+        tmp_path / "generations",
+        max_generations=max_generations,
+    )
+
+    assert store.max_generations == max_generations
+
+
+def test_filesystem_artifact_store_keeps_newest_generation_with_limit_one(tmp_path, monkeypatch):
+    root = tmp_path / "generations"
+    store = history.FilesystemArtifactStore(root, max_generations=1)
+    ids = iter(["oldest", "newest"])
+    monkeypatch.setattr(history, "_generate_id", lambda: next(ids))
+
+    metadata = None
+    for index in range(2):
+        workspace = store.create_generation_workspace()
+        _write_binary_file(Path(workspace.midi_path), b"midi")
+        metadata = store.finalize_generation(
+            workspace=workspace,
+            prompt=f"prompt {index}",
+            key="C",
+            scale="major",
+            model="model",
+            provider="OpenAI",
+            temperature=0.0,
+        )
+
+    assert metadata is not None
+    assert {path.name for path in root.iterdir()} == {"gen_newest"}
+    assert Path(metadata.midi_path).exists()
+
+
 def test_history_count_and_clear_history_reflect_saved_generations(isolated_history_dir):
     _write_generation_metadata(
         isolated_history_dir, gen_id="one", timestamp=datetime.now() - timedelta(minutes=1)

@@ -133,15 +133,22 @@ def test_engine_records_resolved_default_soundfont(
     assert result.metadata.soundfont == default_soundfont.name
 
 
-def test_engine_config_passes_storage_limit_to_default_store(tmp_path):
+@pytest.mark.parametrize("max_generations", [None, 1])
+def test_engine_config_passes_storage_limit_to_default_store(tmp_path, max_generations):
     engine = LoopGenerationEngine(
         EngineConfig.from_defaults(
             artifact_root=tmp_path / "generations",
-            max_generations=None,
+            max_generations=max_generations,
         )
     )
 
-    assert engine.store.max_generations is None
+    assert engine.store.max_generations == max_generations
+
+
+@pytest.mark.parametrize("max_generations", [0, -1])
+def test_engine_config_rejects_non_positive_storage_limit(max_generations):
+    with pytest.raises(ValueError, match="max_generations must be None or a positive integer"):
+        EngineConfig.from_defaults(max_generations=max_generations)
 
 
 def test_engine_cleans_unfinalized_workspace_when_processing_fails(
