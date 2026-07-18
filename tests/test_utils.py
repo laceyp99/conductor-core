@@ -128,7 +128,7 @@ def test_calculate_midi_number_normalizes_pitch_names(
         ("Gbb", 4, 65),
         ("Abb", 4, 67),
         ("Bbb", 4, 69),
-        ("Cbb", 4, 70),
+        ("Cbb", 4, 58),
     ],
 )
 def test_calculate_midi_number_supports_ascii_double_flats(
@@ -138,6 +138,29 @@ def test_calculate_midi_number_supports_ascii_double_flats(
     expected_midi_number,
 ):
     note = note_factory(pitch=pitch, octave=octave)
+
+    assert utils.calculate_midi_number(note) == expected_midi_number
+
+
+@pytest.mark.parametrize(
+    ("pitch", "expected_midi_number"),
+    [
+        ("Cb", 59),
+        ("C♭", 59),
+        ("Cbb", 58),
+        ("C𝄫", 58),
+        ("B#", 72),
+        ("B♯", 72),
+        ("B##", 73),
+        ("B𝄪", 73),
+    ],
+)
+def test_calculate_midi_number_preserves_enharmonic_octave_boundaries(
+    note_factory,
+    pitch,
+    expected_midi_number,
+):
+    note = note_factory(pitch=pitch, octave=4)
 
     assert utils.calculate_midi_number(note) == expected_midi_number
 
