@@ -1,4 +1,6 @@
 import importlib.util
+import json
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -17,7 +19,7 @@ def load_script(name):
 
 @pytest.mark.parametrize(
     "name",
-    ["generate_midi", "midi_loop_roundtrip", "inspect_models"],
+    ["generate_midi", "midi_loop_roundtrip", "inspect_models", "check_copied_history"],
 )
 def test_example_script_imports_without_running_main(name, monkeypatch):
     monkeypatch.setattr("conductor_core.engine.LoopGenerationEngine.generate", lambda *args: None)
@@ -86,6 +88,37 @@ def test_midi_roundtrip_refuses_to_overwrite_input(tmp_path):
 
     with pytest.raises(ValueError, match="must be different"):
         script.roundtrip_midi(midi_path, midi_path)
+
+
+def test_check_copied_history_reports_reconstructed_paths(tmp_path, capsys):
+    script = load_script("check_copied_history")
+    root = tmp_path / "copied"
+    generation_dir = root / "gen_fixed_id"
+    generation_dir.mkdir(parents=True)
+    (generation_dir / "loop.mid").write_bytes(b"midi")
+    (generation_dir / "loop.mp3").write_bytes(b"audio")
+    (generation_dir / "messages.json").write_text("[]", encoding="utf-8")
+    metadata = {
+        "id": "fixed_id",
+        "timestamp": datetime.now().isoformat(),
+        "prompt": "prompt",
+        "key": "C",
+        "scale": "major",
+        "model": "model",
+        "provider": "OpenAI",
+        "temperature": 0.0,
+        "midi_path": "C:/old-root/gen_fixed_id/loop.mid",
+        "audio_path": "C:/old-root/gen_fixed_id/loop.mp3",
+        "messages_path": "C:/old-root/gen_fixed_id/messages.json",
+    }
+    (generation_dir / "metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
+
+    assert script.check_history(root) is True
+
+    output = capsys.readouterr().out
+    assert "C:/old-root/gen_fixed_id/loop.mid" in output
+    assert repr(str(generation_dir / "loop.mid")) in output
+    assert output.count("[PASS]") == 3
 
 
 def test_model_discovery_formats_packaged_metadata_without_provider_calls(capsys):
