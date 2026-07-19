@@ -349,6 +349,7 @@ def finalize_generation(
     temperature: float,
     cost: Optional[float] = None,
     soundfont: Optional[str] = None,
+    audio_render_succeeded: bool | None = None,
 ) -> GenerationMetadata:
     """Finalize a generation after its artifacts have been written.
 
@@ -362,6 +363,9 @@ def finalize_generation(
         temperature: Temperature setting.
         cost: API cost (optional).
         soundfont: SoundFont filename used to render the audio file (optional).
+        audio_render_succeeded: Explicit audio render outcome. When False, any
+            partial audio artifact is removed. When omitted, audio is detected
+            for backwards compatibility.
 
     Returns:
         GenerationMetadata: The persisted metadata.
@@ -377,6 +381,7 @@ def finalize_generation(
         temperature=temperature,
         cost=cost,
         soundfont=soundfont,
+        audio_render_succeeded=audio_render_succeeded,
         max_generations=MAX_GENERATIONS,
     )
 
@@ -392,19 +397,39 @@ def _finalize_generation(
     temperature: float,
     cost: Optional[float] = None,
     soundfont: Optional[str] = None,
+    audio_render_succeeded: bool | None = None,
     max_generations: int | None = MAX_GENERATIONS,
 ) -> GenerationMetadata:
     """Finalize a generation using an explicit artifact root."""
     max_generations = _validate_max_generations(max_generations)
     workspace = _validate_workspace(artifact_root, workspace)
 
-    try:
-        _validate_artifact_file(workspace.midi_path, required=True)
-    except FileNotFoundError as exc:
-        raise FileNotFoundError(f"Missing MIDI file for generation: {workspace.midi_path}") from exc
+	try:
+		_validate_artifact_file(workspace.midi_path, required=True)
+	except FileNotFoundError as exc:
+		raise FileNotFoundError(
+			f"Missing MIDI file for generation: {workspace.midi_path}"
+		) from exc
 
-    audio_path = _validate_artifact_file(workspace.audio_path, required=False)
-    messages_path = _validate_artifact_file(workspace.messages_path, required=False)
+	if audio_render_succeeded is False:
+		try:
+			os.remove(workspace.audio_path)
+		except FileNotFoundError:
+			pass
+		except OSError as exc:
+			logger.warning(f"Failed to remove partial audio artifact: {exc}")
+
+		audio_path = None
+	else:
+		audio_path = _validate_artifact_file(
+			workspace.audio_path,
+			required=False,
+		)
+
+	messages_path = _validate_artifact_file(
+		workspace.messages_path,
+		required=False,
+	)
 
     metadata = GenerationMetadata(
         id=workspace.id,

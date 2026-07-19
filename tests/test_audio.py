@@ -142,5 +142,52 @@ def test_midi_to_mp3_uses_requested_soundfont(monkeypatch, tmp_path):
     assert rendered_output == str(output_path)
     assert captured["soundfont_path"] == str(soundfont_path)
     assert captured["input_midi_path"] == str(midi_path)
-    assert captured["output_path"] == str(output_path)
+    rendered_temp_path = Path(captured["output_path"])
+    assert rendered_temp_path.parent == output_path.parent
+    assert rendered_temp_path != output_path
+    assert not rendered_temp_path.exists()
     assert output_path.read_bytes() == b"mp3"
+
+
+def test_midi_to_mp3_removes_partial_output_when_export_fails(monkeypatch, tmp_path):
+    midi_path = _write_file(tmp_path / "loop.mid")
+    _write_file(tmp_path / "custom.sf2")
+    output_path = tmp_path / "loop.mp3"
+    partial_path = None
+
+    monkeypatch.setattr(audio, "SOUNDFONT_DIR", str(tmp_path))
+    monkeypatch.setattr(audio, "is_playback_available", lambda soundfont_name=None: (True, None))
+
+    class FakeFluidSynth:
+        def __init__(self, selected_soundfont):
+            pass
+
+        def midi_to_audio(self, input_midi_path, temp_wav_path):
+            Path(temp_wav_path).write_bytes(b"wav")
+
+    class FakeAudioSegment:
+        @staticmethod
+        def from_wav(temp_wav_path):
+            class FailedExport:
+                def export(self, target_output_path, format, bitrate):
+                    nonlocal partial_path
+                    partial_path = Path(target_output_path)
+                    partial_path.write_bytes(b"partial")
+                    raise RuntimeError("export failed")
+
+            return FailedExport()
+
+    monkeypatch.setattr(audio, "FluidSynth", FakeFluidSynth)
+    monkeypatch.setattr(audio, "AudioSegment", FakeAudioSegment)
+
+    rendered_output = audio.midi_to_mp3(
+        str(midi_path),
+        output_path=str(output_path),
+        soundfont_name="custom.sf2",
+    )
+
+    assert rendered_output is None
+    assert partial_path is not None
+    assert partial_path.parent == output_path.parent
+    assert not partial_path.exists()
+    assert not output_path.exists()

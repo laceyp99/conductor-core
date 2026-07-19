@@ -117,6 +117,31 @@ def test_finalize_generation_persists_metadata_for_direct_written_artifacts(
     assert loaded_metadata == metadata
 
 
+def test_finalize_generation_discards_audio_after_reported_render_failure(
+    isolated_history_dir, monkeypatch
+):
+    monkeypatch.setattr(history, "_generate_id", lambda: "fixed_id")
+    workspace = history.create_generation_workspace()
+    _write_binary_file(Path(workspace.midi_path), b"midi")
+    _write_binary_file(Path(workspace.audio_path), b"partial")
+
+    metadata = history.finalize_generation(
+        workspace=workspace,
+        prompt="warm rhodes loop",
+        key="D",
+        scale="minor",
+        model="gpt-4o-mini",
+        provider="OpenAI",
+        temperature=0.3,
+        soundfont="custom.sf2",
+        audio_render_succeeded=False,
+    )
+
+    assert metadata.audio_path is None
+    assert metadata.soundfont is None
+    assert not Path(workspace.audio_path).exists()
+
+
 def test_finalize_generation_requires_direct_written_midi(isolated_history_dir, monkeypatch):
     monkeypatch.setattr(history, "_generate_id", lambda: "fixed_id")
     workspace = history.create_generation_workspace()

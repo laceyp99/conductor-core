@@ -111,6 +111,7 @@ class LoopGenerationEngine:
                 soundfont=os.path.basename(resolved_soundfont)
                 if audio_path and resolved_soundfont
                 else None,
+                audio_render_succeeded=audio_path is not None,
             )
             finalized = True
             return GenerationResult(
