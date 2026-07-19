@@ -17,6 +17,8 @@ import json
 import logging
 import os
 import shutil
+import stat
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -60,7 +62,7 @@ class FilesystemArtifactStore:
         )
 
     def cleanup_generation_workspace(self, workspace: "GenerationWorkspace") -> bool:
-        return _cleanup_generation_workspace(workspace)
+        return _cleanup_generation_workspace(self.artifact_root, workspace)
 
     def update_generation_audio(
         self,
@@ -156,7 +158,28 @@ def _get_generation_dir(gen_id: str, artifact_root: str | Path | None = None) ->
     Returns:
         str: Path to the generation's directory.
     """
-    return os.path.join(_resolve_artifact_root(artifact_root), f"gen_{gen_id}")
+    _validate_generation_id(gen_id)
+
+    root = Path(_resolve_artifact_root(artifact_root)).resolve()
+    generation_name = f"gen_{gen_id}"
+    candidate = (root / generation_name).resolve()
+    if candidate.parent != root or candidate.name != generation_name:
+        raise ValueError("generation path must be a direct child of the artifact root")
+
+    return str(candidate)
+
+
+def _validate_generation_id(gen_id: str) -> None:
+    """Reject generation IDs that can be interpreted as filesystem paths."""
+    if (
+        not isinstance(gen_id, str)
+        or not gen_id
+        or gen_id in {".", ".."}
+        or "/" in gen_id
+        or "\\" in gen_id
+        or "\x00" in gen_id
+    ):
+        raise ValueError("generation ID must be a non-empty path component")
 
 
 def _build_workspace(gen_id: str, artifact_root: str | Path | None = None) -> GenerationWorkspace:
@@ -170,6 +193,105 @@ def _build_workspace(gen_id: str, artifact_root: str | Path | None = None) -> Ge
         messages_path=os.path.join(gen_dir, "messages.json"),
         metadata_path=os.path.join(gen_dir, "metadata.json"),
     )
+
+
+def _validate_workspace(
+    artifact_root: str | Path, workspace: GenerationWorkspace
+) -> GenerationWorkspace:
+    """Require every workspace path to match the store's canonical path set."""
+    canonical = _build_workspace(workspace.id, artifact_root)
+    for field_name in (
+        "directory",
+        "midi_path",
+        "audio_path",
+        "messages_path",
+        "metadata_path",
+    ):
+        supplied_path = Path(getattr(workspace, field_name)).resolve()
+        canonical_path = Path(getattr(canonical, field_name)).resolve()
+        if supplied_path != canonical_path:
+            raise ValueError(
+                f"workspace {field_name} does not match generation {workspace.id!r} "
+                "under this artifact root"
+            )
+
+    return canonical
+
+
+def _validate_artifact_file(path: str, *, required: bool) -> str | None:
+    """Return a regular, single-link artifact path without following links."""
+    try:
+        file_stat = os.lstat(path)
+    except FileNotFoundError:
+        if required:
+            raise
+        return None
+
+    reparse_point = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+    file_attributes = getattr(file_stat, "st_file_attributes", 0)
+    if stat.S_ISLNK(file_stat.st_mode) or file_attributes & reparse_point:
+        raise ValueError(f"artifact path must not be a symbolic link or reparse point: {path}")
+    if not stat.S_ISREG(file_stat.st_mode):
+        raise ValueError(f"artifact path must be a regular file: {path}")
+    if file_stat.st_nlink != 1:
+        raise ValueError(f"artifact path must not be hard linked: {path}")
+
+    return path
+
+
+def _write_metadata_file(path: str, metadata: GenerationMetadata) -> None:
+    """Atomically replace metadata without following an existing destination link."""
+    directory = os.path.dirname(path)
+    file_descriptor, temporary_path = tempfile.mkstemp(
+        prefix=".metadata-", suffix=".tmp", dir=directory
+    )
+    try:
+        with os.fdopen(file_descriptor, "w", encoding="utf-8") as metadata_file:
+            metadata_file.write(metadata.model_dump_json(indent=2))
+        os.replace(temporary_path, path)
+    finally:
+        if os.path.exists(temporary_path):
+            os.unlink(temporary_path)
+
+
+def _copy_artifact_file(source: str, destination: str) -> None:
+    """Copy through a new file and atomically replace the destination entry."""
+    directory = os.path.dirname(destination)
+    file_descriptor, temporary_path = tempfile.mkstemp(
+        prefix=".artifact-", suffix=".tmp", dir=directory
+    )
+    os.close(file_descriptor)
+    try:
+        shutil.copy2(source, temporary_path)
+        os.replace(temporary_path, destination)
+    finally:
+        if os.path.exists(temporary_path):
+            os.unlink(temporary_path)
+
+
+def _load_generation_metadata(artifact_root: str | Path, gen_id: str) -> GenerationMetadata:
+    """Load metadata and bind all artifact paths to its validated directory."""
+    workspace = _build_workspace(gen_id, artifact_root)
+    metadata_path = _validate_artifact_file(workspace.metadata_path, required=True)
+    assert metadata_path is not None
+
+    with open(metadata_path, "r", encoding="utf-8") as metadata_file:
+        metadata = GenerationMetadata(**json.load(metadata_file))
+
+    if metadata.id != gen_id:
+        raise ValueError(
+            f"metadata generation ID {metadata.id!r} does not match directory ID {gen_id!r}"
+        )
+
+    _validate_artifact_file(workspace.midi_path, required=False)
+    audio_path = _validate_artifact_file(workspace.audio_path, required=False)
+    messages_path = _validate_artifact_file(workspace.messages_path, required=False)
+    metadata.midi_path = workspace.midi_path
+    metadata.audio_path = audio_path
+    metadata.messages_path = messages_path
+    if audio_path is None:
+        metadata.soundfont = None
+    return metadata
 
 
 def get_provider_for_model(model: str, model_info: dict) -> str:
@@ -280,22 +402,32 @@ def _finalize_generation(
 ) -> GenerationMetadata:
     """Finalize a generation using an explicit artifact root."""
     max_generations = _validate_max_generations(max_generations)
+    workspace = _validate_workspace(artifact_root, workspace)
 
-    if not os.path.exists(workspace.midi_path):
-        raise FileNotFoundError(f"Missing MIDI file for generation: {workspace.midi_path}")
+    try:
+        _validate_artifact_file(workspace.midi_path, required=True)
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(f"Missing MIDI file for generation: {workspace.midi_path}") from exc
 
-    if audio_render_succeeded is False and os.path.exists(workspace.audio_path):
+    if audio_render_succeeded is False:
         try:
             os.remove(workspace.audio_path)
+        except FileNotFoundError:
+            pass
         except OSError as exc:
             logger.warning(f"Failed to remove partial audio artifact: {exc}")
 
-    audio_path = (
-        workspace.audio_path
-        if audio_render_succeeded is not False and os.path.exists(workspace.audio_path)
-        else None
+        audio_path = None
+    else:
+        audio_path = _validate_artifact_file(
+            workspace.audio_path,
+            required=False,
+        )
+
+    messages_path = _validate_artifact_file(
+        workspace.messages_path,
+        required=False,
     )
-    messages_path = workspace.messages_path if os.path.exists(workspace.messages_path) else None
 
     metadata = GenerationMetadata(
         id=workspace.id,
@@ -313,8 +445,7 @@ def _finalize_generation(
         soundfont=soundfont if audio_path else None,
     )
 
-    with open(workspace.metadata_path, "w") as f:
-        f.write(metadata.model_dump_json(indent=2))
+    _write_metadata_file(workspace.metadata_path, metadata)
 
     logger.info(f"Finalized generation {workspace.id} in history")
     _enforce_limit(artifact_root, max_generations=max_generations)
@@ -334,11 +465,15 @@ def cleanup_generation_workspace(workspace: GenerationWorkspace) -> bool:
     Returns:
         bool: True if the workspace was removed, False otherwise.
     """
-    return _cleanup_generation_workspace(workspace)
+    return _cleanup_generation_workspace(GENERATIONS_DIR, workspace)
 
 
-def _cleanup_generation_workspace(workspace: GenerationWorkspace) -> bool:
+def _cleanup_generation_workspace(
+    artifact_root: str | Path, workspace: GenerationWorkspace
+) -> bool:
     """Remove an unfinalized generation workspace."""
+    workspace = _validate_workspace(artifact_root, workspace)
+
     if os.path.exists(workspace.metadata_path):
         return False
 
@@ -387,7 +522,7 @@ def _update_generation_audio(
     if audio_path and os.path.exists(audio_path):
         dest_audio_path = os.path.join(gen_dir, "loop.mp3")
         if os.path.abspath(audio_path) != os.path.abspath(dest_audio_path):
-            shutil.copy2(audio_path, dest_audio_path)
+            _copy_artifact_file(audio_path, dest_audio_path)
         else:
             dest_audio_path = audio_path
         audio_updated = True
@@ -396,8 +531,7 @@ def _update_generation_audio(
     if audio_updated:
         metadata.soundfont = soundfont
 
-    with open(metadata_path, "w") as f:
-        f.write(metadata.model_dump_json(indent=2))
+    _write_metadata_file(metadata_path, metadata)
 
     return metadata
 
@@ -423,20 +557,20 @@ def _load_history(artifact_root: str | Path) -> list[GenerationMetadata]:
         if not item.startswith("gen_"):
             continue
 
-        gen_dir = os.path.join(root, item)
+        try:
+            gen_dir = _get_generation_dir(item.removeprefix("gen_"), root)
+        except ValueError as exc:
+            logger.warning(f"Skipping unsafe generation path {item}: {exc}")
+            continue
         if not os.path.isdir(gen_dir):
             continue
 
-        metadata_path = os.path.join(gen_dir, "metadata.json")
-        if not os.path.exists(metadata_path):
+        try:
+            metadata = _load_generation_metadata(root, item.removeprefix("gen_"))
+            generations.append(metadata)
+        except FileNotFoundError:
             logger.warning(f"Missing metadata for generation: {item}")
             continue
-
-        try:
-            with open(metadata_path, "r") as f:
-                data = json.load(f)
-            metadata = GenerationMetadata(**data)
-            generations.append(metadata)
         except Exception as e:
             logger.warning(f"Failed to load generation {item}: {e}")
             continue
@@ -461,16 +595,11 @@ def get_generation(gen_id: str) -> Optional[GenerationMetadata]:
 
 def _get_generation(artifact_root: str | Path, gen_id: str) -> Optional[GenerationMetadata]:
     """Get a specific generation from an explicit artifact root."""
-    gen_dir = _get_generation_dir(gen_id, artifact_root)
-    metadata_path = os.path.join(gen_dir, "metadata.json")
-
-    if not os.path.exists(metadata_path):
-        return None
-
+    _validate_generation_id(gen_id)
     try:
-        with open(metadata_path, "r") as f:
-            data = json.load(f)
-        return GenerationMetadata(**data)
+        return _load_generation_metadata(artifact_root, gen_id)
+    except FileNotFoundError:
+        return None
     except Exception as e:
         logger.error(f"Failed to load generation {gen_id}: {e}")
         return None
