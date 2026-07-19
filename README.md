@@ -53,6 +53,25 @@ pip install -e ".[providers,playback,dev]"
 Using the venv interpreter explicitly is intentional. `py -3.12 -m pip`
 selects the registered global Python even when a virtual environment exists.
 
+### Install as a project dependency
+
+Other Conductor repositories should pin Core to a release tag instead of an
+unreleased branch or moving commit. Include only the extras the consumer uses:
+
+```text
+conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.2.0
+```
+
+To install the same reference directly:
+
+```powershell
+python -m pip install "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.2.0"
+```
+
+Upgrade a dependent project by changing its pinned tag and reinstalling its
+dependencies. Review [`CHANGELOG.md`](CHANGELOG.md) before changing versions,
+especially while Core remains below version 1.0.
+
 ## Basic generation
 
 ```python
@@ -218,6 +237,17 @@ files. Core retains the newest 20 generations by default, but custom artifact
 stores and manually retained files still consume space at their selected
 location.
 
+Configure retention on the engine or store. Use `None` only when the calling
+application owns its disk-usage policy:
+
+```python
+from conductor_core import EngineConfig
+from conductor_core.storage import FilesystemArtifactStore
+
+config = EngineConfig.from_defaults(max_generations=100)
+unlimited_store = FilesystemArtifactStore("my-output", max_generations=None)
+```
+
 `GenerationResult` contains:
 
 | Attribute | Contents |
@@ -287,3 +317,10 @@ python -m pytest -q
 
 The tests are deterministic and do not make live provider calls or require the
 audio toolchain.
+
+## Releases
+
+Release history, compatibility notes, and migration guidance live in
+[`CHANGELOG.md`](CHANGELOG.md). GitHub releases provide the automatic source
+archives for each tag; this project does not attach release-specific wheels or
+binary downloads.
