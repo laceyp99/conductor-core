@@ -404,32 +404,30 @@ def _finalize_generation(
     max_generations = _validate_max_generations(max_generations)
     workspace = _validate_workspace(artifact_root, workspace)
 
-	try:
-		_validate_artifact_file(workspace.midi_path, required=True)
-	except FileNotFoundError as exc:
-		raise FileNotFoundError(
-			f"Missing MIDI file for generation: {workspace.midi_path}"
-		) from exc
+    try:
+        _validate_artifact_file(workspace.midi_path, required=True)
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(f"Missing MIDI file for generation: {workspace.midi_path}") from exc
 
-	if audio_render_succeeded is False:
-		try:
-			os.remove(workspace.audio_path)
-		except FileNotFoundError:
-			pass
-		except OSError as exc:
-			logger.warning(f"Failed to remove partial audio artifact: {exc}")
+    if audio_render_succeeded is False:
+        try:
+            os.remove(workspace.audio_path)
+        except FileNotFoundError:
+            pass
+        except OSError as exc:
+            logger.warning(f"Failed to remove partial audio artifact: {exc}")
 
-		audio_path = None
-	else:
-		audio_path = _validate_artifact_file(
-			workspace.audio_path,
-			required=False,
-		)
+        audio_path = None
+    else:
+        audio_path = _validate_artifact_file(
+            workspace.audio_path,
+            required=False,
+        )
 
-	messages_path = _validate_artifact_file(
-		workspace.messages_path,
-		required=False,
-	)
+    messages_path = _validate_artifact_file(
+        workspace.messages_path,
+        required=False,
+    )
 
     metadata = GenerationMetadata(
         id=workspace.id,
