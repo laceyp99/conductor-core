@@ -6,6 +6,7 @@ on:
 
 jobs:
   validate:
+    name: Validate (Linux)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,3 +24,28 @@ jobs:
         run: python -m pytest -q
       - name: Build
         run: python -m build
+
+  windows-storage:
+    name: Storage security (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install package and test dependencies
+        run: python -m pip install -e . pytest
+      - name: Verify escaping directory symlinks are exercised
+        shell: pwsh
+        run: |
+          $test = "tests/test_history.py::test_store_rejects_generation_symlink_that_escapes_root"
+          $output = python -m pytest -q $test -rA 2>&1 | Tee-Object -Variable pytestOutput
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+          if ($pytestOutput -match "SKIPPED") {
+            throw "The Windows directory-symlink security test was skipped."
+          }
+      - name: Test Windows storage behavior
+        run: python -m pytest -q tests/test_history.py tests/test_paths.py
