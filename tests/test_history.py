@@ -73,6 +73,32 @@ def test_create_generation_workspace_allocates_canonical_paths(isolated_history_
     assert gen_dir.exists()
 
 
+def test_generation_metadata_distinguishes_unrecorded_and_explicit_reasoning_settings():
+    common_fields = {
+        "id": "fixed_id",
+        "timestamp": datetime.now(),
+        "prompt": "warm rhodes loop",
+        "key": "D",
+        "scale": "minor",
+        "model": "gpt-4o-mini",
+        "provider": "OpenAI",
+        "temperature": 0.3,
+        "midi_path": "loop.mid",
+    }
+
+    unrecorded = history.GenerationMetadata(**common_fields)
+    explicit = history.GenerationMetadata(
+        **common_fields,
+        use_thinking=False,
+        effort="low",
+    )
+
+    assert unrecorded.use_thinking is None
+    assert unrecorded.effort is None
+    assert explicit.use_thinking is False
+    assert explicit.effort == "low"
+
+
 def test_finalize_generation_persists_metadata_for_direct_written_artifacts(
     isolated_history_dir, monkeypatch
 ):
@@ -91,6 +117,8 @@ def test_finalize_generation_persists_metadata_for_direct_written_artifacts(
         model="gpt-4o-mini",
         provider="OpenAI",
         temperature=0.3,
+        use_thinking=False,
+        effort="medium",
         cost=1.5,
         soundfont="FM-Piano1 20190916.sf2",
     )
@@ -109,6 +137,8 @@ def test_finalize_generation_persists_metadata_for_direct_written_artifacts(
     assert metadata.model == "gpt-4o-mini"
     assert metadata.provider == "OpenAI"
     assert metadata.temperature == 0.3
+    assert metadata.use_thinking is False
+    assert metadata.effort == "medium"
     assert metadata.cost == 1.5
     assert metadata.midi_path == str(gen_dir / "loop.mid")
     assert metadata.audio_path == str(gen_dir / "loop.mp3")
@@ -292,6 +322,8 @@ def test_update_generation_audio_copies_audio_and_updates_soundfont(
         model="gpt-4o-mini",
         provider="OpenAI",
         temperature=0.3,
+        use_thinking=True,
+        effort="high",
         cost=1.5,
         soundfont="old.sf2",
     )
@@ -307,9 +339,13 @@ def test_update_generation_audio_copies_audio_and_updates_soundfont(
     assert updated is not None
     assert updated.audio_path == str(gen_dir / "loop.mp3")
     assert updated.soundfont == "new.sf2"
+    assert updated.use_thinking is True
+    assert updated.effort == "high"
     assert (gen_dir / "loop.mp3").read_bytes() == b"new-audio"
     assert metadata is not None
     assert metadata.soundfont == "new.sf2"
+    assert metadata.use_thinking is True
+    assert metadata.effort == "high"
 
 
 @pytest.mark.parametrize("audio_path", [None, "missing.mp3"])
@@ -367,6 +403,25 @@ def test_load_history_allows_older_entries_without_soundfont(isolated_history_di
     assert [entry.id for entry in loaded] == ["newer", "older"]
     assert loaded[0].soundfont == "FM-Piano1 20190916.sf2"
     assert loaded[1].soundfont is None
+
+
+def test_load_history_allows_legacy_entries_without_reasoning_settings(isolated_history_dir):
+    gen_dir = _write_generation_metadata(
+        isolated_history_dir,
+        gen_id="legacy",
+        timestamp=datetime.now(),
+    )
+    metadata_path = gen_dir / "metadata.json"
+    metadata_json = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata_json.pop("use_thinking")
+    metadata_json.pop("effort")
+    metadata_path.write_text(json.dumps(metadata_json), encoding="utf-8")
+
+    loaded = history.load_history()
+
+    assert len(loaded) == 1
+    assert loaded[0].use_thinking is None
+    assert loaded[0].effort is None
 
 
 def test_load_history_sorts_newest_first(isolated_history_dir):

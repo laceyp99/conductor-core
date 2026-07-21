@@ -94,6 +94,8 @@ class GenerationMetadata(BaseModel):
         model: Model name used for generation.
         provider: API provider (OpenAI, Anthropic, Google, Ollama).
         temperature: Temperature setting used.
+        use_thinking: Whether reasoning was requested. None means not recorded.
+        effort: Requested reasoning effort. None means not recorded.
         cost: API cost if available.
         midi_path: Path to the MIDI file.
         audio_path: Path to the audio file (None if synthesis failed).
@@ -109,6 +111,8 @@ class GenerationMetadata(BaseModel):
     model: str
     provider: str
     temperature: float
+    use_thinking: Optional[bool] = None
+    effort: Optional[str] = None
     cost: Optional[float] = None
     midi_path: str
     audio_path: Optional[str] = None
@@ -347,6 +351,8 @@ def finalize_generation(
     model: str,
     provider: str,
     temperature: float,
+    use_thinking: Optional[bool] = None,
+    effort: Optional[str] = None,
     cost: Optional[float] = None,
     soundfont: Optional[str] = None,
     audio_render_succeeded: bool | None = None,
@@ -361,6 +367,8 @@ def finalize_generation(
         model: Model name used.
         provider: API provider.
         temperature: Temperature setting.
+        use_thinking: Whether reasoning was requested (optional).
+        effort: Requested reasoning effort (optional).
         cost: API cost (optional).
         soundfont: SoundFont filename used to render the audio file (optional).
         audio_render_succeeded: Explicit audio render outcome. When False, any
@@ -379,6 +387,8 @@ def finalize_generation(
         model=model,
         provider=provider,
         temperature=temperature,
+        use_thinking=use_thinking,
+        effort=effort,
         cost=cost,
         soundfont=soundfont,
         audio_render_succeeded=audio_render_succeeded,
@@ -395,6 +405,8 @@ def _finalize_generation(
     model: str,
     provider: str,
     temperature: float,
+    use_thinking: Optional[bool] = None,
+    effort: Optional[str] = None,
     cost: Optional[float] = None,
     soundfont: Optional[str] = None,
     audio_render_succeeded: bool | None = None,
@@ -438,6 +450,8 @@ def _finalize_generation(
         model=model,
         provider=provider,
         temperature=temperature,
+        use_thinking=use_thinking,
+        effort=effort,
         cost=cost,
         midi_path=workspace.midi_path,
         audio_path=audio_path,
