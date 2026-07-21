@@ -268,6 +268,13 @@ updating saved audio metadata. By default, history retains the newest 20
 generations. The generation script shows the most commonly consumed result
 fields after a run.
 
+For new engine generations, `GenerationMetadata.use_thinking` and
+`GenerationMetadata.effort` record the exact reasoning settings from the
+`GenerationRequest`. Both fields are optional for compatibility with history
+written by Core 0.2.0 and earlier: `None` means the value was not recorded, not
+that a historical default should be inferred. In particular, consumers should
+distinguish an explicit `False` value from `None`.
+
 ## Direct MIDI and music utilities
 
 Consumers can convert existing MIDI into Core's four-bar loop model and write it
