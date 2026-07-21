@@ -107,6 +107,8 @@ class LoopGenerationEngine:
                 model=request.model,
                 provider=provider,
                 temperature=request.temperature,
+                use_thinking=request.use_thinking,
+                effort=request.effort,
                 cost=total_cost,
                 soundfont=os.path.basename(resolved_soundfont)
                 if audio_path and resolved_soundfont

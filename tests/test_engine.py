@@ -57,6 +57,8 @@ def test_engine_generates_persisted_artifacts_with_mocked_provider(
             description="warm rhodes loop",
             model="gpt-4o-mini",
             temperature=0.3,
+            use_thinking=False,
+            effort="medium",
             render_audio=True,
             soundfont_path="custom.sf2",
         ),
@@ -64,10 +66,19 @@ def test_engine_generates_persisted_artifacts_with_mocked_provider(
     )
 
     generation_dir = tmp_path / "generations" / f"gen_{result.generation_id}"
+    metadata_json = json.loads((generation_dir / "metadata.json").read_text(encoding="utf-8"))
+    loaded_metadata = engine.store.get_generation(result.generation_id)
 
     assert result.midi_path == str(generation_dir / "loop.mid")
     assert result.audio_path == str(generation_dir / "loop.mp3")
     assert result.metadata.soundfont == "custom.sf2"
+    assert result.metadata.use_thinking is False
+    assert result.metadata.effort == "medium"
+    assert metadata_json["use_thinking"] is False
+    assert metadata_json["effort"] == "medium"
+    assert loaded_metadata is not None
+    assert loaded_metadata.use_thinking is False
+    assert loaded_metadata.effort == "medium"
     assert Path(result.midi_path).exists()
     assert Path(result.audio_path).read_bytes() == b"audio"
     assert json.loads((generation_dir / "messages.json").read_text(encoding="utf-8")) == [
@@ -77,6 +88,8 @@ def test_engine_generates_persisted_artifacts_with_mocked_provider(
     assert captured["prompt"] == "C Major warm rhodes loop."
     assert captured["provider_credentials"].openai_api_key == "openai-key"
     assert captured["system_prompt"] == "config prompt"
+    assert captured["use_thinking"] is False
+    assert captured["effort"] == "medium"
     assert captured["_return_provider"] is True
     assert captured["audio"]["soundfont_name"] == str(soundfont_path)
     assert [event.stage for event in progress_events] == [
