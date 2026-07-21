@@ -73,6 +73,32 @@ def test_create_generation_workspace_allocates_canonical_paths(isolated_history_
     assert gen_dir.exists()
 
 
+def test_generation_metadata_distinguishes_unrecorded_and_explicit_reasoning_settings():
+    common_fields = {
+        "id": "fixed_id",
+        "timestamp": datetime.now(),
+        "prompt": "warm rhodes loop",
+        "key": "D",
+        "scale": "minor",
+        "model": "gpt-4o-mini",
+        "provider": "OpenAI",
+        "temperature": 0.3,
+        "midi_path": "loop.mid",
+    }
+
+    unrecorded = history.GenerationMetadata(**common_fields)
+    explicit = history.GenerationMetadata(
+        **common_fields,
+        use_thinking=False,
+        effort="low",
+    )
+
+    assert unrecorded.use_thinking is None
+    assert unrecorded.effort is None
+    assert explicit.use_thinking is False
+    assert explicit.effort == "low"
+
+
 def test_finalize_generation_persists_metadata_for_direct_written_artifacts(
     isolated_history_dir, monkeypatch
 ):
