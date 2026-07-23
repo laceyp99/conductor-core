@@ -461,75 +461,27 @@
                     "ITPM": 30000,
                     "OTPM": 8000
                 }
-            },
-            "claude-opus-4-0": {
-                "extended_thinking": true,
-                "max_tokens": 32000,
-                "max_thinking_budget": 27000,
-                "cost": {
-                    "input": 15.00,
-                    "5m cache input": 18.75,
-                    "1h cache input": 30.00,
-                    "cache hits/refreshes": 1.50,
-                    "output": 75.00
-                },
-                "rate_limits": {
-                    "RPM": 50,
-                    "ITPM": 30000,
-                    "OTPM": 8000
-                }
-            },
-            "claude-sonnet-4-0": {
-                "extended_thinking": true,
-                "max_tokens": 64000,
-                "max_thinking_budget": 59000,
-                "cost": {
-                    "input": 3.00,
-                    "5m cache input": 3.75,
-                    "1h cache input": 6.00,
-                    "cache hits/refreshes": 0.30,
-                    "output": 15.00
-                },
-                "rate_limits": {
-                    "RPM": 50,
-                    "ITPM": 30000,
-                    "OTPM": 8000
-                }
-            },
-            "claude-3-5-haiku-latest": {
-                "extended_thinking": false,
-                "max_tokens": 8192,
-                "cost": {
-                    "input": 0.80,
-                    "5m cache input": 1.00,
-                    "1h cache input": 1.60,
-                    "cache hits/refreshes": 0.08,
-                    "output": 4.00
-                },
-                "rate_limits": {
-                    "RPM": 50,
-                    "ITPM": 50000,
-                    "OTPM": 10000
-                }
-            },
-            "claude-3-haiku-20240307": {
-                "extended_thinking": false,
-                "max_tokens": 4096,
-                "cost": {
-                    "input": 0.25,
-                    "5m cache input": 0.30,
-                    "1h cache input": 0.50,
-                    "cache hits/refreshes": 0.03,
-                    "output": 1.25
-                },
-                "rate_limits": {
-                    "RPM": 50,
-                    "ITPM": 50000,
-                    "OTPM": 10000
-                }
             }
         },
         "Google": {
+            "gemini-3.6-flash": {
+                "extended_thinking": true,
+                "effort_options": ["minimal", "low", "medium", "high"],
+                "max_tokens": 65536,
+                "cost": {
+                    "input": 1.50,
+                    "cache": {
+                        "text": 0.15,
+                        "storage hour": 1.00
+                    },
+                    "output": 7.50
+                },
+                "rate_limits": {
+                    "RPM": 5,
+                    "TPM": 250000,
+                    "RPD": 20
+                }
+            },
             "gemini-3.5-flash": {
                 "extended_thinking": true,
                 "effort_options": ["minimal", "low", "medium", "high"],
@@ -541,6 +493,24 @@
                         "storage hour": 1.00
                     },
                     "output": 9.00
+                },
+                "rate_limits": {
+                    "RPM": 5,
+                    "TPM": 250000,
+                    "RPD": 20
+                }
+            },
+            "gemini-3.5-flash-lite": {
+                "extended_thinking": true,
+                "effort_options": ["minimal", "low", "medium", "high"],
+                "max_tokens": 65536,
+                "cost": {
+                    "input": 0.30,
+                    "cache": {
+                        "text": 0.03,
+                        "storage hour": 1.00
+                    },
+                    "output": 2.50
                 },
                 "rate_limits": {
                     "RPM": 5,
@@ -671,38 +641,6 @@
                     "RPM": 10,
                     "TPM": 250000,
                     "RPD": 20
-                }
-            },
-            "gemini-2.0-flash": {
-                "extended_thinking": false,
-                "min_thinking_budget": 0,
-                "max_thinking_budget": 0,
-                "max_tokens": 8192,
-                "cost": {
-                    "input": 0.10,
-                    "cache": {
-                        "text": 0.025,
-                        "storage hour": 1.00
-                    },
-                    "output": 0.40
-                },
-                "rate_limits": {
-                    "RPM": 2000,
-                    "TPM": 4000000
-                }
-            },
-            "gemini-2.0-flash-lite": {
-                "extended_thinking": false,
-                "min_thinking_budget": 0,
-                "max_thinking_budget": 0,
-                "max_tokens": 8192,
-                "cost": {
-                    "input": 0.075,
-                    "output": 0.30
-                },
-                "rate_limits": {
-                    "RPM": 4000,
-                    "TPM": 4000000
                 }
             }
         }
