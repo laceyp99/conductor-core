@@ -37,9 +37,9 @@ def test_calc_cost_handles_models_without_cache_pricing():
         cached_content_token_count=None,
     )
 
-    cost = gemini_api.calc_cost("gemini-2.0-flash-lite", usage)
+    cost = gemini_api.calc_cost("gemini-2.5-flash-lite", usage)
 
-    expected = (1000 * 0.075 / 1_000_000) + (200 * 0.30 / 1_000_000)
+    expected = (1000 * 0.10 / 1_000_000) + (200 * 0.40 / 1_000_000)
     assert cost == pytest.approx(expected)
 
 
