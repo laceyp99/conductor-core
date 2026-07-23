@@ -606,38 +606,6 @@
                     "TPM": 250000,
                     "RPD": 20
                 }
-            },
-            "gemini-2.0-flash": {
-                "extended_thinking": false,
-                "min_thinking_budget": 0,
-                "max_thinking_budget": 0,
-                "max_tokens": 8192,
-                "cost": {
-                    "input": 0.10,
-                    "cache": {
-                        "text": 0.025,
-                        "storage hour": 1.00
-                    },
-                    "output": 0.40
-                },
-                "rate_limits": {
-                    "RPM": 2000,
-                    "TPM": 4000000
-                }
-            },
-            "gemini-2.0-flash-lite": {
-                "extended_thinking": false,
-                "min_thinking_budget": 0,
-                "max_thinking_budget": 0,
-                "max_tokens": 8192,
-                "cost": {
-                    "input": 0.075,
-                    "output": 0.30
-                },
-                "rate_limits": {
-                    "RPM": 4000,
-                    "TPM": 4000000
-                }
             }
         }
     }
