@@ -178,7 +178,7 @@ def test_claude_loop_gen_omits_cache_control_for_short_system_prompt(monkeypatch
         return _anthropic_completion(payload)
 
     fake_client = SimpleNamespace(messages=SimpleNamespace(create=fake_create))
-    monkeypatch.setattr(claude_api, "initialize_anthropic_client", lambda: fake_client)
+    monkeypatch.setattr(claude_api, "initialize_anthropic_client", lambda api_key: fake_client)
     monkeypatch.setattr(claude_api.utils, "get_loop_prompt", lambda: "short system prompt")
     monkeypatch.setattr(claude_api.utils, "save_messages_to_json", _fail_save_messages)
 
@@ -203,7 +203,7 @@ def test_claude_loop_gen_adds_cache_control_for_large_system_prompt(monkeypatch)
 
     fake_client = SimpleNamespace(messages=SimpleNamespace(create=fake_create))
     long_prompt = "x" * claude_api.ANTHROPIC_CACHE_CONTROL_MIN_CHARS
-    monkeypatch.setattr(claude_api, "initialize_anthropic_client", lambda: fake_client)
+    monkeypatch.setattr(claude_api, "initialize_anthropic_client", lambda api_key: fake_client)
     monkeypatch.setattr(claude_api.utils, "get_loop_prompt", lambda: long_prompt)
     monkeypatch.setattr(claude_api.utils, "save_messages_to_json", _fail_save_messages)
 
@@ -242,7 +242,7 @@ def test_openai_loop_gen_does_not_write_message_log(monkeypatch):
     )
     fake_client = SimpleNamespace(responses=SimpleNamespace(parse=lambda **kwargs: response))
 
-    monkeypatch.setattr(openai_api, "initialize_openai_client", lambda: fake_client)
+    monkeypatch.setattr(openai_api, "initialize_openai_client", lambda api_key: fake_client)
     monkeypatch.setattr(openai_api.utils, "get_loop_prompt", lambda: "system prompt")
     monkeypatch.setattr(openai_api.utils, "save_messages_to_json", _fail_save_messages)
 
@@ -273,7 +273,8 @@ def test_gemini_loop_gen_logs_unsupported_effort(monkeypatch, caplog, capsys):
         models=SimpleNamespace(generate_content=lambda **kwargs: response)
     )
 
-    monkeypatch.setattr(gemini_api, "initialize_gemini_client", lambda: fake_client)
+    monkeypatch.setattr(gemini_api, "initialize_gemini_client", lambda api_key: fake_client)
+
     monkeypatch.setattr(gemini_api.utils, "get_loop_prompt", lambda: "system prompt")
     monkeypatch.setattr(gemini_api.utils, "save_messages_to_json", _fail_save_messages)
 
@@ -289,6 +290,27 @@ def test_gemini_loop_gen_logs_unsupported_effort(monkeypatch, caplog, capsys):
     assert cost == 0
     assert capsys.readouterr().out == ""
     assert "Effort 'bogus' is not supported by model gemini-3.1-flash-lite" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("provider", "initializer"),
+    [
+        (openai_api, "initialize_openai_client"),
+        (gemini_api, "initialize_gemini_client"),
+        (claude_api, "initialize_anthropic_client"),
+    ],
+)
+def test_provider_loop_gen_propagates_client_initialization_type_errors(
+    monkeypatch, provider, initializer
+):
+    def raise_type_error(*, api_key):
+        assert api_key == "injected-key"
+        raise TypeError("client initialization failed")
+
+    monkeypatch.setattr(provider, initializer, raise_type_error)
+
+    with pytest.raises(TypeError, match="client initialization failed"):
+        provider.loop_gen("write a loop", "test-model", api_key="injected-key")
 
 
 def test_ollama_loop_gen_rejects_missing_content(monkeypatch):

@@ -95,10 +95,7 @@ def loop_gen(
     system_prompt: str | None = None,
 ):
     """Generate a MIDI loop using the specified Gemini model and prompt."""
-    try:
-        client = initialize_gemini_client(api_key=api_key)
-    except TypeError:
-        client = initialize_gemini_client()
+    client = initialize_gemini_client(api_key=api_key)
     loop_prompt = system_prompt or utils.get_loop_prompt()
 
     model_info = utils.get_model_info()
