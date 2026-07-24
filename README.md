@@ -311,7 +311,7 @@ logging in the application:
 ```python
 import logging
 
-logging.basicConfig(level=logging.INFO)          # everything to the console
+logging.basicConfig(level=logging.INFO)  # everything to the console
 # or route only Core records somewhere specific:
 logging.getLogger("conductor_core").addHandler(my_handler)
 ```
