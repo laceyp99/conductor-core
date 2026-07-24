@@ -82,10 +82,7 @@ def loop_gen(
     system_prompt: str | None = None,
 ):
     """Generate a MIDI loop using the specified OpenAI model and prompt."""
-    try:
-        client = initialize_openai_client(api_key=api_key)
-    except TypeError:
-        client = initialize_openai_client()
+    client = initialize_openai_client(api_key=api_key)
     loop_prompt = system_prompt or utils.get_loop_prompt()
     messages = [
         {"role": "system", "content": loop_prompt},
