@@ -29,7 +29,7 @@ def test_list_soundfonts_returns_sorted_sf2_files(monkeypatch, tmp_path):
 def test_get_default_soundfont_prefers_known_candidates(monkeypatch, tmp_path):
     monkeypatch.setattr(audio, "SOUNDFONT_DIR", str(tmp_path))
     _write_file(tmp_path / "custom.sf2")
-    preferred = _write_file(tmp_path / "FM-Piano1 20190916.sf2")
+    preferred = _write_file(tmp_path / "FM-Piano1-20190916.sf2")
 
     soundfont_path = audio.get_default_soundfont()
 
