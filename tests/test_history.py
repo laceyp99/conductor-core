@@ -120,7 +120,7 @@ def test_finalize_generation_persists_metadata_for_direct_written_artifacts(
         use_thinking=False,
         effort="medium",
         cost=1.5,
-        soundfont="FM-Piano1 20190916.sf2",
+        soundfont="FM-Piano1-20190916.sf2",
     )
 
     gen_dir = isolated_history_dir / "gen_fixed_id"
@@ -143,7 +143,7 @@ def test_finalize_generation_persists_metadata_for_direct_written_artifacts(
     assert metadata.midi_path == str(gen_dir / "loop.mid")
     assert metadata.audio_path == str(gen_dir / "loop.mp3")
     assert metadata.messages_path == str(gen_dir / "messages.json")
-    assert metadata.soundfont == "FM-Piano1 20190916.sf2"
+    assert metadata.soundfont == "FM-Piano1-20190916.sf2"
     assert loaded_metadata == metadata
 
 
@@ -395,13 +395,13 @@ def test_load_history_allows_older_entries_without_soundfont(isolated_history_di
         isolated_history_dir,
         gen_id="newer",
         timestamp=now,
-        soundfont="FM-Piano1 20190916.sf2",
+        soundfont="FM-Piano1-20190916.sf2",
     )
 
     loaded = history.load_history()
 
     assert [entry.id for entry in loaded] == ["newer", "older"]
-    assert loaded[0].soundfont == "FM-Piano1 20190916.sf2"
+    assert loaded[0].soundfont == "FM-Piano1-20190916.sf2"
     assert loaded[1].soundfont is None
 
 

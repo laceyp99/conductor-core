@@ -45,6 +45,7 @@ conductor_core = [
 	"resources/model_list.json",
 	"resources/prompts/loop_gen.txt",
 	"resources/soundfonts/*.sf2",
+	"resources/soundfonts/README.md",
 ]
 
 [tool.pytest.ini_options]

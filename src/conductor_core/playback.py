@@ -24,7 +24,7 @@ SOUNDFONT_DIR = str(resources.files("conductor_core.resources").joinpath("soundf
 _EXTRA_SOUNDFONT_DIRS: list[str] = []
 # Preferred SoundFont filenames searched in order.
 DEFAULT_SOUNDFONT_CANDIDATES = [
-    "FM-Piano1 20190916.sf2",
+    "FM-Piano1-20190916.sf2",
     "SalamanderGrandPiano.sf2",
     "salamander-grand-piano.sf2",
     "piano.sf2",

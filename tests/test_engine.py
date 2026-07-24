@@ -105,7 +105,7 @@ def test_engine_records_resolved_default_soundfont(
     sample_loop,
 ):
     captured = {}
-    default_soundfont = tmp_path / "FM-Piano1 20190916.sf2"
+    default_soundfont = tmp_path / "FM-Piano1-20190916.sf2"
 
     def fake_midi_to_mp3(midi_path, output_path=None, soundfont_name=None):
         Path(output_path).write_bytes(b"audio")
