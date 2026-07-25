@@ -23,7 +23,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, PrivateAttr
 
 from conductor_core.paths import resolve_default_artifact_root
 
@@ -117,7 +117,11 @@ class GenerationMetadata(BaseModel):
 
 
 class GenerationWorkspace(BaseModel):
-    """Canonical artifact paths for a generation in progress."""
+    """Canonical artifact paths for a generation in progress.
+
+    Workspaces created by Core retain their resolved artifact root internally so
+    lifecycle operations are not redirected if the process environment changes.
+    """
 
     id: str
     directory: str
@@ -125,6 +129,7 @@ class GenerationWorkspace(BaseModel):
     audio_path: str
     messages_path: str
     metadata_path: str
+    _artifact_root: str | None = PrivateAttr(default=None)
 
 
 def _resolve_artifact_root(artifact_root: str | Path | None = None) -> str:
@@ -184,8 +189,9 @@ def _validate_generation_id(gen_id: str) -> None:
 
 def _build_workspace(gen_id: str, artifact_root: str | Path | None = None) -> GenerationWorkspace:
     """Build the canonical path set for a generation ID."""
-    gen_dir = _get_generation_dir(gen_id, artifact_root)
-    return GenerationWorkspace(
+    root = _resolve_artifact_root(artifact_root)
+    gen_dir = _get_generation_dir(gen_id, root)
+    workspace = GenerationWorkspace(
         id=gen_id,
         directory=gen_dir,
         midi_path=os.path.join(gen_dir, "loop.mid"),
@@ -193,6 +199,15 @@ def _build_workspace(gen_id: str, artifact_root: str | Path | None = None) -> Ge
         messages_path=os.path.join(gen_dir, "messages.json"),
         metadata_path=os.path.join(gen_dir, "metadata.json"),
     )
+    workspace._artifact_root = root
+    return workspace
+
+
+def _workspace_artifact_root(workspace: GenerationWorkspace) -> str:
+    """Return the root pinned when Core created a generation workspace."""
+    if workspace._artifact_root is None:
+        raise ValueError("workspace must be created by Conductor Core")
+    return workspace._artifact_root
 
 
 def _validate_workspace(
@@ -375,7 +390,7 @@ def finalize_generation(
         GenerationMetadata: The persisted metadata.
     """
     return _finalize_generation(
-        _resolve_artifact_root(),
+        _workspace_artifact_root(workspace),
         workspace=workspace,
         prompt=prompt,
         key=key,
@@ -475,7 +490,7 @@ def cleanup_generation_workspace(workspace: GenerationWorkspace) -> bool:
     Returns:
         bool: True if the workspace was removed, False otherwise.
     """
-    return _cleanup_generation_workspace(_resolve_artifact_root(), workspace)
+    return _cleanup_generation_workspace(_workspace_artifact_root(workspace), workspace)
 
 
 def _cleanup_generation_workspace(

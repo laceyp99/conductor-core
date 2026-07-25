@@ -78,6 +78,42 @@ def test_storage_defaults_resolve_environment_at_use_time_after_module_import(
     assert project_workspace.directory == str(project_expected_root / "gen_runtime_default")
 
 
+def test_workspace_lifecycle_stays_pinned_after_environment_switch(monkeypatch, tmp_path):
+    """Existing workspaces use their original root while new work uses the new default."""
+    _clear_data_environment(monkeypatch)
+    suite_root = tmp_path / "suite"
+    project_root = tmp_path / "project"
+    monkeypatch.setenv("CONDUCTOR_HOME", str(suite_root))
+    ids = iter(["to_finalize", "to_cleanup", "independent"])
+    monkeypatch.setattr(storage, "_generate_id", lambda: next(ids))
+
+    suite_expected_root = suite_root / "core" / "generations"
+    finalizing_workspace = storage.create_generation_workspace()
+    cleanup_workspace = storage.create_generation_workspace()
+    Path(finalizing_workspace.midi_path).write_bytes(b"midi")
+
+    monkeypatch.setenv("CONDUCTOR_CORE_DATA_DIR", str(project_root))
+
+    metadata = storage.finalize_generation(
+        workspace=finalizing_workspace,
+        prompt="prompt",
+        key="C",
+        scale="major",
+        model="model",
+        provider="OpenAI",
+        temperature=0.0,
+    )
+
+    assert metadata.midi_path == str(suite_expected_root / "gen_to_finalize" / "loop.mid")
+    assert storage.cleanup_generation_workspace(cleanup_workspace) is True
+    assert not (suite_expected_root / "gen_to_cleanup").exists()
+
+    project_expected_root = project_root / "generations"
+    independent_workspace = storage.create_generation_workspace()
+
+    assert independent_workspace.directory == str(project_expected_root / "gen_independent")
+
+
 def test_environment_paths_expand_tilde(monkeypatch, tmp_path):
     _clear_data_environment(monkeypatch)
     monkeypatch.setenv("USERPROFILE", str(tmp_path))
