@@ -212,6 +212,27 @@ def test_claude_loop_gen_adds_cache_control_for_large_system_prompt(monkeypatch)
     assert captured["system"][0]["cache_control"] == {"type": "ephemeral"}
 
 
+def test_claude_opus_5_uses_adaptive_thinking_and_effort(monkeypatch):
+    captured = {}
+    payload = json.dumps(_loop_payload())
+
+    def fake_create(**kwargs):
+        captured.update(kwargs)
+        return _anthropic_completion(payload)
+
+    fake_client = SimpleNamespace(messages=SimpleNamespace(create=fake_create))
+    monkeypatch.setattr(claude_api, "initialize_anthropic_client", lambda api_key: fake_client)
+    monkeypatch.setattr(claude_api.utils, "get_loop_prompt", lambda: "system prompt")
+    monkeypatch.setattr(claude_api.utils, "save_messages_to_json", _fail_save_messages)
+
+    claude_api.loop_gen("write a loop", "claude-opus-5", effort="max")
+
+    assert captured["thinking"] == {"type": "adaptive"}
+    assert captured["output_config"] == {"effort": "max"}
+    assert captured["temperature"] == 1.0
+    assert captured["tool_choice"] == {"type": "auto"}
+
+
 def test_ollama_loop_gen_accepts_missing_thinking(monkeypatch):
     payload = json.dumps(_loop_payload())
     completion = SimpleNamespace(message=SimpleNamespace(content=payload))
