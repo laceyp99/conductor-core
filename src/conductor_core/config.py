@@ -2,6 +2,7 @@
 
 import warnings
 from dataclasses import dataclass, field
+from math import isfinite
 from pathlib import Path
 from typing import Any
 
@@ -28,9 +29,17 @@ class EngineConfig:
     prompt_override: str | None = None
     default_soundfont_path: str | Path | None = None
     max_generations: int | None = MAX_GENERATIONS
+    request_timeout: float | None = None
 
     def __post_init__(self) -> None:
         _validate_max_generations(self.max_generations)
+        if self.request_timeout is not None and (
+            isinstance(self.request_timeout, bool)
+            or not isinstance(self.request_timeout, (int, float))
+            or not isfinite(self.request_timeout)
+            or self.request_timeout <= 0
+        ):
+            raise ValueError("request_timeout must be None or a positive finite number")
 
     @classmethod
     def from_defaults(
@@ -40,6 +49,7 @@ class EngineConfig:
         prompt_override: str | None = None,
         default_soundfont_path: str | Path | None = None,
         max_generations: int | None = MAX_GENERATIONS,
+        request_timeout: float | None = None,
     ) -> "EngineConfig":
         """Create a config using Core defaults plus caller-provided overrides."""
         return cls(
@@ -50,6 +60,7 @@ class EngineConfig:
             prompt_override=prompt_override,
             default_soundfont_path=default_soundfont_path,
             max_generations=max_generations,
+            request_timeout=request_timeout,
         )
 
 

@@ -10,6 +10,14 @@ from conductor_core.config import (
     ProviderCredentials,
 )
 from conductor_core.engine import LoopGenerationEngine
+from conductor_core.errors import (
+    ProviderAuthenticationError,
+    ProviderConnectionError,
+    ProviderError,
+    ProviderRateLimitError,
+    ProviderRequestError,
+    ProviderTimeoutError,
+)
 from conductor_core.paths import (
     resolve_conductor_home,
     resolve_data_dir,
@@ -27,7 +35,13 @@ __all__ = [
     "GenerationResult",
     "LoopGenerationEngine",
     "ProgressEvent",
+    "ProviderAuthenticationError",
+    "ProviderConnectionError",
     "ProviderCredentials",
+    "ProviderError",
+    "ProviderRateLimitError",
+    "ProviderRequestError",
+    "ProviderTimeoutError",
     "resolve_conductor_home",
     "resolve_data_dir",
     "resolve_default_artifact_root",

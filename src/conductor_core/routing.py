@@ -26,6 +26,7 @@ def generate_midi(
     use_thinking=False,
     effort="low",
     provider_credentials: ProviderCredentials | None = None,
+    request_timeout: float | None = None,
     system_prompt: str | None = None,
     _return_provider: bool = False,
 ):
@@ -47,6 +48,7 @@ def generate_midi(
             effort=effort,
             api_key=credentials.openai_api_key,
             system_prompt=system_prompt,
+            **({"request_timeout": request_timeout} if request_timeout is not None else {}),
         )
     elif model_choice in model_info["models"]["Google"]:
         _validate_effort(
@@ -63,6 +65,7 @@ def generate_midi(
             effort=effort,
             api_key=credentials.google_api_key,
             system_prompt=system_prompt,
+            **({"request_timeout": request_timeout} if request_timeout is not None else {}),
         )
     elif model_choice in model_info["models"]["Anthropic"]:
         _validate_effort(
@@ -79,6 +82,7 @@ def generate_midi(
             effort=effort,
             api_key=credentials.anthropic_api_key,
             system_prompt=system_prompt,
+            **({"request_timeout": request_timeout} if request_timeout is not None else {}),
         )
     else:
         ollama_status = ollama_api.get_ollama_status(
@@ -94,6 +98,7 @@ def generate_midi(
                 temp=temp,
                 host_address=credentials.ollama_host,
                 system_prompt=system_prompt,
+                **({"request_timeout": request_timeout} if request_timeout is not None else {}),
             )
         elif not ollama_status["available"]:
             raise ValueError(

@@ -66,6 +66,7 @@ class LoopGenerationEngine:
                 use_thinking=request.use_thinking,
                 effort=request.effort,
                 provider_credentials=self.config.provider_credentials,
+                request_timeout=self.config.request_timeout,
                 system_prompt=system_prompt,
                 _return_provider=True,
             )

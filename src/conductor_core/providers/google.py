@@ -5,18 +5,42 @@ import os
 
 from conductor_core import models as objects
 from conductor_core import music as utils
+from conductor_core.errors import (
+    ProviderConnectionError,
+    ProviderTimeoutError,
+    error_for_status,
+)
 
 try:
+    import httpx
     from google import genai
+    from google.genai import errors as genai_errors
     from google.genai import types
 except ImportError:  # pragma: no cover - exercised only in minimal installs
     genai = None
+    genai_errors = None
+    httpx = None
     types = None
 
 logger = logging.getLogger(__name__)
 
 
-def initialize_gemini_client(api_key: str | None = None):
+def _raise_google_error(exc: Exception, operation: str) -> None:
+    if isinstance(exc, httpx.TimeoutException):
+        error = ProviderTimeoutError("Google", str(exc), operation=operation)
+    elif isinstance(exc, httpx.NetworkError):
+        error = ProviderConnectionError("Google", str(exc), operation=operation)
+    else:
+        error = error_for_status(
+            "Google",
+            str(exc),
+            getattr(exc, "code", None),
+            operation=operation,
+        )
+    raise error from exc
+
+
+def initialize_gemini_client(api_key: str | None = None, timeout: float | None = None):
     """Initialize and return a Gemini client."""
     if genai is None:
         raise ImportError("Install conductor-core[google] to use Google models.")
@@ -25,7 +49,13 @@ def initialize_gemini_client(api_key: str | None = None):
     if not resolved_api_key:
         raise ValueError("GEMINI_API_KEY not found.")
 
-    return genai.Client(api_key=resolved_api_key)
+    client_args = {"api_key": resolved_api_key}
+    if timeout is not None:
+        client_args["http_options"] = types.HttpOptions(timeout=max(1, round(timeout * 1000)))
+    try:
+        return genai.Client(**client_args)
+    except (genai_errors.APIError, httpx.TimeoutException, httpx.NetworkError) as exc:
+        _raise_google_error(exc, "client initialization")
 
 
 def calc_cost(model, usage):
@@ -93,9 +123,13 @@ def loop_gen(
     effort=None,
     api_key: str | None = None,
     system_prompt: str | None = None,
+    request_timeout: float | None = None,
 ):
     """Generate a MIDI loop using the specified Gemini model and prompt."""
-    client = initialize_gemini_client(api_key=api_key)
+    client = initialize_gemini_client(
+        api_key=api_key,
+        **({"timeout": request_timeout} if request_timeout is not None else {}),
+    )
     loop_prompt = system_prompt or utils.get_loop_prompt()
 
     model_info = utils.get_model_info()
@@ -144,11 +178,15 @@ def loop_gen(
             }
         )
 
-    response = client.models.generate_content(
-        model=model,
-        contents=prompt,
-        config=config,
-    )
+    try:
+        response = client.models.generate_content(
+            model=model,
+            contents=prompt,
+            config=config,
+        )
+    except (genai_errors.APIError, httpx.TimeoutException, httpx.NetworkError) as exc:
+        logger.error("Google request failed: %s", exc)
+        _raise_google_error(exc, "request")
     content, thinking_content = process_output(response)
     midi_loop: objects.Loop_G = response.parsed
     if midi_loop is None:

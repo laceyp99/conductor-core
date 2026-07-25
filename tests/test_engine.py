@@ -48,6 +48,7 @@ def test_engine_generates_persisted_artifacts_with_mocked_provider(
             artifact_root=tmp_path / "generations",
             provider_credentials=ProviderCredentials(openai_api_key="openai-key"),
             prompt_override="config prompt",
+            request_timeout=2.5,
         )
     )
     result = engine.generate(
@@ -87,6 +88,7 @@ def test_engine_generates_persisted_artifacts_with_mocked_provider(
     assert captured["model_choice"] == "gpt-4o-mini"
     assert captured["prompt"] == "C Major warm rhodes loop."
     assert captured["provider_credentials"].openai_api_key == "openai-key"
+    assert captured["request_timeout"] == 2.5
     assert captured["system_prompt"] == "config prompt"
     assert captured["use_thinking"] is False
     assert captured["effort"] == "medium"

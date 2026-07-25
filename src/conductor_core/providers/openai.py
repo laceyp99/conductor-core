@@ -5,23 +5,45 @@ import os
 
 from conductor_core import models as objects
 from conductor_core import music as utils
+from conductor_core.errors import (
+    ProviderAuthenticationError,
+    ProviderConnectionError,
+    ProviderRateLimitError,
+    ProviderRequestError,
+    ProviderTimeoutError,
+)
 
 try:
     from openai import (
         APIConnectionError,
         APIError,
+        APITimeoutError,
         AuthenticationError,
         OpenAI,
         RateLimitError,
     )
 except ImportError:  # pragma: no cover - exercised only in minimal installs
-    APIConnectionError = APIError = AuthenticationError = RateLimitError = ()
+    APIConnectionError = APIError = APITimeoutError = AuthenticationError = RateLimitError = ()
     OpenAI = None
 
 logger = logging.getLogger(__name__)
 
 
-def initialize_openai_client(api_key: str | None = None):
+def _raise_openai_error(exc: Exception, operation: str) -> None:
+    if isinstance(exc, AuthenticationError):
+        error = ProviderAuthenticationError("OpenAI", str(exc), operation=operation)
+    elif isinstance(exc, RateLimitError):
+        error = ProviderRateLimitError("OpenAI", str(exc), operation=operation)
+    elif isinstance(exc, APITimeoutError):
+        error = ProviderTimeoutError("OpenAI", str(exc), operation=operation)
+    elif isinstance(exc, APIConnectionError):
+        error = ProviderConnectionError("OpenAI", str(exc), operation=operation)
+    else:
+        error = ProviderRequestError("OpenAI", str(exc), operation=operation)
+    raise error from exc
+
+
+def initialize_openai_client(api_key: str | None = None, timeout: float | None = None):
     """Initialize and return an OpenAI client."""
     if OpenAI is None:
         raise ImportError("Install conductor-core[openai] to use OpenAI models.")
@@ -29,7 +51,19 @@ def initialize_openai_client(api_key: str | None = None):
     resolved_api_key = api_key or os.getenv("OPENAI_API_KEY")
     if not resolved_api_key or not resolved_api_key.strip():
         logger.error("OPENAI_API_KEY is not set!")
-    return OpenAI(api_key=resolved_api_key)
+    client_args = {"api_key": resolved_api_key}
+    if timeout is not None:
+        client_args["timeout"] = timeout
+    try:
+        return OpenAI(**client_args)
+    except (
+        AuthenticationError,
+        RateLimitError,
+        APITimeoutError,
+        APIConnectionError,
+        APIError,
+    ) as exc:
+        _raise_openai_error(exc, "client initialization")
 
 
 def calc_price(model, response):
@@ -80,9 +114,13 @@ def loop_gen(
     effort=None,
     api_key: str | None = None,
     system_prompt: str | None = None,
+    request_timeout: float | None = None,
 ):
     """Generate a MIDI loop using the specified OpenAI model and prompt."""
-    client = initialize_openai_client(api_key=api_key)
+    client = initialize_openai_client(
+        api_key=api_key,
+        **({"timeout": request_timeout} if request_timeout is not None else {}),
+    )
     loop_prompt = system_prompt or utils.get_loop_prompt()
     messages = [
         {"role": "system", "content": loop_prompt},
@@ -106,18 +144,15 @@ def loop_gen(
 
     try:
         response = client.responses.parse(**request_params)
-    except AuthenticationError as exc:
-        logger.error("Authentication failed: %s", exc)
-        raise ValueError("Invalid OpenAI API key") from exc
-    except RateLimitError as exc:
-        logger.error("Rate limit exceeded: %s", exc)
-        raise
-    except APIConnectionError as exc:
-        logger.error("Connection error: %s", exc)
-        raise
-    except APIError as exc:
-        logger.error("OpenAI API error: %s", exc)
-        raise
+    except (
+        AuthenticationError,
+        RateLimitError,
+        APITimeoutError,
+        APIConnectionError,
+        APIError,
+    ) as exc:
+        logger.error("OpenAI request failed: %s", exc)
+        _raise_openai_error(exc, "request")
 
     if response.output_parsed is None:
         raise ValueError("OpenAI response did not include parsed loop content.")
