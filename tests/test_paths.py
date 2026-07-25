@@ -3,7 +3,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from conductor_core import paths
+from conductor_core import paths, storage
 from conductor_core.config import EngineConfig
 from conductor_core.storage import FilesystemArtifactStore
 
@@ -46,6 +46,36 @@ def test_explicit_artifact_root_overrides_data_directory_policy(monkeypatch, tmp
     assert EngineConfig.from_defaults(artifact_root=explicit_root).artifact_root == explicit_root
     assert FilesystemArtifactStore(explicit_root).artifact_root == str(explicit_root)
     assert not explicit_root.exists()
+
+
+def test_storage_defaults_resolve_environment_at_use_time_after_module_import(
+    monkeypatch, tmp_path
+):
+    """Storage and engine defaults honor environment changes made after import."""
+    _clear_data_environment(monkeypatch)
+    suite_root = tmp_path / "suite"
+    project_root = tmp_path / "project"
+    monkeypatch.setenv("CONDUCTOR_HOME", str(suite_root))
+    monkeypatch.setattr(storage, "_generate_id", lambda: "runtime_default")
+
+    suite_expected_root = suite_root / "core" / "generations"
+    assert EngineConfig().artifact_root == suite_expected_root
+    assert EngineConfig.from_defaults().artifact_root == suite_expected_root
+    assert FilesystemArtifactStore().artifact_root == str(suite_expected_root)
+
+    suite_workspace = storage.create_generation_workspace()
+
+    assert suite_workspace.directory == str(suite_expected_root / "gen_runtime_default")
+
+    monkeypatch.setenv("CONDUCTOR_CORE_DATA_DIR", str(project_root))
+    project_expected_root = project_root / "generations"
+    assert EngineConfig().artifact_root == project_expected_root
+    assert EngineConfig.from_defaults().artifact_root == project_expected_root
+    assert FilesystemArtifactStore().artifact_root == str(project_expected_root)
+
+    project_workspace = storage.create_generation_workspace()
+
+    assert project_workspace.directory == str(project_expected_root / "gen_runtime_default")
 
 
 def test_environment_paths_expand_tilde(monkeypatch, tmp_path):

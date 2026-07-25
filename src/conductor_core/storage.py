@@ -29,10 +29,6 @@ from conductor_core.paths import resolve_default_artifact_root
 
 logger = logging.getLogger(__name__)
 
-# Resolved default used by module-level compatibility helpers. Resolution is
-# side-effect free; directories are still created only by workspace writes.
-GENERATIONS_DIR = str(resolve_default_artifact_root())
-
 # Default maximum number of generations retained by module-level helpers.
 MAX_GENERATIONS = 20
 
@@ -132,7 +128,7 @@ class GenerationWorkspace(BaseModel):
 
 
 def _resolve_artifact_root(artifact_root: str | Path | None = None) -> str:
-    selected_root = artifact_root if artifact_root is not None else GENERATIONS_DIR
+    selected_root = artifact_root if artifact_root is not None else resolve_default_artifact_root()
     return str(selected_root)
 
 
@@ -323,7 +319,7 @@ def create_generation_workspace() -> GenerationWorkspace:
     Raises:
         RuntimeError: If a unique generation ID cannot be allocated.
     """
-    return _create_generation_workspace(GENERATIONS_DIR)
+    return _create_generation_workspace(_resolve_artifact_root())
 
 
 def _create_generation_workspace(artifact_root: str | Path) -> GenerationWorkspace:
@@ -379,7 +375,7 @@ def finalize_generation(
         GenerationMetadata: The persisted metadata.
     """
     return _finalize_generation(
-        GENERATIONS_DIR,
+        _resolve_artifact_root(),
         workspace=workspace,
         prompt=prompt,
         key=key,
@@ -479,7 +475,7 @@ def cleanup_generation_workspace(workspace: GenerationWorkspace) -> bool:
     Returns:
         bool: True if the workspace was removed, False otherwise.
     """
-    return _cleanup_generation_workspace(GENERATIONS_DIR, workspace)
+    return _cleanup_generation_workspace(_resolve_artifact_root(), workspace)
 
 
 def _cleanup_generation_workspace(
@@ -514,7 +510,9 @@ def update_generation_audio(
     Returns:
         GenerationMetadata or None if the generation does not exist.
     """
-    return _update_generation_audio(GENERATIONS_DIR, gen_id, audio_path, soundfont=soundfont)
+    return _update_generation_audio(
+        _resolve_artifact_root(), gen_id, audio_path, soundfont=soundfont
+    )
 
 
 def _update_generation_audio(
@@ -556,7 +554,7 @@ def load_history() -> list[GenerationMetadata]:
     Returns:
         list: List of GenerationMetadata objects, sorted by timestamp (newest first).
     """
-    return _load_history(GENERATIONS_DIR)
+    return _load_history(_resolve_artifact_root())
 
 
 def _load_history(artifact_root: str | Path) -> list[GenerationMetadata]:
@@ -604,7 +602,7 @@ def get_generation(gen_id: str) -> Optional[GenerationMetadata]:
     Returns:
         GenerationMetadata or None if not found.
     """
-    return _get_generation(GENERATIONS_DIR, gen_id)
+    return _get_generation(_resolve_artifact_root(), gen_id)
 
 
 def _get_generation(artifact_root: str | Path, gen_id: str) -> Optional[GenerationMetadata]:
@@ -628,7 +626,7 @@ def delete_generation(gen_id: str) -> bool:
     Returns:
         bool: True if deleted successfully, False otherwise.
     """
-    return _delete_generation(GENERATIONS_DIR, gen_id)
+    return _delete_generation(_resolve_artifact_root(), gen_id)
 
 
 def _delete_generation(artifact_root: str | Path, gen_id: str) -> bool:

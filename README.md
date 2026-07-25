@@ -226,11 +226,9 @@ Packaged prompts, model metadata, and the bundled SoundFont are not copied or
 moved into the data directory. Core currently owns no persistent configuration
 or disposable disk cache.
 
-Resolving or importing these paths does not create directories. Core creates
-`generations/` only when a generation workspace is written. It does not migrate,
-overwrite, or delete an existing project-local `generations/` directory. To keep
-using that portable layout, pass `artifact_root="generations"`; to migrate data,
-copy it manually after reviewing destination contents.
+Resolving or importing these paths does not create directories. Core creates the
+selected generation-history directory only when a generation workspace is
+written.
 
 Generation history can grow through MIDI, JSON, and especially optional MP3
 files. Core retains the newest 20 generations by default, but custom artifact
