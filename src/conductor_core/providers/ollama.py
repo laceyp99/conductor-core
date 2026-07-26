@@ -31,7 +31,7 @@ def _resolve_host(host_address: str | None = None) -> str:
 def _raise_ollama_error(exc: Exception, operation: str) -> None:
     if isinstance(exc, httpx.TimeoutException):
         error = ProviderTimeoutError("Ollama", str(exc), operation=operation)
-    elif isinstance(exc, httpx.NetworkError):
+    elif isinstance(exc, (httpx.NetworkError, ConnectionError)):
         error = ProviderConnectionError("Ollama", str(exc), operation=operation)
     elif isinstance(exc, ollama.ResponseError):
         error = error_for_status(
@@ -58,13 +58,18 @@ def initialize_ollama_client(host_address: str | None = None, timeout: float | N
     except (
         httpx.TimeoutException,
         httpx.NetworkError,
+        ConnectionError,
         ollama.RequestError,
         ollama.ResponseError,
     ) as exc:
         _raise_ollama_error(exc, "client initialization")
 
 
-def get_ollama_status(force_refresh=False, host_address: str | None = None):
+def get_ollama_status(
+    force_refresh=False,
+    host_address: str | None = None,
+    request_timeout: float | None = None,
+):
     """Get the current Ollama availability and discovered models."""
     global _ollama_status_cache
 
@@ -87,7 +92,10 @@ def get_ollama_status(force_refresh=False, host_address: str | None = None):
         return status
 
     try:
-        client = initialize_ollama_client(host_address=host)
+        client = initialize_ollama_client(
+            host_address=host,
+            **({"timeout": request_timeout} if request_timeout is not None else {}),
+        )
         status["models"] = [model.model for model in client.list().models]
         status["available"] = True
     except Exception as exc:
@@ -134,6 +142,7 @@ def loop_gen(
     except (
         httpx.TimeoutException,
         httpx.NetworkError,
+        ConnectionError,
         ollama.RequestError,
         ollama.ResponseError,
     ) as exc:

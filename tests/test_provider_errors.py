@@ -5,6 +5,7 @@ import pytest
 from conductor_core import (
     EngineConfig,
     ProviderAuthenticationError,
+    ProviderConnectionError,
     ProviderRateLimitError,
     ProviderTimeoutError,
     routing,
@@ -133,6 +134,19 @@ def test_ollama_request_normalizes_authentication_error(monkeypatch):
     assert raised.value.__cause__ is original
 
 
+def test_ollama_request_normalizes_sdk_connection_error(monkeypatch):
+    original = ConnectionError("connection refused")
+    client = SimpleNamespace(chat=lambda **kwargs: (_ for _ in ()).throw(original))
+    monkeypatch.setattr(ollama_api, "initialize_ollama_client", lambda **kwargs: client)
+
+    with pytest.raises(ProviderConnectionError) as raised:
+        ollama_api.loop_gen("write a loop", "llama3")
+
+    assert raised.value.provider == "Ollama"
+    assert raised.value.operation == "request"
+    assert raised.value.__cause__ is original
+
+
 @pytest.mark.parametrize(
     ("initializer", "client_attr"),
     [
@@ -175,6 +189,25 @@ def test_ollama_initializer_passes_timeout(monkeypatch):
     ollama_api.initialize_ollama_client(host_address="http://ollama.test", timeout=2.5)
 
     assert captured == {"host": "http://ollama.test", "timeout": 2.5}
+
+
+def test_ollama_status_forwards_request_timeout(monkeypatch):
+    captured = {}
+    client = SimpleNamespace(list=lambda: SimpleNamespace(models=[]))
+    monkeypatch.setattr(
+        ollama_api,
+        "initialize_ollama_client",
+        lambda **kwargs: captured.update(kwargs) or client,
+    )
+
+    status = ollama_api.get_ollama_status(
+        force_refresh=True,
+        host_address="http://ollama.test",
+        request_timeout=2.5,
+    )
+
+    assert status["available"] is True
+    assert captured == {"host_address": "http://ollama.test", "timeout": 2.5}
 
 
 @pytest.mark.parametrize(
@@ -229,11 +262,13 @@ def test_routing_forwards_request_timeout(monkeypatch, provider, model, adapter_
     if provider != "Ollama":
         model_info["models"][provider][model] = {}
     monkeypatch.setattr(routing, "get_model_info", lambda: model_info)
+    status_captured = {}
     if provider == "Ollama":
         monkeypatch.setattr(
             routing.ollama_api,
             "get_ollama_status",
-            lambda **kwargs: {"available": True, "models": [model]},
+            lambda **kwargs: status_captured.update(kwargs)
+            or {"available": True, "models": [model]},
         )
 
     adapter = getattr(routing, adapter_name)
@@ -248,3 +283,5 @@ def test_routing_forwards_request_timeout(monkeypatch, provider, model, adapter_
     routing.generate_midi(model, "write a loop", request_timeout=2.5)
 
     assert captured["request_timeout"] == 2.5
+    if provider == "Ollama":
+        assert status_captured["request_timeout"] == 2.5

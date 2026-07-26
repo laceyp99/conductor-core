@@ -88,6 +88,7 @@ def generate_midi(
         ollama_status = ollama_api.get_ollama_status(
             force_refresh=True,
             host_address=credentials.ollama_host,
+            **({"request_timeout": request_timeout} if request_timeout is not None else {}),
         )
 
         if model_choice in ollama_status["models"]:
