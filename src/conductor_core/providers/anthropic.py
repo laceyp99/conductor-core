@@ -5,10 +5,25 @@ import os
 
 from conductor_core import models as objects
 from conductor_core import music as utils
+from conductor_core.errors import (
+    ProviderAuthenticationError,
+    ProviderConnectionError,
+    ProviderRateLimitError,
+    ProviderRequestError,
+    ProviderTimeoutError,
+)
 
 try:
-    from anthropic import Anthropic
+    from anthropic import (
+        Anthropic,
+        APIConnectionError,
+        APIError,
+        APITimeoutError,
+        AuthenticationError,
+        RateLimitError,
+    )
 except ImportError:  # pragma: no cover - exercised only in minimal installs
+    APIConnectionError = APIError = APITimeoutError = AuthenticationError = RateLimitError = ()
     Anthropic = None
 
 logger = logging.getLogger(__name__)
@@ -17,7 +32,21 @@ ALWAYS_ON_ADAPTIVE_THINKING_MODELS = {"claude-fable-5", "claude-mythos-5"}
 ANTHROPIC_CACHE_CONTROL_MIN_CHARS = 4096
 
 
-def initialize_anthropic_client(api_key: str | None = None):
+def _raise_anthropic_error(exc: Exception, operation: str) -> None:
+    if isinstance(exc, AuthenticationError):
+        error = ProviderAuthenticationError("Anthropic", str(exc), operation=operation)
+    elif isinstance(exc, RateLimitError):
+        error = ProviderRateLimitError("Anthropic", str(exc), operation=operation)
+    elif isinstance(exc, APITimeoutError):
+        error = ProviderTimeoutError("Anthropic", str(exc), operation=operation)
+    elif isinstance(exc, APIConnectionError):
+        error = ProviderConnectionError("Anthropic", str(exc), operation=operation)
+    else:
+        error = ProviderRequestError("Anthropic", str(exc), operation=operation)
+    raise error from exc
+
+
+def initialize_anthropic_client(api_key: str | None = None, timeout: float | None = None):
     """Initialize and return an Anthropic client."""
     if Anthropic is None:
         raise ImportError("Install conductor-core[anthropic] to use Anthropic models.")
@@ -25,7 +54,19 @@ def initialize_anthropic_client(api_key: str | None = None):
     resolved_api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
     if not resolved_api_key or not resolved_api_key.strip():
         logger.error("ANTHROPIC_API_KEY is not set!")
-    return Anthropic(api_key=resolved_api_key)
+    client_args = {"api_key": resolved_api_key}
+    if timeout is not None:
+        client_args["timeout"] = timeout
+    try:
+        return Anthropic(**client_args)
+    except (
+        AuthenticationError,
+        RateLimitError,
+        APITimeoutError,
+        APIConnectionError,
+        APIError,
+    ) as exc:
+        _raise_anthropic_error(exc, "client initialization")
 
 
 def calc_price(model, output):
@@ -119,9 +160,13 @@ def loop_gen(
     effort="low",
     api_key: str | None = None,
     system_prompt: str | None = None,
+    request_timeout: float | None = None,
 ):
     """Generate a MIDI loop using the specified Anthropic model and prompt."""
-    client = initialize_anthropic_client(api_key=api_key)
+    client = initialize_anthropic_client(
+        api_key=api_key,
+        **({"timeout": request_timeout} if request_timeout is not None else {}),
+    )
     loop_prompt = system_prompt or utils.get_loop_prompt()
     tools = [
         {
@@ -163,8 +208,29 @@ def loop_gen(
     elif use_thinking and not model_config.get("extended_thinking"):
         logger.warning("Extended thinking requested but not supported by model: %s", model)
 
-    completion = client.messages.create(**api_params)
-    output = process_streaming_response(completion)
+    try:
+        completion = client.messages.create(**api_params)
+    except (
+        AuthenticationError,
+        RateLimitError,
+        APITimeoutError,
+        APIConnectionError,
+        APIError,
+    ) as exc:
+        logger.error("Anthropic request failed: %s", exc)
+        _raise_anthropic_error(exc, "request")
+
+    try:
+        output = process_streaming_response(completion)
+    except (
+        AuthenticationError,
+        RateLimitError,
+        APITimeoutError,
+        APIConnectionError,
+        APIError,
+    ) as exc:
+        logger.error("Anthropic stream failed: %s", exc)
+        _raise_anthropic_error(exc, "stream")
     if not output["loop"]:
         raise ValueError(
             f"Model {model} did not call the build_MIDI_loop tool. "
