@@ -2,11 +2,13 @@ name: CI
 
 on:
   push:
+    branches:
+      - main
   pull_request:
 
 jobs:
-  validate:
-    name: Validate (Linux)
+  known-good:
+    name: Known-good dependencies (Python 3.12)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -14,8 +16,10 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - name: Install package
-        run: python -m pip install --upgrade pip build && python -m pip install -e ".[providers,playback,dev]"
+      - name: Install known-good dependencies
+        env:
+          PIP_BUILD_CONSTRAINT: requirements/ci-known-good.txt
+        run: python -m pip install --upgrade -c requirements/ci-known-good.txt pip build && python -m pip install -c requirements/ci-known-good.txt -e ".[providers,playback,dev]"
       - name: Ruff format
         run: python -m ruff format --check .
       - name: Ruff lint
@@ -23,7 +27,62 @@ jobs:
       - name: Test
         run: python -m pytest -q
       - name: Build
+        env:
+          PIP_BUILD_CONSTRAINT: requirements/ci-known-good.txt
         run: python -m build
+      - name: Test built wheel as a consumer
+        run: |
+          python -m venv .venv-consumer
+          .venv-consumer/bin/python -m pip install --upgrade pip
+          .venv-consumer/bin/python -m pip install dist/conductor_core-*.whl
+          .venv-consumer/bin/python -m pip check
+          .venv-consumer/bin/python -I tests/installed_package_smoke.py
+
+  minimal-install:
+    name: Minimal install (Python 3.10)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Create fresh environment
+        run: python -m venv .venv-minimal
+      - name: Install bare package and test dependency
+        run: .venv-minimal/bin/python -m pip install --upgrade pip && .venv-minimal/bin/python -m pip install -e . "pytest>=8.3,<9"
+      - name: Verify optional dependencies are absent
+        run: >-
+          .venv-minimal/bin/python -c "from importlib.util import find_spec; optional = ('anthropic', 'google', 'midi2audio', 'ollama', 'openai', 'pydub'); installed = [name for name in optional if find_spec(name) is not None]; assert not installed, f'optional dependencies unexpectedly installed: {installed}'"
+      - name: Test import boundary and core behavior
+        run: >-
+          .venv-minimal/bin/python -m pytest -q
+          tests/test_import_boundary.py
+          tests/test_audio.py
+          tests/test_engine.py
+          tests/test_example_scripts.py
+          tests/test_history.py
+          tests/test_midi_processing.py
+          tests/test_objects.py
+          tests/test_paths.py
+          tests/test_runs.py
+          tests/test_utils.py
+
+  latest-compatible:
+    name: Latest compatible dependencies (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install latest compatible dependencies
+        run: python -m pip install --upgrade pip build && python -m pip install --upgrade --upgrade-strategy eager -e ".[providers,playback,dev]"
+      - name: Test
+        run: python -m pytest -q
 
   windows-storage:
     name: Storage security (Windows)
