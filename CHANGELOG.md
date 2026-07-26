@@ -6,6 +6,69 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 while its public API is still in initial development.
 
+## [0.3.0] - 2026-07-26
+
+Version 0.3.0 improves provider failure handling, request configuration,
+generation-history fidelity, dependency testing, and model metadata. It also
+completes the removal of the deprecated caller-supplied provider field.
+
+### Added
+
+- A public provider-error hierarchy for authentication, rate-limit, timeout,
+  connection, and request failures across OpenAI, Anthropic, Google, and Ollama.
+- Configurable provider request timeouts through `EngineConfig.request_timeout`.
+- Persisted `use_thinking` and `effort` generation metadata, with optional
+  fields so histories written by earlier Core versions remain readable.
+- Claude Opus 5 and the current Gemini 3.5/3.6 Flash model family in the
+  packaged model registry.
+- A known-good dependency constraint set and CI coverage for Python 3.10
+  through 3.13, minimal installs, built-wheel consumers, and Windows storage
+  security.
+- Bundled SoundFont provenance documentation and Conductor Core logo assets.
+
+### Changed
+
+- Runtime dependencies now use compatible version ranges; CI separately tests
+  both a pinned known-good set and the latest compatible versions.
+- The bundled FM Piano SoundFont filename no longer contains spaces.
+- Model metadata no longer advertises retired Anthropic and Gemini models.
+- Generation workspaces pin their resolved artifact root for their full
+  lifecycle, while module-level storage helpers resolve defaults at call time.
+- Provider adapters consistently pass configured timeouts and translate SDK
+  failures into Core's provider-independent exceptions.
+
+### Removed
+
+- The deprecated `GenerationRequest.provider` field. Provider identity is
+  derived from the selected model and the route actually used.
+
+### Fixed
+
+- Provider client-initialization `TypeError` exceptions are no longer mistaken
+  for legacy initializer signatures.
+- Ollama connection and HTTP failures are normalized with the other provider
+  adapters.
+- Generation storage is no longer redirected when relevant environment
+  variables change after a workspace is created.
+- The built wheel is now exercised from an isolated consumer process in CI.
+
+### Security
+
+- Windows CI now exercises storage confinement behavior, including escaping
+  directory-symlink rejection.
+
+### Upgrade notes
+
+- Remove the `provider` argument from every `GenerationRequest`; select a
+  supported `model` and let Core derive the provider.
+- Update Git references in dependent repositories from `v0.2.0` to `v0.3.0`
+  after the release tag is available.
+- If a consumer references the bundled SoundFont by filename, update it to
+  `FM-Piano1-20190916.sf2`. Consumers using Core's default do not need a change.
+- Consumers may catch the new `ProviderError` subclasses instead of individual
+  provider SDK exceptions.
+- Existing generation histories require no migration.
+
 ## [0.2.0] - 2026-07-19
 
 Version 0.2.0 hardens and extends the reusable Core library now that other
@@ -103,5 +166,6 @@ other Conductor repositories could build on a shared engine.
 - Deterministic tests and package-boundary checks suitable for reuse outside the
   original LoopGPT application.
 
+[0.3.0]: https://github.com/laceyp99/conductor-core/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/laceyp99/conductor-core/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/laceyp99/conductor-core/tree/v0.1.0

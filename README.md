@@ -61,13 +61,13 @@ Other Conductor repositories should pin Core to a release tag instead of an
 unreleased branch or moving commit. Include only the extras the consumer uses:
 
 ```text
-conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.2.0
+conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.3.0
 ```
 
 To install the same reference directly:
 
 ```powershell
-python -m pip install "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.2.0"
+python -m pip install "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.3.0"
 ```
 
 Upgrade a dependent project by changing its pinned tag and reinstalling its
@@ -131,10 +131,9 @@ ANTHROPIC_API_KEY="..."
 OLLAMA_API_HOST_ADDRESS="http://localhost:11434"
 ```
 
-The provider is derived from the route actually used for `model`. The
-`GenerationRequest.provider` field is deprecated, ignored, and retained only
-for temporary compatibility with existing callers. To inspect available
-providers, models, and capabilities without contacting a provider, run
+The provider is derived from the route actually used for `model`;
+`GenerationRequest` does not accept a caller-supplied provider. To inspect
+available providers, models, and capabilities without contacting a provider, run
 [`scripts/inspect_models.py`](scripts/inspect_models.py).
 
 ## Generation request options
@@ -143,7 +142,6 @@ providers, models, and capabilities without contacting a provider, run
 |---|---|
 | `key`, `scale`, `description` | Musical request added to the model prompt |
 | `model` | Packaged model identifier used for routing and response handling |
-| `provider` | Deprecated compatibility field; ignored |
 | `temperature` | Sampling temperature for models that support it |
 | `use_thinking` | Toggle-style reasoning control for supported models |
 | `effort` | Model-specific reasoning effort such as `minimal`, `low`, or `high` |
