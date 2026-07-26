@@ -1,19 +1,5 @@
 <div align="center">
-  <picture>
-    <source
-      media="(prefers-color-scheme: dark)"
-      srcset="app/readme-logo-light.png"
-    >
-    <source
-      media="(prefers-color-scheme: light)"
-      srcset="app/readme-logo.png"
-    >
-    <img
-      src="app/readme-logo.png"
-      alt="conductor-core icon"
-      width="50%"
-    >
-  </picture>
+  <img src="app/readme-logo.png" alt="Conductor Core Logo" width="50%">
 </div>
 
 `conductor-core` is the reusable prompt-to-MIDI engine behind the Conductor
