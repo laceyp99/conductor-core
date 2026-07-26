@@ -10,6 +10,6 @@ dist/
 *.mid
 *.mp3
 [.]env
-.venv/
+.venv*/
 venv/
 .vscode/
