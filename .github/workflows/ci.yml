@@ -30,6 +30,13 @@ jobs:
         env:
           PIP_BUILD_CONSTRAINT: requirements/ci-known-good.txt
         run: python -m build
+      - name: Test built wheel as a consumer
+        run: |
+          python -m venv .venv-consumer
+          .venv-consumer/bin/python -m pip install --upgrade pip
+          .venv-consumer/bin/python -m pip install dist/conductor_core-*.whl
+          .venv-consumer/bin/python -m pip check
+          .venv-consumer/bin/python -I tests/installed_package_smoke.py
 
   minimal-install:
     name: Minimal install (Python 3.10)
