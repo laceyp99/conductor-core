@@ -1,4 +1,6 @@
-# Conductor Core
+<div align="center">
+  <img src="app/readme-logo.png" alt="Conductor Core Logo" width="50%">
+</div>
 
 `conductor-core` is the reusable prompt-to-MIDI engine behind the Conductor
 applications. It can be embedded in a CLI, notebook, backend service, test
