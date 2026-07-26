@@ -236,30 +236,12 @@ def test_engine_cleans_unfinalized_workspace_when_processing_fails(
     assert not generations_root.exists() or list(generations_root.iterdir()) == []
 
 
-def test_engine_ignores_deprecated_provider_and_records_actual_route(
-    monkeypatch,
-    tmp_path,
-    sample_loop,
-):
-    monkeypatch.setattr(
-        engine_module.routing,
-        "generate_midi",
-        lambda **kwargs: (sample_loop, [], 0, "OpenAI"),
-    )
-
-    engine = LoopGenerationEngine(
-        EngineConfig.from_defaults(artifact_root=tmp_path / "generations")
-    )
-
-    with pytest.warns(DeprecationWarning, match="provider is deprecated and ignored"):
-        request = GenerationRequest(
+def test_generation_request_rejects_removed_provider():
+    with pytest.raises(TypeError, match="unexpected keyword argument 'provider'"):
+        GenerationRequest(
             key="C",
             scale="Major",
             description="provider conflict",
             model="gpt-4o-mini",
             provider="Anthropic",
         )
-
-    result = engine.generate(request)
-
-    assert result.metadata.provider == "OpenAI"
