@@ -28,13 +28,46 @@ def test_generate_midi_rejects_unsupported_effort_before_provider_call(
     with pytest.raises(
         ValueError,
         match=(
-            rf"Effort 'high' is not supported by {model_choice}; "
-            r"supported values: low, medium"
+            rf"Invalid effort 'high' for {model_choice}\. "
+            r"Expected one of: low, medium"
         ),
     ):
         runs.generate_midi(model_choice, "write a loop", effort="high")
 
     loop_gen.assert_not_called()
+
+
+def test_validate_reasoning_options_warns_when_unsupported(caplog):
+    with caplog.at_level("WARNING", logger="conductor_core.routing"):
+        runs._validate_reasoning_options(
+            "non-reasoning-model",
+            {"extended_thinking": False},
+            use_thinking=True,
+            effort="high",
+        )
+
+    assert caplog.messages == [
+        (
+            "Effort 'high' was requested for non-reasoning-model, but this model "
+            "does not support configurable effort; the setting will be ignored."
+        ),
+        (
+            "Thinking was requested for non-reasoning-model, but this model does "
+            "not support extended thinking; the setting will be ignored."
+        ),
+    ]
+
+
+def test_validate_reasoning_options_does_not_warn_for_defaults(caplog):
+    with caplog.at_level("WARNING", logger="conductor_core.routing"):
+        runs._validate_reasoning_options(
+            "non-reasoning-model",
+            {"extended_thinking": False},
+            use_thinking=False,
+            effort="low",
+        )
+
+    assert caplog.messages == []
 
 
 def test_generate_midi_routes_to_ollama_and_forwards_temperature(monkeypatch):
