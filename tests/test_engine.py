@@ -245,3 +245,75 @@ def test_generation_request_rejects_removed_provider():
             model="gpt-4o-mini",
             provider="Anthropic",
         )
+
+
+@pytest.mark.parametrize("key", ["H", "Cbbb", "c"])
+def test_generation_request_rejects_unknown_keys(key):
+    with pytest.raises(
+        ValueError,
+        match=rf"Invalid key {key!r}\. Expected one of: B#, C, Dbb",
+    ):
+        GenerationRequest(
+            key=key,
+            scale="Major",
+            description="invalid key",
+            model="gpt-4o-mini",
+        )
+
+
+@pytest.mark.parametrize("scale", ["major", "MINOR", "Harmonic Minor", "melodic minor"])
+def test_generation_request_accepts_known_scales_case_insensitively(scale):
+    request = GenerationRequest(
+        key="C",
+        scale=scale,
+        description="valid scale",
+        model="gpt-4o-mini",
+    )
+
+    assert request.scale == scale
+
+
+@pytest.mark.parametrize("scale", ["dorian", "", None])
+def test_generation_request_rejects_unknown_scales(scale):
+    expected_message = (
+        f"Invalid scale {scale!r}. Expected one of: "
+        "major, minor, harmonic minor, melodic minor (case-insensitive)"
+    )
+    with pytest.raises(ValueError, match="Invalid scale") as raised:
+        GenerationRequest(
+            key="C",
+            scale=scale,
+            description="invalid scale",
+            model="gpt-4o-mini",
+        )
+    assert str(raised.value) == expected_message
+
+
+@pytest.mark.parametrize("temperature", [-0.1, 2.1, float("inf"), "0.5", True])
+def test_generation_request_rejects_invalid_temperatures(temperature):
+    expected_message = (
+        f"Invalid temperature {temperature!r}. "
+        "Expected a finite number between 0.0 and 2.0 (inclusive)"
+    )
+    with pytest.raises(ValueError, match="Invalid temperature") as raised:
+        GenerationRequest(
+            key="C",
+            scale="Major",
+            description="invalid temperature",
+            model="gpt-4o-mini",
+            temperature=temperature,
+        )
+    assert str(raised.value) == expected_message
+
+
+@pytest.mark.parametrize("temperature", [0.0, 0.5, 2.0])
+def test_generation_request_accepts_temperature_in_range(temperature):
+    request = GenerationRequest(
+        key="C",
+        scale="Major",
+        description="valid temperature",
+        model="gpt-4o-mini",
+        temperature=temperature,
+    )
+
+    assert request.temperature == temperature

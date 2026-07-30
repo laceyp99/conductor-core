@@ -1,5 +1,7 @@
 """Provider routing for Conductor Core."""
 
+import logging
+
 from conductor_core.config import ProviderCredentials
 from conductor_core.music import get_model_info
 from conductor_core.providers import anthropic as claude_api
@@ -7,15 +9,30 @@ from conductor_core.providers import google as gemini_api
 from conductor_core.providers import ollama as ollama_api
 from conductor_core.providers import openai as openai_api
 
+logger = logging.getLogger(__name__)
 
-def _validate_effort(model_choice, model_config, effort):
-    """Ensure the requested effort is supported by the selected model."""
+
+def _validate_reasoning_options(model_choice, model_config, use_thinking, effort):
+    """Validate supported reasoning options and warn when settings are ignored."""
     effort_options = model_config.get("effort_options") or []
     if effort_options and effort not in effort_options:
         supported_values = ", ".join(effort_options)
         raise ValueError(
-            f"Effort {effort!r} is not supported by {model_choice}; "
-            f"supported values: {supported_values}"
+            f"Invalid effort {effort!r} for {model_choice}. Expected one of: {supported_values}"
+        )
+    if not effort_options and effort not in (None, "low"):
+        logger.warning(
+            "Effort %r was requested for %s, but this model does not support "
+            "configurable effort; the setting will be ignored.",
+            effort,
+            model_choice,
+        )
+
+    if use_thinking and not model_config.get("extended_thinking"):
+        logger.warning(
+            "Thinking was requested for %s, but this model does not support "
+            "extended thinking; the setting will be ignored.",
+            model_choice,
         )
 
 
@@ -35,9 +52,10 @@ def generate_midi(
     model_info = get_model_info()
 
     if model_choice in model_info["models"]["OpenAI"]:
-        _validate_effort(
+        _validate_reasoning_options(
             model_choice,
             model_info["models"]["OpenAI"][model_choice],
+            use_thinking,
             effort,
         )
         provider = "OpenAI"
@@ -51,9 +69,10 @@ def generate_midi(
             **({"request_timeout": request_timeout} if request_timeout is not None else {}),
         )
     elif model_choice in model_info["models"]["Google"]:
-        _validate_effort(
+        _validate_reasoning_options(
             model_choice,
             model_info["models"]["Google"][model_choice],
+            use_thinking,
             effort,
         )
         provider = "Google"
@@ -68,9 +87,10 @@ def generate_midi(
             **({"request_timeout": request_timeout} if request_timeout is not None else {}),
         )
     elif model_choice in model_info["models"]["Anthropic"]:
-        _validate_effort(
+        _validate_reasoning_options(
             model_choice,
             model_info["models"]["Anthropic"][model_choice],
+            use_thinking,
             effort,
         )
         provider = "Anthropic"
@@ -92,6 +112,7 @@ def generate_midi(
         )
 
         if model_choice in ollama_status["models"]:
+            _validate_reasoning_options(model_choice, {}, use_thinking, effort)
             provider = "Ollama"
             loop, messages, loop_cost = ollama_api.loop_gen(
                 prompt,

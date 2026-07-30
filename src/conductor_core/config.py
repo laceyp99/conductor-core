@@ -5,6 +5,7 @@ from math import isfinite
 from pathlib import Path
 from typing import Any
 
+from conductor_core.music import ENHARMONIC_NOTE_NAMES, SCALE_INTERVALS
 from conductor_core.paths import resolve_default_artifact_root
 from conductor_core.storage import MAX_GENERATIONS, _validate_max_generations
 
@@ -77,6 +78,28 @@ class GenerationRequest:
     prompt_override: str | None = None
     render_audio: bool = False
     soundfont_path: str | Path | None = None
+
+    def __post_init__(self) -> None:
+        valid_keys = tuple(note for notes in ENHARMONIC_NOTE_NAMES for note in notes)
+        if self.key not in valid_keys:
+            raise ValueError(f"Invalid key {self.key!r}. Expected one of: {', '.join(valid_keys)}")
+
+        if not isinstance(self.scale, str) or self.scale.lower() not in SCALE_INTERVALS:
+            raise ValueError(
+                f"Invalid scale {self.scale!r}. Expected one of: "
+                f"{', '.join(SCALE_INTERVALS)} (case-insensitive)"
+            )
+
+        if (
+            isinstance(self.temperature, bool)
+            or not isinstance(self.temperature, (int, float))
+            or not isfinite(self.temperature)
+            or not 0.0 <= self.temperature <= 2.0
+        ):
+            raise ValueError(
+                f"Invalid temperature {self.temperature!r}. "
+                "Expected a finite number between 0.0 and 2.0 (inclusive)"
+            )
 
 
 @dataclass(frozen=True)

@@ -308,7 +308,7 @@
         },
         "Anthropic": {
             "claude-fable-5":{
-                "extended_thinking": false,
+                "extended_thinking": true,
                 "effort_options": ["low", "medium", "high", "xhigh", "max"],
                 "max_tokens": 128000,
                 "cost": {
@@ -320,7 +320,7 @@
                 }
             },
             "claude-sonnet-5":{
-                "extended_thinking": false,
+                "extended_thinking": true,
                 "effort_options": ["low", "medium", "high", "xhigh", "max"],
                 "max_tokens": 128000,
                 "cost": {
@@ -332,7 +332,7 @@
                 }
             },
             "claude-opus-5":{
-                "extended_thinking": false,
+                "extended_thinking": true,
                 "effort_options": ["low", "medium", "high", "xhigh", "max"],
                 "max_tokens": 128000,
                 "cost": {
