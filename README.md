@@ -154,6 +154,15 @@ Model capabilities differ. Consumers can inspect
 [`scripts/inspect_models.py`](scripts/inspect_models.py) instead of assuming
 every model accepts temperature or the same reasoning settings.
 
+Every packaged cloud model has a `rate_limits` object with the same fields:
+`RPM`, `TPM`, and `RPD`. `RPM` is a positive integer conservative baseline for
+the lowest generally supported account tier that Core intentionally supports;
+it is not a complete representation of provider usage, loyalty, priority, or
+entitlement tiers. `TPM` and `RPD` are positive integers when a matching
+baseline is intentionally recorded and `null` when it is unknown or cannot be
+represented consistently. Core exposes this metadata but does not schedule or
+retry requests from it.
+
 ## Prompt customization
 
 Core ships with a default loop-generation prompt. Set `prompt_override` on
