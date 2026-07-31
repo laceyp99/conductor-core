@@ -126,8 +126,41 @@ INTERVAL_NAMES = [
 _model_info_cache = None
 
 
+def _validate_model_info(model_info):
+    """Validate invariants for packaged, selectable cloud-model metadata."""
+    models_by_provider = model_info.get("models")
+    if not isinstance(models_by_provider, dict):
+        raise ValueError("model metadata must contain a 'models' object")
+
+    expected_rate_limit_fields = {"RPM", "TPM", "RPD"}
+    for provider, models in models_by_provider.items():
+        if not isinstance(models, dict):
+            raise ValueError(f"model metadata for {provider} must be an object")
+
+        for model, model_config in models.items():
+            rate_limits = model_config.get("rate_limits")
+            model_label = f"{provider}/{model}"
+            if not isinstance(rate_limits, dict):
+                raise ValueError(f"{model_label} must define rate_limits")
+            if set(rate_limits) != expected_rate_limit_fields:
+                raise ValueError(
+                    f"{model_label} rate_limits must contain exactly RPM, TPM, and RPD"
+                )
+
+            rpm = rate_limits["RPM"]
+            if isinstance(rpm, bool) or not isinstance(rpm, int) or rpm <= 0:
+                raise ValueError(f"{model_label} RPM must be a positive integer")
+
+            for field in ("TPM", "RPD"):
+                value = rate_limits[field]
+                if value is not None and (
+                    isinstance(value, bool) or not isinstance(value, int) or value <= 0
+                ):
+                    raise ValueError(f"{model_label} {field} must be a positive integer or null")
+
+
 def get_model_info():
-    """Load packaged model metadata once and reuse it."""
+    """Load, validate, and cache packaged model metadata."""
     global _model_info_cache
 
     if _model_info_cache is None:
@@ -135,7 +168,9 @@ def get_model_info():
             "model_list.json"
         )
         with model_info_resource.open("r", encoding="utf-8") as model_file:
-            _model_info_cache = json.load(model_file)
+            model_info = json.load(model_file)
+        _validate_model_info(model_info)
+        _model_info_cache = model_info
 
     return _model_info_cache
 
