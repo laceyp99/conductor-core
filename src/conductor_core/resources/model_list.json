@@ -9,6 +9,11 @@
                     "input": 5.00,
                     "cached input": 0.50,
                     "output": 30.00
+                },
+                "rate_limits": {
+                    "RPM": 500,
+                    "TPM": 500000,
+                    "RPD": null
                 }
             },
             "gpt-5.6-terra": {
@@ -19,6 +24,11 @@
                     "input": 2.50,
                     "cached input": 0.25,
                     "output": 15.00
+                },
+                "rate_limits": {
+                    "RPM": 500,
+                    "TPM": 500000,
+                    "RPD": null
                 }
             },
             "gpt-5.6-luna": {
@@ -29,6 +39,11 @@
                     "input": 1.00,
                     "cached input": 0.10,
                     "output": 6.00
+                },
+                "rate_limits": {
+                    "RPM": 500,
+                    "TPM": 200000,
+                    "RPD": null
                 }
             },
             "gpt-5.5": {
@@ -39,6 +54,11 @@
                     "input": 5.00,
                     "cached input": 0.50,
                     "output": 30.00
+                },
+                "rate_limits": {
+                    "RPM": 500,
+                    "TPM": 500000,
+                    "RPD": null
                 }
             },
             "gpt-5.4-nano": {
@@ -51,9 +71,9 @@
                     "output": 1.25
                 },
                 "rate_limits": {
-                    "TPM": 4000000,
-                    "RPM": 10000,
-                    "TPD": 200000000
+                    "RPM": 500,
+                    "TPM": 200000,
+                    "RPD": null
                 }
             },
             "gpt-5.4-mini": {
@@ -66,9 +86,9 @@
                     "output": 4.50
                 },
                 "rate_limits": {
-                    "TPM": 4000000,
-                    "RPM": 10000,
-                    "TPD": 200000000
+                    "RPM": 500,
+                    "TPM": 200000,
+                    "RPD": null
                 }
             },
             "gpt-5.4": {
@@ -81,9 +101,9 @@
                     "output": 15.00
                 },
                 "rate_limits": {
-                    "TPM": 4000000,
-                    "RPM": 10000,
-                    "TPD": 200000000
+                    "RPM": 500,
+                    "TPM": 500000,
+                    "RPD": null
                 }
             },
             "gpt-5.2": {
@@ -96,9 +116,9 @@
                     "output": 14.00
                 },
                 "rate_limits": {
-                    "TPM": 4000000,
-                    "RPM": 10000,
-                    "TPD": 200000000
+                    "RPM": 500,
+                    "TPM": 500000,
+                    "RPD": null
                 }
             },
             "gpt-5.1": {
@@ -111,9 +131,9 @@
                     "output": 10.00
                 },
                 "rate_limits": {
-                    "TPM": 4000000,
-                    "RPM": 10000,
-                    "TPD": 200000000
+                    "RPM": 500,
+                    "TPM": 500000,
+                    "RPD": null
                 }
             },
             "gpt-5": {
@@ -126,9 +146,9 @@
                     "output": 10.00
                 },
                 "rate_limits": {
-                    "TPM": 2000000,
-                    "RPM": 10000,
-                    "TPD": 200000000
+                    "RPM": 500,
+                    "TPM": 500000,
+                    "RPD": null
                 }
             },
             "gpt-5-mini": {
@@ -141,9 +161,9 @@
                     "output": 2.00
                 },
                 "rate_limits": {
-                    "TPM": 10000000,
-                    "RPM": 10000,
-                    "TPD": 1000000000
+                    "RPM": 500,
+                    "TPM": 500000,
+                    "RPD": null
                 }
             },
             "gpt-5-nano": {
@@ -156,9 +176,9 @@
                     "output": 0.40
                 },
                 "rate_limits": {
-                    "TPM": 10000000,
-                    "RPM": 10000,
-                    "TPD": 1000000000
+                    "RPM": 500,
+                    "TPM": 200000,
+                    "RPD": null
                 }
             },
             "o4-mini": {
@@ -171,9 +191,9 @@
                     "output": 4.40
                 },
                 "rate_limits": {
-                    "TPM": 10000000,
-                    "RPM": 10000,
-                    "TPD": 1000000000
+                    "RPM": 1000,
+                    "TPM": 100000,
+                    "RPD": null
                 }
             },
             "o3": {
@@ -186,9 +206,9 @@
                     "output": 8.00
                 },
                 "rate_limits": {
-                    "TPM": 20000000,
-                    "RPM": 10000,
-                    "TPD": 200000000
+                    "RPM": 500,
+                    "TPM": 30000,
+                    "RPD": null
                 }
             },
             "o3-mini": {
@@ -201,9 +221,9 @@
                     "output": 4.40
                 },
                 "rate_limits": {
-                    "TPM": 2000000,
-                    "RPM": 10000,
-                    "TPD": 200000000
+                    "RPM": 1000,
+                    "TPM": 100000,
+                    "RPD": null
                 }
             },
             "o1": {
@@ -216,9 +236,9 @@
                     "output": 60.00
                 },
                 "rate_limits": {
-                    "TPM": 2000000,
-                    "RPM": 10000,
-                    "TPD": 200000000
+                    "RPM": 500,
+                    "TPM": 30000,
+                    "RPD": null
                 }
             },
             "gpt-4.1": {
@@ -230,9 +250,9 @@
                     "output": 8.00
                 },
                 "rate_limits": {
-                    "TPM": 2000000,
-                    "RPM": 10000,
-                    "TPD": 200000000
+                    "RPM": 500,
+                    "TPM": 30000,
+                    "RPD": null
                 }
             },
             "gpt-4.1-mini": {
@@ -244,9 +264,9 @@
                     "output": 1.60
                 },
                 "rate_limits": {
-                    "TPM": 10000000,
-                    "RPM": 10000,
-                    "TPD": 1000000000
+                    "RPM": 500,
+                    "TPM": null,
+                    "RPD": null
                 }
             },
             "gpt-4.1-nano": {
@@ -258,9 +278,9 @@
                     "output": 0.40
                 },
                 "rate_limits": {
-                    "TPM": 100000000,
-                    "RPM": 10000,
-                    "TPD": 1000000000
+                    "RPM": 500,
+                    "TPM": 10000,
+                    "RPD": null
                 }
             },
             "gpt-4o-2024-11-20": {
@@ -272,9 +292,9 @@
                     "output": 10.00
                 },
                 "rate_limits": {
-                    "TPM": 2000000,
-                    "RPM": 10000,
-                    "TPD": 200000000
+                    "RPM": 500,
+                    "TPM": 30000,
+                    "RPD": null
                 }
             },
             "gpt-4o-2024-08-06": {
@@ -286,9 +306,9 @@
                     "output": 10.00
                 },
                 "rate_limits": {
-                    "TPM": 2000000,
-                    "RPM": 10000,
-                    "TPD": 200000000
+                    "RPM": 500,
+                    "TPM": 30000,
+                    "RPD": null
                 }
             },
             "gpt-4o-mini": {
@@ -300,9 +320,9 @@
                     "output": 0.60
                 },
                 "rate_limits": {
-                    "TPM": 10000000,
-                    "RPM": 10000,
-                    "TPD": 1000000000
+                    "RPM": 500,
+                    "TPM": 30000,
+                    "RPD": null
                 }
             }
         },
@@ -317,6 +337,11 @@
                     "1h cache input": 20.00,
                     "cache hits/refreshes": 1.00,
                     "output": 50.00
+                },
+                "rate_limits": {
+                    "RPM": 1000,
+                    "TPM": 100000,
+                    "RPD": null
                 }
             },
             "claude-sonnet-5":{
@@ -329,6 +354,11 @@
                     "1h cache input": 6.00,
                     "cache hits/refreshes": 0.30,
                     "output": 15.00
+                },
+                "rate_limits": {
+                    "RPM": 1000,
+                    "TPM": 400000,
+                    "RPD": null
                 }
             },
             "claude-opus-5":{
@@ -341,6 +371,11 @@
                     "1h cache input": 10.00,
                     "cache hits/refreshes": 0.50,
                     "output": 25.00
+                },
+                "rate_limits": {
+                    "RPM": 1000,
+                    "TPM": 400000,
+                    "RPD": null
                 }
             },
             "claude-opus-4-8":{
@@ -353,6 +388,11 @@
                     "1h cache input": 10.00,
                     "cache hits/refreshes": 0.50,
                     "output": 25.00
+                },
+                "rate_limits": {
+                    "RPM": 1000,
+                    "TPM": 400000,
+                    "RPD": null
                 }
             },
             "claude-opus-4-7":{
@@ -367,9 +407,9 @@
                     "output": 25.00
                 },
                 "rate_limits": {
-                    "RPM": 50,
-                    "ITPM": 30000,
-                    "OTPM": 8000
+                    "RPM": 1000,
+                    "TPM": 400000,
+                    "RPD": null
                 }
             },
             "claude-sonnet-4-6":{
@@ -384,9 +424,9 @@
                     "output": 15.00
                 },
                 "rate_limits": {
-                    "RPM": 50,
-                    "ITPM": 30000,
-                    "OTPM": 8000
+                    "RPM": 1000,
+                    "TPM": 400000,
+                    "RPD": null
                 }
             },
             "claude-opus-4-6":{
@@ -401,9 +441,9 @@
                     "output": 25.00
                 },
                 "rate_limits": {
-                    "RPM": 50,
-                    "ITPM": 30000,
-                    "OTPM": 8000
+                    "RPM": 1000,
+                    "TPM": 400000,
+                    "RPD": null
                 }
             },
             "claude-opus-4-5":{
@@ -418,9 +458,9 @@
                     "output": 25.00
                 },
                 "rate_limits": {
-                    "RPM": 50,
-                    "ITPM": 30000,
-                    "OTPM": 8000
+                    "RPM": 1000,
+                    "TPM": 400000,
+                    "RPD": null
                 }
             },
             "claude-haiku-4-5":{
@@ -435,9 +475,9 @@
                     "output": 5.00
                 },
                 "rate_limits": {
-                    "RPM": 50,
-                    "ITPM": 30000,
-                    "OTPM": 8000
+                    "RPM": 1000,
+                    "TPM": 400000,
+                    "RPD": null
                 }
             },
             "claude-sonnet-4-5":{
@@ -452,9 +492,9 @@
                     "cache hits/refreshes": 0.30
                 },
                 "rate_limits": {
-                    "RPM": 50,
-                    "ITPM": 30000,
-                    "OTPM": 8000
+                    "RPM": 1000,
+                    "TPM": 400000,
+                    "RPD": null
                 }
             },
             "claude-opus-4-1-20250805": {
@@ -469,9 +509,9 @@
                     "output": 75.00
                 },
                 "rate_limits": {
-                    "RPM": 50,
-                    "ITPM": 30000,
-                    "OTPM": 8000
+                    "RPM": 1000,
+                    "TPM": 400000,
+                    "RPD": null
                 }
             }
         },
@@ -489,9 +529,9 @@
                     "output": 7.50
                 },
                 "rate_limits": {
-                    "RPM": 5,
-                    "TPM": 250000,
-                    "RPD": 20
+                    "RPM": 1000,
+                    "TPM": 2000000,
+                    "RPD": 10000
                 }
             },
             "gemini-3.5-flash": {
@@ -507,9 +547,9 @@
                     "output": 9.00
                 },
                 "rate_limits": {
-                    "RPM": 5,
-                    "TPM": 250000,
-                    "RPD": 20
+                    "RPM": 1000,
+                    "TPM": 2000000,
+                    "RPD": 10000
                 }
             },
             "gemini-3.5-flash-lite": {
@@ -525,9 +565,9 @@
                     "output": 2.50
                 },
                 "rate_limits": {
-                    "RPM": 5,
-                    "TPM": 250000,
-                    "RPD": 20
+                    "RPM": 4000,
+                    "TPM": 4000000,
+                    "RPD": 150000
                 }
             },
             "gemini-3.1-flash-lite": {
@@ -543,9 +583,9 @@
                     "output": 1.50
                 },
                 "rate_limits": {
-                    "RPM": 15,
-                    "TPM": 250000,
-                    "RPD": 500
+                    "RPM": 4000,
+                    "TPM": 4000000,
+                    "RPD": 150000
                 }
             },
             "gemini-3.1-pro-preview": {
@@ -586,9 +626,9 @@
                     "output": 3.00
                 },
                 "rate_limits": {
-                    "RPM": 5,
-                    "TPM": 250000,
-                    "RPD": 20
+                    "RPM": 1000,
+                    "TPM": 2000000,
+                    "RPD": 10000
                 }
             },
             "gemini-2.5-pro": {
@@ -631,9 +671,9 @@
                     "output": 2.50
                 },
                 "rate_limits": {
-                    "RPM": 5,
-                    "TPM": 250000,
-                    "RPD": 20
+                    "RPM": 1000,
+                    "TPM": 1000000,
+                    "RPD": 10000
                 }
             },
             "gemini-2.5-flash-lite": {
@@ -650,9 +690,9 @@
                     "output": 0.40
                 },
                 "rate_limits": {
-                    "RPM": 10,
-                    "TPM": 250000,
-                    "RPD": 20
+                    "RPM": 4000,
+                    "TPM": 4000000,
+                    "RPD": 4000000
                 }
             }
         }
