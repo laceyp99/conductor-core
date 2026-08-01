@@ -208,9 +208,12 @@ class Note(BaseModel):
     octave: int = Field(
         ...,
         strict=True,
-        ge=-1,
+        ge=-2,
         le=9,
-        description="Scientific pitch octave within the MIDI range (C-1 through G9)",
+        description=(
+            "Scientific pitch octave from -2 through 9; the exact MIDI range "
+            "depends on the pitch spelling"
+        ),
     )
     velocity: int = Field(
         ...,
@@ -234,9 +237,12 @@ class Note_G(BaseModel):
     octave: int = Field(
         ...,
         strict=True,
-        ge=-1,
+        ge=-2,
         le=9,
-        description="Scientific pitch octave within the MIDI range (C-1 through G9)",
+        description=(
+            "Scientific pitch octave from -2 through 9; the exact MIDI range "
+            "depends on the pitch spelling"
+        ),
     )
     velocity: int = Field(
         ...,

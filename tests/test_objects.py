@@ -55,9 +55,13 @@ def test_time_information_g_rejects_unknown_string_values():
 )
 def test_note_accepts_midi_pitch_boundaries(note_type, time):
     low_note = note_type(pitch="C", octave=-1, velocity=1, time=time)
+    low_enharmonic = note_type(pitch="B#", octave=-2, velocity=1, time=time)
+    low_double_sharp = note_type(pitch="B##", octave=-2, velocity=1, time=time)
     high_note = note_type(pitch="G", octave=9, velocity=127, time=time)
 
     assert (low_note.octave, low_note.velocity) == (-1, 1)
+    assert (low_enharmonic.octave, low_enharmonic.velocity) == (-2, 1)
+    assert (low_double_sharp.octave, low_double_sharp.velocity) == (-2, 1)
     assert (high_note.octave, high_note.velocity) == (9, 127)
 
 
@@ -71,7 +75,8 @@ def test_note_accepts_midi_pitch_boundaries(note_type, time):
 @pytest.mark.parametrize(
     ("pitch", "octave", "velocity", "message"),
     [
-        ("C", -2, 96, "greater than or equal to -1"),
+        ("C", -2, 96, "maps to MIDI note -12"),
+        ("B", -3, 96, "greater than or equal to -2"),
         ("G#", 9, 96, "maps to MIDI note 128"),
         ("C", 10, 96, "less than or equal to 9"),
         ("C", 4, 0, "greater than or equal to 1"),
@@ -166,13 +171,13 @@ def test_loop_schema_distinguishes_duration_from_start_position():
 
     assert 64 in definitions["DurationSixteenth"]["enum"]
     assert definitions["SixteenthNote"]["enum"] == list(range(1, 17))
-    assert definitions["Note"]["properties"]["octave"]["minimum"] == -1
+    assert definitions["Note"]["properties"]["octave"]["minimum"] == -2
     assert definitions["Note"]["properties"]["octave"]["maximum"] == 9
     assert definitions["Note"]["properties"]["velocity"]["minimum"] == 1
     assert definitions["Note"]["properties"]["velocity"]["maximum"] == 127
 
     gemini_definitions = Loop_G.model_json_schema()["$defs"]
-    assert gemini_definitions["Note_G"]["properties"]["octave"]["minimum"] == -1
+    assert gemini_definitions["Note_G"]["properties"]["octave"]["minimum"] == -2
     assert gemini_definitions["Note_G"]["properties"]["octave"]["maximum"] == 9
     assert gemini_definitions["Note_G"]["properties"]["velocity"]["minimum"] == 1
     assert gemini_definitions["Note_G"]["properties"]["velocity"]["maximum"] == 127
