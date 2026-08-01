@@ -187,14 +187,36 @@ class TimeInformation_G(BaseModel):
 
 
 # Note Objects
+def _validate_midi_pitch(note):
+    """Ensure a pitch and octave identify an encodable MIDI note."""
+    from conductor_core.music import calculate_midi_number
+
+    midi_number = calculate_midi_number(note)
+    if not 0 <= midi_number <= 127:
+        raise ValueError(
+            f"Pitch {note.pitch}{note.octave} maps to MIDI note {midi_number}; "
+            "expected a value from 0 to 127"
+        )
+    return note
+
+
 class Note(BaseModel):
     pitch: str = Field(
         ...,
         description='Pitch of the note (e.g. "C", "D", "E", "F", "G", "A", "B") Please do not include the octave number',
     )
-    octave: int = Field(..., description="Octave of the note (e.g. 1-8)")
-    velocity: int = Field(..., description="Velocity of the note (e.g. 0-127)")
+    octave: int = Field(
+        ...,
+        ge=-1,
+        le=9,
+        description="Scientific pitch octave within the MIDI range (C-1 through G9)",
+    )
+    velocity: int = Field(..., ge=1, le=127, description="Note-on velocity (1-127)")
     time: TimeInformation
+
+    @model_validator(mode="after")
+    def validate_midi_pitch(self):
+        return _validate_midi_pitch(self)
 
 
 class Note_G(BaseModel):
@@ -202,9 +224,18 @@ class Note_G(BaseModel):
         ...,
         description='Pitch of the note (e.g. "C", "D", "E", "F", "G", "A", "B") Please do not include the octave number',
     )
-    octave: int = Field(..., description="Octave of the note (e.g. 1-8)")
-    velocity: int = Field(..., description="Velocity of the note (e.g. 0-127)")
+    octave: int = Field(
+        ...,
+        ge=-1,
+        le=9,
+        description="Scientific pitch octave within the MIDI range (C-1 through G9)",
+    )
+    velocity: int = Field(..., ge=1, le=127, description="Note-on velocity (1-127)")
     time: TimeInformation_G = Field(..., description="Time information of the note")
+
+    @model_validator(mode="after")
+    def validate_midi_pitch(self):
+        return _validate_midi_pitch(self)
 
 
 # Bar Objects

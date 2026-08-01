@@ -32,7 +32,7 @@ def _validate_import_ppq(ticks_per_beat):
         )
 
 
-def loop_to_midi(midi, loop, times_as_string=True):
+def loop_to_midi(midi, loop, times_as_string=True) -> list[str]:
     """
     Converts a loop object into MIDI format.
 
@@ -46,7 +46,8 @@ def loop_to_midi(midi, loop, times_as_string=True):
                                 via `utils.convert_sixteenth`; otherwise, they are integers.
 
     Returns:
-        None. The function modifies the midi.tracks in place.
+        A list of warnings describing notes changed or dropped during export. The
+        function also modifies the midi.tracks in place.
     """
     if loop is None:
         raise ValueError("The loop object is None. Ensure it is properly initialized.")
@@ -57,6 +58,8 @@ def loop_to_midi(midi, loop, times_as_string=True):
             "One or more bars in the loop object are None. Ensure all bars are initialized."
         )
 
+    warnings = []
+
     # Create a new track to hold the MIDI messages of the Loop
     track = MidiTrack()
     # Calculated ticks per sixteenth note, based on provided ticks per beat (quarter note).
@@ -66,12 +69,54 @@ def loop_to_midi(midi, loop, times_as_string=True):
 
     # Initialize a list to hold all note events (on and off).
     events = []
-    bars = [loop.Bar_1, loop.Bar_2, loop.Bar_3, loop.Bar_4]
     # Iterate through each bar and its notes to schedule events.
     for bar_index, bar in enumerate(bars):
         bar_offset = bar_index * bar_length
         # Iterate through each note in the bar.
         for note in bar.notes:
+            try:
+                note_num = utils.calculate_midi_number(note)
+            except (AttributeError, TypeError, ValueError) as exc:
+                warning = f"Dropped note with invalid pitch {getattr(note, 'pitch', None)!r}: {exc}"
+                logger.warning("[MIDI] %s", warning)
+                warnings.append(warning)
+                continue
+
+            if not 0 <= note_num <= 127:
+                warning = (
+                    f"Dropped out-of-range MIDI note {note.pitch}{note.octave} ({note_num}); "
+                    "valid range is 0-127."
+                )
+                logger.warning("[MIDI] %s", warning)
+                warnings.append(warning)
+                continue
+
+            velocity = note.velocity
+            if isinstance(velocity, bool) or not isinstance(velocity, int):
+                warning = (
+                    f"Dropped MIDI note {note.pitch}{note.octave} with invalid "
+                    f"velocity {velocity!r}."
+                )
+                logger.warning("[MIDI] %s", warning)
+                warnings.append(warning)
+                continue
+            if velocity <= 0:
+                warning = (
+                    f"Dropped MIDI note {note.pitch}{note.octave} with non-positive "
+                    f"velocity {velocity}."
+                )
+                logger.warning("[MIDI] %s", warning)
+                warnings.append(warning)
+                continue
+            if velocity > 127:
+                warning = (
+                    f"Clamped velocity for MIDI note {note.pitch}{note.octave} "
+                    f"from {velocity} to 127."
+                )
+                logger.warning("[MIDI] %s", warning)
+                warnings.append(warning)
+                velocity = 127
+
             # Get the note's time information from either style loop object.
             if times_as_string:
                 start_beat = utils.convert_sixteenth(note.time.start_beat)
@@ -85,12 +130,14 @@ def loop_to_midi(midi, loop, times_as_string=True):
             note_duration_ticks = duration * ticks_per_sixteenth
             note_end_tick = note_start_tick + note_duration_ticks
             if note_end_tick > final_bar_ticks:
-                logger.warning("[MIDI] Note output clamped to the 4-bar loop boundary.")
+                warning = "Note output was clamped to the four-bar loop boundary."
+                logger.warning("[MIDI] %s", warning)
+                warnings.append(warning)
                 note_end_tick = final_bar_ticks
 
             # Append note on and note off events.
-            events.append((note_start_tick, "note_on", note))
-            events.append((note_end_tick, "note_off", note))
+            events.append((note_start_tick, "note_on", note_num, velocity))
+            events.append((note_end_tick, "note_off", note_num, velocity))
 
     # Sort events by time; for equal timestamps, note_off is processed before note_on.
     events.sort(key=lambda ev: (ev[0], 0 if ev[1] == "note_off" else 1))
@@ -98,19 +145,7 @@ def loop_to_midi(midi, loop, times_as_string=True):
     # Convert absolute times to delta times for the MIDI messages.
     prev_tick = 0
     # Iterate through the sorted events and create MIDI messages.
-    for event_time, event_type, note in events:
-        if not 0 <= note.velocity <= 127:
-            logger.info(f"[MIDI] Handling out-of-range velocity {note.velocity}")
-            velocity = max(0, min(127, note.velocity))
-        else:
-            velocity = note.velocity
-
-        note_num = utils.calculate_midi_number(note)
-        if not 0 <= note_num <= 127:
-            logger.info(f"[MIDI] Handling out-of-range note {note_num}")
-            note_num = max(0, min(127, note_num))
-            velocity = 0
-
+    for event_time, event_type, note_num, velocity in events:
         # Calculate the delta time from the previous event.
         delta_time = event_time - prev_tick
 
@@ -128,6 +163,7 @@ def loop_to_midi(midi, loop, times_as_string=True):
 
     # Append the track to the MIDI file.
     midi.tracks.append(track)
+    return warnings
 
 
 def midi_to_loop(midi_filename, times_as_string=True):

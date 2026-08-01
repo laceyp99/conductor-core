@@ -42,9 +42,10 @@ def test_loop_to_midi_orders_note_off_before_note_on_at_same_tick(loop_factory, 
 
 
 def test_loop_to_midi_clamps_out_of_range_velocity(loop_factory, note_factory):
+    note = note_factory(pitch="C", start_beat=1, duration=4).model_copy(update={"velocity": 200})
     loop = loop_factory(
         bars=[
-            [note_factory(pitch="C", start_beat=1, duration=4, velocity=200)],
+            [note],
             [],
             [],
             [],
@@ -52,11 +53,56 @@ def test_loop_to_midi_clamps_out_of_range_velocity(loop_factory, note_factory):
     )
     midi = MidiFile(ticks_per_beat=480)
 
-    loop_to_midi(midi, loop, times_as_string=False)
+    warnings = loop_to_midi(midi, loop, times_as_string=False)
 
     note_messages = [msg for msg in midi.tracks[0] if msg.type != "end_of_track"]
 
     assert [msg.velocity for msg in note_messages] == [127, 127]
+    assert warnings == ["Clamped velocity for MIDI note C4 from 200 to 127."]
+
+
+@pytest.mark.parametrize(
+    ("pitch", "octave", "midi_number"),
+    [("C", -2, -12), ("C", 12, 156)],
+)
+def test_loop_to_midi_drops_out_of_range_pitch_pairs(
+    loop_factory, note_factory, pitch, octave, midi_number
+):
+    invalid_note = note_factory(pitch=pitch, start_beat=1, duration=4).model_copy(
+        update={"octave": octave}
+    )
+    loop = loop_factory(
+        bars=[
+            [note_factory(pitch="G", octave=9, start_beat=1, duration=4)],
+            [],
+            [],
+            [],
+        ]
+    )
+    unvalidated_bar = loop.Bar_1.model_copy(update={"notes": [invalid_note, loop.Bar_1.notes[0]]})
+    loop = loop.model_copy(update={"Bar_1": unvalidated_bar})
+    midi = MidiFile(ticks_per_beat=480)
+
+    warnings = loop_to_midi(midi, loop, times_as_string=False)
+
+    assert _note_events_with_absolute_times(midi) == [
+        ("note_on", 127, 0),
+        ("note_off", 127, 480),
+    ]
+    assert warnings == [
+        f"Dropped out-of-range MIDI note {pitch}{octave} ({midi_number}); valid range is 0-127."
+    ]
+
+
+def test_loop_to_midi_drops_non_positive_velocity_pair(loop_factory, note_factory):
+    silent_note = note_factory(start_beat=1, duration=4).model_copy(update={"velocity": 0})
+    loop = loop_factory(bars=[[silent_note], [], [], []])
+    midi = MidiFile(ticks_per_beat=480)
+
+    warnings = loop_to_midi(midi, loop, times_as_string=False)
+
+    assert _note_events_with_absolute_times(midi) == []
+    assert warnings == ["Dropped MIDI note C4 with non-positive velocity 0."]
 
 
 def test_loop_to_midi_allows_notes_to_cross_early_bar_boundaries(loop_factory, note_factory):
