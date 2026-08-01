@@ -140,6 +140,9 @@ def _validate_model_info(model_info):
         for model, model_config in models.items():
             rate_limits = model_config.get("rate_limits")
             model_label = f"{provider}/{model}"
+            always_on_adaptive_thinking = model_config.get("always_on_adaptive_thinking", False)
+            if not isinstance(always_on_adaptive_thinking, bool):
+                raise ValueError(f"{model_label} always_on_adaptive_thinking must be a boolean")
             if not isinstance(rate_limits, dict):
                 raise ValueError(f"{model_label} must define rate_limits")
             if set(rate_limits) != expected_rate_limit_fields:

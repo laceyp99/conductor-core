@@ -24,6 +24,34 @@ def test_selectable_cloud_models_have_normalized_rate_limits():
                 ), f"{provider}/{model} {field}"
 
 
+def test_only_fable_5_has_always_on_adaptive_thinking():
+    anthropic_models = music.get_model_info()["models"]["Anthropic"]
+
+    always_on_models = {
+        model
+        for model, model_config in anthropic_models.items()
+        if model_config.get("always_on_adaptive_thinking")
+    }
+
+    assert always_on_models == {"claude-fable-5"}
+
+
+def test_model_metadata_rejects_non_boolean_always_on_adaptive_thinking():
+    model_info = {
+        "models": {
+            "Anthropic": {
+                "test-model": {
+                    "always_on_adaptive_thinking": "yes",
+                    "rate_limits": {"RPM": 1, "TPM": None, "RPD": None},
+                }
+            }
+        }
+    }
+
+    with pytest.raises(ValueError, match="always_on_adaptive_thinking must be a boolean"):
+        music._validate_model_info(model_info)
+
+
 @pytest.mark.parametrize(
     ("rate_limits", "message"),
     [

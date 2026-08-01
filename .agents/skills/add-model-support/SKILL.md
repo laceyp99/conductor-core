@@ -33,13 +33,13 @@ If the user does not provide a URL, search the web first and prefer official rel
 2. Research the model from official sources.
    - Prefer vendor docs over third-party summaries.
    - Capture the public model identifier, pricing, context or max token limits, published rate limits, and any request-parameter constraints relevant to this repo.
-   - Specifically determine whether the model supports or restricts temperature, extended thinking, or effort-style reasoning controls.
+   - Specifically determine whether the model supports or restricts temperature, extended thinking, effort-style reasoning controls, or always-on adaptive thinking.
    - If official data is incomplete, do not invent values. Record the gap and ask for maintainer direction if the missing field blocks a safe edit.
 
 3. Update the model registry.
    - Edit `src/conductor_core/resources/model_list.json` under the existing provider key.
    - Preserve the current schema and nearby provider conventions.
-   - Add `extended_thinking`, `effort_options` when applicable, `max_tokens`, `cost`, and `rate_limits` only from supported evidence.
+   - Add `extended_thinking`, `always_on_adaptive_thinking`, `effort_options` when applicable, `max_tokens`, `cost`, and `rate_limits` only from supported evidence.
 
 4. Verify the provider module.
    - Inspect the matching file under `src/conductor_core/providers/` and check whether the new model works with the current request construction, parameter names, parsing path, and cost calculation.

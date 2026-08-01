@@ -32,6 +32,7 @@ Example shape:
     "OpenAI": {
       "model-id": {
         "extended_thinking": true,
+        "always_on_adaptive_thinking": false,
         "effort_options": ["low", "medium", "high"],
         "max_tokens": 128000,
         "cost": {
@@ -51,6 +52,8 @@ Example shape:
 ```
 
 Keep field names and nesting consistent with nearby entries. If a provider does not publish one of these values, do not fabricate it.
+Anthropic models that always apply adaptive thinking should set
+`always_on_adaptive_thinking` to `true`; omit the field otherwise.
 
 ## Conductor Main Control Points
 
@@ -77,6 +80,7 @@ For the matching provider file in `src/conductor_core/providers/`, verify all of
 
 - The model identifier is accepted by the provider API call path.
 - The module uses the right parameter names for temperature, thinking, or effort controls.
+- Provider-specific request constraints, such as always-on adaptive thinking, are driven by model metadata rather than model-name checks.
 - The cost calculation matches the registry fields used by that provider.
 - Structured output parsing still works for loop generation.
 
