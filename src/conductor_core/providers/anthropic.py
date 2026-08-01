@@ -28,7 +28,6 @@ except ImportError:  # pragma: no cover - exercised only in minimal installs
 
 logger = logging.getLogger(__name__)
 
-ALWAYS_ON_ADAPTIVE_THINKING_MODELS = {"claude-fable-5", "claude-mythos-5"}
 ANTHROPIC_CACHE_CONTROL_MIN_CHARS = 4096
 
 
@@ -178,7 +177,7 @@ def loop_gen(
 
     model_info = utils.get_model_info()
     model_config = model_info["models"]["Anthropic"][model]
-    always_on_adaptive_thinking = model in ALWAYS_ON_ADAPTIVE_THINKING_MODELS
+    always_on_adaptive_thinking = model_config.get("always_on_adaptive_thinking", False)
     api_params = {
         "model": model,
         "max_tokens": model_config["max_tokens"],

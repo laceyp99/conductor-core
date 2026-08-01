@@ -329,6 +329,7 @@
         "Anthropic": {
             "claude-fable-5":{
                 "extended_thinking": true,
+                "always_on_adaptive_thinking": true,
                 "effort_options": ["low", "medium", "high", "xhigh", "max"],
                 "max_tokens": 128000,
                 "cost": {
