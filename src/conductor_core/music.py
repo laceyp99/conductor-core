@@ -345,16 +345,14 @@ def midi_to_note_name(midi_numbers):
 
 
 def save_messages_to_json(messages, filename):
-    """Saves messages to a JSON file with the same name as the MIDI file.
+    """Save messages to a JSON file.
 
     Args:
-        messages (list of dictionaries): A list of messages to save to the JSON file.
-        midi_filename (str): The filename of the MIDI file to save the messages for.
+        messages (list[dict]): Message payloads to serialize.
+        filename (str): Output filename, with or without a ``.json`` suffix.
     """
-    # Construct the JSON filename similar to the MIDI filename
-    base_filename = f"{filename}.json"
-    # Save the messages to the JSON file with indentation for readability
-    with open(base_filename, "w") as json_file:
+    base_filename = filename if str(filename).endswith(".json") else f"{filename}.json"
+    with open(base_filename, "w", encoding="utf-8") as json_file:
         json.dump(messages, json_file, indent=4)
 
 
