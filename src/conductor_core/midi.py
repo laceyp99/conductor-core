@@ -82,6 +82,14 @@ def loop_to_midi(midi, loop, times_as_string=True) -> list[str]:
                 warnings.append(warning)
                 continue
 
+            if type(note_num) is not int:
+                warning = (
+                    f"Dropped MIDI note {note.pitch}{note.octave} with invalid "
+                    f"note number {note_num!r}."
+                )
+                logger.warning("[MIDI] %s", warning)
+                warnings.append(warning)
+                continue
             if not 0 <= note_num <= 127:
                 warning = (
                     f"Dropped out-of-range MIDI note {note.pitch}{note.octave} ({note_num}); "
@@ -92,7 +100,7 @@ def loop_to_midi(midi, loop, times_as_string=True) -> list[str]:
                 continue
 
             velocity = note.velocity
-            if isinstance(velocity, bool) or not isinstance(velocity, int):
+            if type(velocity) is not int:
                 warning = (
                     f"Dropped MIDI note {note.pitch}{note.octave} with invalid "
                     f"velocity {velocity!r}."

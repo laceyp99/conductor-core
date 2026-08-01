@@ -105,6 +105,17 @@ def test_loop_to_midi_drops_non_positive_velocity_pair(loop_factory, note_factor
     assert warnings == ["Dropped MIDI note C4 with non-positive velocity 0."]
 
 
+def test_loop_to_midi_drops_non_integer_note_number(loop_factory, note_factory):
+    invalid_note = note_factory().model_copy(update={"octave": 4.5})
+    loop = loop_factory(bars=[[invalid_note], [], [], []])
+    midi = MidiFile(ticks_per_beat=480)
+
+    warnings = loop_to_midi(midi, loop, times_as_string=False)
+
+    assert _note_events_with_absolute_times(midi) == []
+    assert warnings == ["Dropped MIDI note C4.5 with invalid note number 66.0."]
+
+
 def test_loop_to_midi_allows_notes_to_cross_early_bar_boundaries(loop_factory, note_factory):
     loop = loop_factory(
         bars=[

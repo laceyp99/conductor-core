@@ -207,11 +207,18 @@ class Note(BaseModel):
     )
     octave: int = Field(
         ...,
+        strict=True,
         ge=-1,
         le=9,
         description="Scientific pitch octave within the MIDI range (C-1 through G9)",
     )
-    velocity: int = Field(..., ge=1, le=127, description="Note-on velocity (1-127)")
+    velocity: int = Field(
+        ...,
+        strict=True,
+        ge=1,
+        le=127,
+        description="Note-on velocity (1-127)",
+    )
     time: TimeInformation
 
     @model_validator(mode="after")
@@ -226,11 +233,18 @@ class Note_G(BaseModel):
     )
     octave: int = Field(
         ...,
+        strict=True,
         ge=-1,
         le=9,
         description="Scientific pitch octave within the MIDI range (C-1 through G9)",
     )
-    velocity: int = Field(..., ge=1, le=127, description="Note-on velocity (1-127)")
+    velocity: int = Field(
+        ...,
+        strict=True,
+        ge=1,
+        le=127,
+        description="Note-on velocity (1-127)",
+    )
     time: TimeInformation_G = Field(..., description="Time information of the note")
 
     @model_validator(mode="after")

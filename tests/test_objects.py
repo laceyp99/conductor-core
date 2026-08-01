@@ -91,6 +91,32 @@ def test_note_rejects_values_that_cannot_create_note_on_events(
         )
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("octave", True),
+        ("octave", 4.0),
+        ("octave", "4"),
+        ("velocity", True),
+        ("velocity", 96.0),
+        ("velocity", "96"),
+    ],
+)
+@pytest.mark.parametrize(
+    ("note_type", "time"),
+    [
+        (Note, {"start_beat": 1, "duration": 1}),
+        (Note_G, {"start_beat": "one", "duration": "one"}),
+    ],
+)
+def test_note_requires_integer_octave_and_velocity(note_type, time, field, value):
+    values = {"pitch": "C", "octave": 4, "velocity": 96, "time": time}
+    values[field] = value
+
+    with pytest.raises(ValidationError, match="Input should be a valid integer"):
+        note_type(**values)
+
+
 def test_loop_validates_nested_bar_and_note_data_from_dicts():
     loop = Loop(
         Bar_1={
