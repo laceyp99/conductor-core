@@ -1,0 +1,26 @@
+name: Dependency compatibility
+
+on:
+  schedule:
+    - cron: "00 12 * * 0"
+  workflow_dispatch:
+
+jobs:
+  latest-compatible:
+    name: Latest compatible dependencies (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.16"
+      - name: Resolve newest compatible dependencies
+        run: uv lock --upgrade
+      - name: Sync fresh environment
+        run: uv sync --locked --all-extras --python ${{ matrix.python-version }}
+      - name: Test
+        run: uv run --locked --all-extras --python ${{ matrix.python-version }} pytest -q
