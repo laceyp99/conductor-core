@@ -16,8 +16,8 @@ reproducible development, testing, and package builds.
 
 - Validation for generation keys, scales, and finite temperatures from 0.0
   through 2.0.
-- Export warnings on `GenerationResult` for notes that MIDI processing changes
-  or drops.
+- MIDI export warnings are now included in `GenerationResult.warnings` for 
+  notes that are changed or dropped.
 - A normalized `rate_limits` object with `RPM`, `TPM`, and `RPD` fields for
   every packaged cloud model, plus validation of packaged model metadata.
 - Weekly compatibility testing against the newest supported dependencies on
