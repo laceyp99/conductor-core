@@ -298,6 +298,11 @@ error occurs after a workspace is allocated, Core removes the unfinished
 workspace. Callers should catch exceptions at their application boundary and
 decide how to display, retry, or log them.
 
+Hosted providers fail before constructing an SDK client when their required API
+key is missing or blank. These failures, along with credentials rejected by a
+provider, raise `ProviderAuthenticationError`. Other provider SDK failures use
+the public `ProviderError` hierarchy and identify the provider and operation.
+
 ## Logging
 
 Core emits log records under the `conductor_core` logger namespace and never
