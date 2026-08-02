@@ -15,6 +15,40 @@ from conductor_core.providers import google as google_api
 from conductor_core.providers import ollama as ollama_api
 from conductor_core.providers import openai as openai_api
 
+HOSTED_PROVIDERS = [
+    pytest.param(
+        openai_api,
+        "initialize_openai_client",
+        "OpenAI",
+        "OPENAI_API_KEY",
+        ("OpenAI",),
+        id="openai",
+    ),
+    pytest.param(
+        anthropic_api,
+        "initialize_anthropic_client",
+        "Anthropic",
+        "ANTHROPIC_API_KEY",
+        ("Anthropic",),
+        id="anthropic",
+    ),
+    pytest.param(
+        google_api,
+        "initialize_gemini_client",
+        "Google",
+        "GEMINI_API_KEY",
+        ("genai", "Client"),
+        id="google",
+    ),
+]
+
+
+def _patch_client_constructor(monkeypatch, module, client_path, replacement):
+    target = module
+    for attribute in client_path[:-1]:
+        target = getattr(target, attribute)
+    monkeypatch.setattr(target, client_path[-1], replacement)
+
 
 def test_engine_config_rejects_invalid_request_timeouts():
     for timeout in (0, -1, float("inf"), "5", True):
@@ -22,6 +56,102 @@ def test_engine_config_rejects_invalid_request_timeouts():
             ValueError, match="request_timeout must be None or a positive finite number"
         ):
             EngineConfig.from_defaults(request_timeout=timeout)
+
+
+@pytest.mark.parametrize(
+    ("module", "initializer_name", "provider", "env_var", "client_path"),
+    HOSTED_PROVIDERS,
+)
+@pytest.mark.parametrize("api_key", [None, "   "], ids=["missing", "blank"])
+def test_hosted_provider_initializers_fail_fast_without_credentials(
+    monkeypatch,
+    module,
+    initializer_name,
+    provider,
+    env_var,
+    client_path,
+    api_key,
+):
+    monkeypatch.delenv(env_var, raising=False)
+    client_called = False
+
+    def construct_client(**kwargs):
+        nonlocal client_called
+        client_called = True
+        return object()
+
+    _patch_client_constructor(monkeypatch, module, client_path, construct_client)
+
+    with pytest.raises(ProviderAuthenticationError) as raised:
+        getattr(module, initializer_name)(api_key=api_key)
+
+    assert raised.value.provider == provider
+    assert raised.value.operation == "client initialization"
+    assert str(raised.value) == (
+        f"{provider} client initialization failed: {env_var} is not set "
+        "and no usable api_key was provided"
+    )
+    assert client_called is False
+
+
+@pytest.mark.parametrize(
+    ("module", "initializer_name", "provider", "env_var", "client_path"),
+    HOSTED_PROVIDERS,
+)
+def test_hosted_provider_initializers_reject_blank_environment_credentials(
+    monkeypatch,
+    module,
+    initializer_name,
+    provider,
+    env_var,
+    client_path,
+):
+    monkeypatch.setenv(env_var, "   ")
+    client_called = False
+
+    def construct_client(**kwargs):
+        nonlocal client_called
+        client_called = True
+        return object()
+
+    _patch_client_constructor(monkeypatch, module, client_path, construct_client)
+
+    with pytest.raises(ProviderAuthenticationError) as raised:
+        getattr(module, initializer_name)()
+
+    assert raised.value.provider == provider
+    assert raised.value.operation == "client initialization"
+    assert str(raised.value) == (
+        f"{provider} client initialization failed: {env_var} is not set "
+        "and no usable api_key was provided"
+    )
+    assert client_called is False
+
+
+@pytest.mark.parametrize(
+    ("module", "initializer_name", "provider", "env_var", "client_path"),
+    HOSTED_PROVIDERS,
+)
+def test_hosted_provider_initializers_prefer_explicit_credentials(
+    monkeypatch,
+    module,
+    initializer_name,
+    provider,
+    env_var,
+    client_path,
+):
+    monkeypatch.setenv(env_var, "environment-key")
+    captured = {}
+    _patch_client_constructor(
+        monkeypatch,
+        module,
+        client_path,
+        lambda **kwargs: captured.update(kwargs) or object(),
+    )
+
+    getattr(module, initializer_name)(api_key="explicit-key")
+
+    assert captured["api_key"] == "explicit-key"
 
 
 def test_openai_client_initialization_normalizes_authentication_error(monkeypatch):

@@ -17,7 +17,7 @@ class ProviderError(RuntimeError):
 
 
 class ProviderAuthenticationError(ProviderError):
-    """The provider rejected the supplied credentials."""
+    """Provider credentials are missing or were rejected."""
 
 
 class ProviderRateLimitError(ProviderError):

@@ -50,7 +50,11 @@ def initialize_openai_client(api_key: str | None = None, timeout: float | None =
 
     resolved_api_key = api_key or os.getenv("OPENAI_API_KEY")
     if not resolved_api_key or not resolved_api_key.strip():
-        logger.error("OPENAI_API_KEY is not set!")
+        raise ProviderAuthenticationError(
+            "OpenAI",
+            "OPENAI_API_KEY is not set and no usable api_key was provided",
+            operation="client initialization",
+        )
     client_args = {"api_key": resolved_api_key}
     if timeout is not None:
         client_args["timeout"] = timeout

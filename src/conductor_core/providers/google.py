@@ -6,6 +6,7 @@ import os
 from conductor_core import models as objects
 from conductor_core import music as utils
 from conductor_core.errors import (
+    ProviderAuthenticationError,
     ProviderConnectionError,
     ProviderTimeoutError,
     error_for_status,
@@ -46,8 +47,12 @@ def initialize_gemini_client(api_key: str | None = None, timeout: float | None =
         raise ImportError("Install conductor-core[google] to use Google models.")
 
     resolved_api_key = api_key or os.getenv("GEMINI_API_KEY")
-    if not resolved_api_key:
-        raise ValueError("GEMINI_API_KEY not found.")
+    if not resolved_api_key or not resolved_api_key.strip():
+        raise ProviderAuthenticationError(
+            "Google",
+            "GEMINI_API_KEY is not set and no usable api_key was provided",
+            operation="client initialization",
+        )
 
     client_args = {"api_key": resolved_api_key}
     if timeout is not None:
