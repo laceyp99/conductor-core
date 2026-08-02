@@ -19,63 +19,21 @@ Core owns:
 
 ## Installation
 
-### Use as a dependency
-
-The base install supports deterministic music models and MIDI operations. Add
-only the capabilities your application needs:
-
-| Extra | Adds | Example use |
-|---|---|---|
-| `openai` | OpenAI SDK | An OpenAI-only service |
-| `anthropic` | Anthropic SDK | A Claude-only client |
-| `google` | Google Gen AI SDK | A Gemini-only notebook |
-| `ollama` | Ollama SDK | Local generation |
-| `providers` | All four provider SDKs | A client with model switching |
-| `playback` | MIDI synthesis and MP3 helpers | Audio previews |
-
-Other Conductor repositories should pin Core to a release tag instead of an
-unreleased branch or moving commit. In a uv-managed project, add the tagged
-dependency with the extras your application needs:
-
-```powershell
-uv add "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.3.0"
-```
-
-For a direct install into an existing uv environment:
-
-```powershell
-uv pip install "conductor-core[google,playback] @ git+https://github.com/laceyp99/conductor-core.git@v0.3.0"
-```
-
-Pip remains fully supported for consumers. The equivalent tagged installation
-uses the same PEP 508 requirement syntax:
-
-```powershell
-python -m pip install "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.3.0"
-```
-
-```text
-conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.3.0
-```
-
-Upgrade a dependent project by changing its pinned tag and reinstalling its
-dependencies. Review [`CHANGELOG.md`](CHANGELOG.md) before changing versions,
-especially while Core remains below version 1.0.
-
 ### Contribute to Core
 
-Core contributors use [uv](https://docs.astral.sh/uv/) version 0.11.16 or
-newer. From the repository root, no virtual-environment activation is needed:
+Core uses [uv](https://docs.astral.sh/uv/) 0.11.16 or newer for local
+development. After cloning the repository, run this from the repository root:
 
 ```powershell
 uv sync --all-extras
 ```
 
-For a lighter core-only contributor environment, use `uv sync`. It installs the
-base package and repository development tools, but not provider or playback
-extras.
+That creates the virtual environment and installs Core, the development tools,
+and every optional provider and playback dependency. You do not need to
+activate the environment. If you only need the base package and development
+tools, use `uv sync` instead.
 
-Validate the repository with the locked environment:
+Run the project checks with:
 
 ```powershell
 uv run --locked --all-extras ruff format --check .
@@ -84,9 +42,27 @@ uv run --locked --all-extras pytest -q
 uv build
 ```
 
-Update dependencies deliberately with `uv lock --upgrade`. Review the resulting
-`uv.lock`, rerun the full validation sequence, and commit the lock update with
-the metadata change that requires it. Do not edit `uv.lock` by hand.
+When intentionally updating dependencies, run `uv lock --upgrade`, review the
+lockfile diff, and rerun the checks. Do not edit `uv.lock` by hand.
+
+### Use as a dependency
+
+Pin Core to a release tag and choose only the optional features your application
+needs. Use `providers` for all model providers, a provider name such as `google`
+for just one, and `playback` for audio helpers.
+
+```powershell
+# Add Core to a uv-managed project
+uv add "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.3.0"
+
+# Install Core in a pip-managed environment
+python -m pip install "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.3.0"
+```
+
+Available provider extras are `openai`, `anthropic`, `google`, and `ollama`.
+Extras can be combined—for example, use `[google,playback]` for Gemini generation
+with audio previews. To upgrade, change the pinned tag and review
+[`CHANGELOG.md`](CHANGELOG.md).
 
 ## Basic generation
 
