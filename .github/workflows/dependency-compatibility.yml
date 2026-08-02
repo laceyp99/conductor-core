@@ -23,4 +23,4 @@ jobs:
       - name: Sync fresh environment
         run: uv sync --locked --all-extras --python ${{ matrix.python-version }}
       - name: Test
-        run: uv run --locked pytest -q
+        run: uv run --locked --all-extras --python ${{ matrix.python-version }} pytest -q

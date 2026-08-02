@@ -23,7 +23,7 @@ jobs:
       - name: Sync locked environment
         run: uv sync --locked --all-extras --python ${{ matrix.python-version }}
       - name: Test
-        run: uv run --locked pytest -q
+        run: uv run --locked --all-extras --python ${{ matrix.python-version }} pytest -q
 
   quality-build:
     name: Quality and package build (Python 3.12)
@@ -38,9 +38,9 @@ jobs:
       - name: Sync locked environment
         run: uv sync --locked --all-extras --python 3.12
       - name: Ruff format
-        run: uv run --locked ruff format --check .
+        run: uv run --locked --all-extras --python 3.12 ruff format --check .
       - name: Ruff lint
-        run: uv run --locked ruff check .
+        run: uv run --locked --all-extras --python 3.12 ruff check .
       - name: Build
         run: uv build
       - name: Test built wheel as a pip consumer
@@ -97,7 +97,7 @@ jobs:
         shell: pwsh
         run: |
           $test = "tests/test_history.py::test_store_rejects_generation_symlink_that_escapes_root"
-          $output = uv run --locked pytest -q $test -rA 2>&1 | Tee-Object -Variable pytestOutput
+          $output = uv run --locked --all-extras --python 3.12 pytest -q $test -rA 2>&1 | Tee-Object -Variable pytestOutput
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
@@ -105,4 +105,4 @@ jobs:
             throw "The Windows directory-symlink security test was skipped."
           }
       - name: Test Windows storage behavior
-        run: uv run --locked pytest -q tests/test_history.py tests/test_paths.py
+        run: uv run --locked --all-extras --python 3.12 pytest -q tests/test_history.py tests/test_paths.py
