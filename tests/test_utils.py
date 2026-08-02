@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from conductor_core import music as utils
@@ -193,6 +195,21 @@ def test_midi_number_to_name_and_octave_returns_canonical_name_and_octave(
 
 def test_midi_to_note_name_accepts_plain_python_lists():
     assert utils.midi_to_note_name([60, 61, 73]) == ["C4", "C#4", "C#5"]
+
+
+@pytest.mark.parametrize("filename", ["messages", "messages.json"])
+def test_save_messages_to_json_normalizes_suffix_and_round_trips_utf8(tmp_path, filename):
+    output_path = tmp_path / filename
+    messages = [{"content": "Lydian ♯4 and “quotes”"}]
+    expected_path = (
+        output_path if output_path.suffix == ".json" else output_path.with_suffix(".json")
+    )
+
+    utils.save_messages_to_json(messages, output_path)
+
+    assert expected_path.exists()
+    assert json.loads(expected_path.read_text(encoding="utf-8")) == messages
+    assert (tmp_path / "messages.json.json").exists() is False
 
 
 def test_sixteenth_converters_round_trip_enum_values():
