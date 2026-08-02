@@ -31,12 +31,15 @@ Gradio, Dash, or evaluation dependencies into Core.
 ## Validation
 
 ```powershell
-python -m ruff format --check .
-python -m ruff check .
-python -m pytest -q
-python -m build
+uv sync --all-extras
+uv run --locked ruff format --check .
+uv run --locked ruff check .
+uv run --locked pytest -q
+uv build
 ```
 
 Run focused provider, engine, MIDI, or storage tests while iterating. Before a
 commit, check `git status` and the intended diff. Do not commit planning
-artifacts or unrelated changes.
+artifacts or unrelated changes. Keep `uv.lock` current with `pyproject.toml`;
+use `uv lock --upgrade` only for intentional dependency updates, review the
+generated diff, and never edit the lockfile by hand.

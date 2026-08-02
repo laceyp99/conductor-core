@@ -19,17 +19,10 @@ Core owns:
 
 ## Installation
 
-From the `conductor-core` project directory on Windows:
-
-```
-py -3.12 -m venv .venv
-.\.venv\Scripts\activate
-pip install --upgrade pip
-pip install -e .
-```
+### Use as a dependency
 
 The base install supports deterministic music models and MIDI operations. Add
-only the capabilities your consumer needs:
+only the capabilities your application needs:
 
 | Extra | Adds | Example use |
 |---|---|---|
@@ -39,40 +32,61 @@ only the capabilities your consumer needs:
 | `ollama` | Ollama SDK | Local generation |
 | `providers` | All four provider SDKs | A client with model switching |
 | `playback` | MIDI synthesis and MP3 helpers | Audio previews |
-| `dev` | Pytest | Core development |
-
-```
-# All providers
-pip install -e ".[providers]"
-
-# One provider plus playback
-pip install -e ".[google,playback]"
-
-# Complete local development install
-pip install -e ".[providers,playback,dev]"
-```
-
-Using the venv interpreter explicitly is intentional. `py -3.12 -m pip`
-selects the registered global Python even when a virtual environment exists.
-
-### Install as a project dependency
 
 Other Conductor repositories should pin Core to a release tag instead of an
-unreleased branch or moving commit. Include only the extras the consumer uses:
+unreleased branch or moving commit. In a uv-managed project, add the tagged
+dependency with the extras your application needs:
 
-```text
-conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.3.0
+```powershell
+uv add "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.3.0"
 ```
 
-To install the same reference directly:
+For a direct install into an existing uv environment:
+
+```powershell
+uv pip install "conductor-core[google,playback] @ git+https://github.com/laceyp99/conductor-core.git@v0.3.0"
+```
+
+Pip remains fully supported for consumers. The equivalent tagged installation
+uses the same PEP 508 requirement syntax:
 
 ```powershell
 python -m pip install "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.3.0"
 ```
 
+```text
+conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.3.0
+```
+
 Upgrade a dependent project by changing its pinned tag and reinstalling its
 dependencies. Review [`CHANGELOG.md`](CHANGELOG.md) before changing versions,
 especially while Core remains below version 1.0.
+
+### Contribute to Core
+
+Core contributors use [uv](https://docs.astral.sh/uv/) version 0.11.16 or
+newer. From the repository root, no virtual-environment activation is needed:
+
+```powershell
+uv sync --all-extras
+```
+
+For a lighter core-only contributor environment, use `uv sync`. It installs the
+base package and repository development tools, but not provider or playback
+extras.
+
+Validate the repository with the locked environment:
+
+```powershell
+uv run --locked ruff format --check .
+uv run --locked ruff check .
+uv run --locked pytest -q
+uv build
+```
+
+Update dependencies deliberately with `uv lock --upgrade`. Review the resulting
+`uv.lock`, rerun the full validation sequence, and commit the lock update with
+the metadata change that requires it. Do not edit `uv.lock` by hand.
 
 ## Basic generation
 
@@ -325,8 +339,8 @@ logging.getLogger("conductor_core").addHandler(my_handler)
 
 ## Validate Core independently
 
-```
-python -m pytest -q
+```powershell
+uv run --locked pytest -q
 ```
 
 The tests are deterministic and do not make live provider calls or require the
