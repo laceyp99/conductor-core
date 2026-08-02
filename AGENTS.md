@@ -32,9 +32,9 @@ Gradio, Dash, or evaluation dependencies into Core.
 
 ```powershell
 uv sync --all-extras
-uv run --locked ruff format --check .
-uv run --locked ruff check .
-uv run --locked pytest -q
+uv run --locked --all-extras ruff format --check .
+uv run --locked --all-extras ruff check .
+uv run --locked --all-extras pytest -q
 uv build
 ```
 

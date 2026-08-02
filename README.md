@@ -78,9 +78,9 @@ extras.
 Validate the repository with the locked environment:
 
 ```powershell
-uv run --locked ruff format --check .
-uv run --locked ruff check .
-uv run --locked pytest -q
+uv run --locked --all-extras ruff format --check .
+uv run --locked --all-extras ruff check .
+uv run --locked --all-extras pytest -q
 uv build
 ```
 
@@ -340,7 +340,7 @@ logging.getLogger("conductor_core").addHandler(my_handler)
 ## Validate Core independently
 
 ```powershell
-uv run --locked pytest -q
+uv run --locked --all-extras pytest -q
 ```
 
 The tests are deterministic and do not make live provider calls or require the
