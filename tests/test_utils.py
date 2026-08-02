@@ -166,7 +166,7 @@ def test_calculate_midi_number_preserves_enharmonic_octave_boundaries(
 
 
 def test_calculate_midi_number_rejects_unknown_pitch_names(note_factory):
-    note = note_factory(pitch="H")
+    note = note_factory().model_copy(update={"pitch": "H"})
 
     with pytest.raises(ValueError, match="Unrecognized note name"):
         utils.calculate_midi_number(note)

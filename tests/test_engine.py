@@ -190,6 +190,35 @@ def test_engine_discards_partial_audio_when_renderer_reports_failure(
     assert not (generation_dir / "loop.mp3").exists()
 
 
+def test_engine_surfaces_warning_for_defensively_dropped_pitch(
+    monkeypatch,
+    tmp_path,
+    sample_loop,
+):
+    invalid_note = sample_loop.Bar_1.notes[0].model_copy(update={"octave": 12})
+    invalid_bar = sample_loop.Bar_1.model_copy(update={"notes": [invalid_note]})
+    unvalidated_loop = sample_loop.model_copy(update={"Bar_1": invalid_bar})
+    monkeypatch.setattr(
+        engine_module.routing,
+        "generate_midi",
+        lambda **kwargs: (unvalidated_loop, [], 0.25, "OpenAI"),
+    )
+
+    engine = LoopGenerationEngine(
+        EngineConfig.from_defaults(artifact_root=tmp_path / "generations")
+    )
+    result = engine.generate(
+        GenerationRequest(
+            key="C",
+            scale="Major",
+            description="loop with a hallucinated pitch",
+            model="gpt-4o-mini",
+        )
+    )
+
+    assert result.warnings == ["Dropped out-of-range MIDI note C12 (156); valid range is 0-127."]
+
+
 @pytest.mark.parametrize("max_generations", [None, 1])
 def test_engine_config_passes_storage_limit_to_default_store(tmp_path, max_generations):
     engine = LoopGenerationEngine(

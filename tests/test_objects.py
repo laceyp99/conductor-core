@@ -6,6 +6,8 @@ from conductor_core.models import (
     DurationSixteenth_G,
     Loop,
     Loop_G,
+    Note,
+    Note_G,
     SixteenthNote,
     SixteenthNote_G,
     TimeInformation,
@@ -42,6 +44,82 @@ def test_duration_has_a_dedicated_four_bar_vocabulary():
 def test_time_information_g_rejects_unknown_string_values():
     with pytest.raises(ValidationError):
         TimeInformation_G(start_beat="zero", duration="sixteen")
+
+
+@pytest.mark.parametrize(
+    ("note_type", "time"),
+    [
+        (Note, {"start_beat": 1, "duration": 1}),
+        (Note_G, {"start_beat": "one", "duration": "one"}),
+    ],
+)
+def test_note_accepts_midi_pitch_boundaries(note_type, time):
+    low_note = note_type(pitch="C", octave=-1, velocity=1, time=time)
+    low_enharmonic = note_type(pitch="B#", octave=-2, velocity=1, time=time)
+    low_double_sharp = note_type(pitch="B##", octave=-2, velocity=1, time=time)
+    high_note = note_type(pitch="G", octave=9, velocity=127, time=time)
+
+    assert (low_note.octave, low_note.velocity) == (-1, 1)
+    assert (low_enharmonic.octave, low_enharmonic.velocity) == (-2, 1)
+    assert (low_double_sharp.octave, low_double_sharp.velocity) == (-2, 1)
+    assert (high_note.octave, high_note.velocity) == (9, 127)
+
+
+@pytest.mark.parametrize(
+    ("note_type", "time"),
+    [
+        (Note, {"start_beat": 1, "duration": 1}),
+        (Note_G, {"start_beat": "one", "duration": "one"}),
+    ],
+)
+@pytest.mark.parametrize(
+    ("pitch", "octave", "velocity", "message"),
+    [
+        ("C", -2, 96, "maps to MIDI note -12"),
+        ("B", -3, 96, "greater than or equal to -2"),
+        ("G#", 9, 96, "maps to MIDI note 128"),
+        ("C", 10, 96, "less than or equal to 9"),
+        ("C", 4, 0, "greater than or equal to 1"),
+        ("C", 4, 128, "less than or equal to 127"),
+        ("H", 4, 96, "Unrecognized note name"),
+    ],
+)
+def test_note_rejects_values_that_cannot_create_note_on_events(
+    note_type, time, pitch, octave, velocity, message
+):
+    with pytest.raises(ValidationError, match=message):
+        note_type(
+            pitch=pitch,
+            octave=octave,
+            velocity=velocity,
+            time=time,
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("octave", True),
+        ("octave", 4.0),
+        ("octave", "4"),
+        ("velocity", True),
+        ("velocity", 96.0),
+        ("velocity", "96"),
+    ],
+)
+@pytest.mark.parametrize(
+    ("note_type", "time"),
+    [
+        (Note, {"start_beat": 1, "duration": 1}),
+        (Note_G, {"start_beat": "one", "duration": "one"}),
+    ],
+)
+def test_note_requires_integer_octave_and_velocity(note_type, time, field, value):
+    values = {"pitch": "C", "octave": 4, "velocity": 96, "time": time}
+    values[field] = value
+
+    with pytest.raises(ValidationError, match="Input should be a valid integer"):
+        note_type(**values)
 
 
 def test_loop_validates_nested_bar_and_note_data_from_dicts():
@@ -93,8 +171,16 @@ def test_loop_schema_distinguishes_duration_from_start_position():
 
     assert 64 in definitions["DurationSixteenth"]["enum"]
     assert definitions["SixteenthNote"]["enum"] == list(range(1, 17))
+    assert definitions["Note"]["properties"]["octave"]["minimum"] == -2
+    assert definitions["Note"]["properties"]["octave"]["maximum"] == 9
+    assert definitions["Note"]["properties"]["velocity"]["minimum"] == 1
+    assert definitions["Note"]["properties"]["velocity"]["maximum"] == 127
 
     gemini_definitions = Loop_G.model_json_schema()["$defs"]
+    assert gemini_definitions["Note_G"]["properties"]["octave"]["minimum"] == -2
+    assert gemini_definitions["Note_G"]["properties"]["octave"]["maximum"] == 9
+    assert gemini_definitions["Note_G"]["properties"]["velocity"]["minimum"] == 1
+    assert gemini_definitions["Note_G"]["properties"]["velocity"]["maximum"] == 127
     assert "sixty_four" in gemini_definitions["DurationSixteenth_G"]["enum"]
     assert gemini_definitions["SixteenthNote_G"]["enum"] == [
         "one",
