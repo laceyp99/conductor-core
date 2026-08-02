@@ -41,6 +41,8 @@ jobs:
         run: uv run --locked --all-extras --python 3.12 ruff format --check .
       - name: Ruff lint
         run: uv run --locked --all-extras --python 3.12 ruff check .
+      - name: Test
+        run: uv run --locked --all-extras --python 3.12 pytest -q
       - name: Build
         run: uv build
       - name: Test built wheel as a pip consumer
