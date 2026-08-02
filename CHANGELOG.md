@@ -6,6 +6,67 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 while its public API is still in initial development.
 
+## [0.4.0] - 2026-08-02
+
+Version 0.4.0 makes generation inputs, provider failures, model capabilities,
+and MIDI export behavior more explicit. It also adopts a locked uv workflow for
+reproducible development, testing, and package builds.
+
+### Added
+
+- Validation for generation keys, scales, and finite temperatures from 0.0
+  through 2.0.
+- Export warnings on `GenerationResult` for notes that MIDI processing changes
+  or drops.
+- A normalized `rate_limits` object with `RPM`, `TPM`, and `RPD` fields for
+  every packaged cloud model, plus validation of packaged model metadata.
+- Weekly compatibility testing against the newest supported dependencies on
+  Python 3.10 through 3.14.
+
+### Changed
+
+- Note octave and velocity inputs must be integers that can produce valid MIDI
+  note-on events; valid low enharmonic spellings remain supported.
+- `loop_to_midi()` returns its export warnings while continuing to modify the
+  supplied MIDI file in place.
+- Anthropic always-on adaptive thinking behavior is selected from model
+  metadata instead of a provider-side model-name list.
+- Unsupported non-default thinking and effort options emit warnings, while
+  invalid effort values for configurable models still fail before a provider
+  call.
+- Development, CI, dependency locking, and package builds now use uv; the
+  project lockfile replaces the former CI-only known-good constraints file.
+- Application branding assets were refreshed.
+
+### Fixed
+
+- OpenAI, Anthropic, and Google fail before SDK client construction when their
+  API key is missing or blank, consistently raising
+  `ProviderAuthenticationError`.
+- Invalid or out-of-range notes are dropped during MIDI export instead of being
+  encoded as zero-velocity events, and excessive velocities are clamped with a
+  warning.
+- Message JSON helpers accept paths with or without an existing `.json` suffix
+  without appending the extension twice.
+- Cloud-model rate limits use consistent field names and conservative baseline
+  values instead of mixing incompatible provider-specific representations.
+
+### Upgrade notes
+
+- Review any `GenerationRequest` construction that can receive unvalidated
+  user input. Invalid keys, scales, and temperatures now raise `ValueError`
+  during request construction.
+- Consumers that construct `Note` or `Note_G` directly must provide integer
+  octave and velocity values. Velocity must be from 1 through 127, and the
+  pitch and octave together must map to MIDI note 0 through 127.
+- Code that calls `loop_to_midi()` may inspect its returned warning list;
+  callers that previously ignored its `None` return value can continue to
+  ignore the result.
+- Catch `ProviderAuthenticationError` for missing or blank hosted-provider API
+  keys as well as credentials rejected by a provider.
+- Update Git references in dependent repositories from `v0.3.0` to `v0.4.0`
+  after the release tag is available.
+
 ## [0.3.0] - 2026-07-26
 
 Version 0.3.0 improves provider failure handling, request configuration,
@@ -166,6 +227,7 @@ other Conductor repositories could build on a shared engine.
 - Deterministic tests and package-boundary checks suitable for reuse outside the
   original LoopGPT application.
 
+[0.4.0]: https://github.com/laceyp99/conductor-core/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/laceyp99/conductor-core/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/laceyp99/conductor-core/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/laceyp99/conductor-core/tree/v0.1.0
