@@ -63,7 +63,7 @@ jobs:
       - name: Create fresh environment
         run: uv venv --python 3.10 .venv-minimal
       - name: Install bare package and test dependency
-        run: uv pip install --python .venv-minimal/bin/python -e . "pytest>=8.3,<9"
+        run: uv pip install --python .venv-minimal/bin/python -e . "pytest>=9.0.3,<10"
       - name: Verify optional dependencies are absent
         run: >-
           .venv-minimal/bin/python -c "from importlib.util import find_spec; optional = ('anthropic', 'google', 'midi2audio', 'ollama', 'openai', 'pydub'); installed = [name for name in optional if find_spec(name) is not None]; assert not installed, f'optional dependencies unexpectedly installed: {installed}'"
