@@ -91,13 +91,16 @@ class LoopGenerationEngine:
             if request.render_audio:
                 self._emit(progress_callback, "audio", "Rendering Audio...")
                 resolved_soundfont = playback.resolve_soundfont(requested_soundfont)
-                audio_path = playback.midi_to_mp3(
+                audio_path, audio_error = playback._midi_to_mp3_with_error(
                     workspace.midi_path,
                     output_path=workspace.audio_path,
                     soundfont_name=resolved_soundfont or requested_soundfont,
                 )
                 if audio_path is None:
-                    warnings.append("Audio rendering was skipped or failed.")
+                    warning = "Audio rendering was skipped or failed."
+                    if audio_error:
+                        warning = f"{warning} {audio_error}"
+                    warnings.append(warning)
 
             with open(workspace.messages_path, "w", encoding="utf-8") as messages_file:
                 json.dump(messages, messages_file, indent=2)
