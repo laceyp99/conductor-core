@@ -31,11 +31,11 @@ def test_engine_generates_persisted_artifacts_with_mocked_provider(
             "output_path": output_path,
             "soundfont_name": soundfont_name,
         }
-        return output_path, None
+        return engine_module.playback.MidiToMp3Result(path=output_path, error=None)
 
     soundfont_path = tmp_path / "custom.sf2"
     monkeypatch.setattr(engine_module.routing, "generate_midi", fake_generate_midi)
-    monkeypatch.setattr(engine_module.playback, "_midi_to_mp3_with_error", fake_midi_to_mp3)
+    monkeypatch.setattr(engine_module.playback, "midi_to_mp3", fake_midi_to_mp3)
     monkeypatch.setattr(
         engine_module.playback,
         "resolve_soundfont",
@@ -112,7 +112,7 @@ def test_engine_records_resolved_default_soundfont(
     def fake_midi_to_mp3(midi_path, output_path=None, soundfont_name=None):
         Path(output_path).write_bytes(b"audio")
         captured["soundfont_name"] = soundfont_name
-        return output_path, None
+        return engine_module.playback.MidiToMp3Result(path=output_path, error=None)
 
     def fake_resolve_soundfont(soundfont_name):
         captured["requested_soundfont"] = soundfont_name
@@ -123,7 +123,7 @@ def test_engine_records_resolved_default_soundfont(
         "generate_midi",
         lambda **kwargs: (sample_loop, [], 0.25, "OpenAI"),
     )
-    monkeypatch.setattr(engine_module.playback, "_midi_to_mp3_with_error", fake_midi_to_mp3)
+    monkeypatch.setattr(engine_module.playback, "midi_to_mp3", fake_midi_to_mp3)
     monkeypatch.setattr(
         engine_module.playback,
         "resolve_soundfont",
@@ -155,14 +155,17 @@ def test_engine_discards_partial_audio_when_renderer_reports_failure(
 ):
     def failed_render(midi_path, output_path=None, soundfont_name=None):
         Path(output_path).write_bytes(b"partial")
-        return None, "RuntimeError: FluidSynth exited without producing audio"
+        return engine_module.playback.MidiToMp3Result(
+            path=None,
+            error="RuntimeError: FluidSynth exited without producing audio",
+        )
 
     monkeypatch.setattr(
         engine_module.routing,
         "generate_midi",
         lambda **kwargs: (sample_loop, [], 0.25, "OpenAI"),
     )
-    monkeypatch.setattr(engine_module.playback, "_midi_to_mp3_with_error", failed_render)
+    monkeypatch.setattr(engine_module.playback, "midi_to_mp3", failed_render)
     monkeypatch.setattr(
         engine_module.playback,
         "resolve_soundfont",

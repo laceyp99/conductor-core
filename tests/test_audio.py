@@ -169,13 +169,14 @@ def test_midi_to_mp3_uses_requested_soundfont(monkeypatch, tmp_path):
     monkeypatch.setattr(audio, "FluidSynth", FakeFluidSynth)
     monkeypatch.setattr(audio, "AudioSegment", FakeAudioSegment)
 
-    rendered_output = audio.midi_to_mp3(
+    result = audio.midi_to_mp3(
         str(midi_path),
         output_path=str(output_path),
         soundfont_name="custom.sf2",
     )
 
-    assert rendered_output == str(output_path)
+    assert result.path == str(output_path)
+    assert result.error is None
     assert captured["soundfont_path"] == str(soundfont_path)
     assert captured["input_midi_path"] == str(midi_path)
     rendered_temp_path = Path(captured["output_path"])
@@ -216,13 +217,14 @@ def test_midi_to_mp3_removes_partial_output_when_export_fails(monkeypatch, tmp_p
     monkeypatch.setattr(audio, "FluidSynth", FakeFluidSynth)
     monkeypatch.setattr(audio, "AudioSegment", FakeAudioSegment)
 
-    rendered_output = audio.midi_to_mp3(
+    result = audio.midi_to_mp3(
         str(midi_path),
         output_path=str(output_path),
         soundfont_name="custom.sf2",
     )
 
-    assert rendered_output is None
+    assert result.path is None
+    assert result.error == "RuntimeError: export failed"
     assert partial_path is not None
     assert partial_path.parent == output_path.parent
     assert not partial_path.exists()
@@ -252,14 +254,14 @@ def test_midi_to_mp3_reports_invalid_fluidsynth_output(monkeypatch, tmp_path):
     monkeypatch.setattr(audio, "FluidSynth", FakeFluidSynth)
     monkeypatch.setattr(audio, "AudioSegment", UnexpectedAudioSegment)
 
-    rendered_output, error = audio._midi_to_mp3_with_error(
+    result = audio.midi_to_mp3(
         str(midi_path),
         output_path=str(output_path),
         soundfont_name="custom.sf2",
     )
 
-    assert rendered_output is None
-    assert error == (
+    assert result.path is None
+    assert result.error == (
         "RuntimeError: FluidSynth did not produce a valid WAV file "
         "(expected more than 44 bytes, got 0)"
     )

@@ -15,6 +15,7 @@ import os
 import shutil
 import tempfile
 from contextlib import ExitStack
+from dataclasses import dataclass
 from importlib import resources
 from threading import Lock
 
@@ -42,6 +43,14 @@ DEFAULT_SOUNDFONT_CANDIDATES = [
     "GeneralUser.sf2",
     "FluidR3_GM.sf2",
 ]
+
+
+@dataclass(frozen=True)
+class MidiToMp3Result:
+    """Result of attempting to render a MIDI file to MP3."""
+
+    path: str | None
+    error: str | None
 
 
 def _soundfont_search_dirs() -> list[str]:
@@ -250,7 +259,7 @@ def midi_to_mp3(
     midi_path: str,
     output_path: str | None = None,
     soundfont_name: str | None = None,
-) -> str | None:
+) -> MidiToMp3Result:
     """Convert a MIDI file to MP3 audio using FluidSynth.
 
     Args:
@@ -260,25 +269,11 @@ def midi_to_mp3(
         soundfont_name (str, optional): SoundFont filename or path to use.
 
     Returns:
-        str | None: Path to the generated MP3 file, or None if conversion failed.
+        MidiToMp3Result: Generated MP3 path or a diagnostic error.
 
     Raises:
         FileNotFoundError: If the MIDI file doesn't exist.
     """
-    output_path, _ = _midi_to_mp3_with_error(
-        midi_path,
-        output_path=output_path,
-        soundfont_name=soundfont_name,
-    )
-    return output_path
-
-
-def _midi_to_mp3_with_error(
-    midi_path: str,
-    output_path: str | None = None,
-    soundfont_name: str | None = None,
-) -> tuple[str | None, str | None]:
-    """Convert MIDI to MP3 and return a diagnostic when rendering fails."""
     if not os.path.exists(midi_path):
         raise FileNotFoundError(f"MIDI file not found: {midi_path}")
 
@@ -286,7 +281,7 @@ def _midi_to_mp3_with_error(
     available, error = is_playback_available(soundfont_name)
     if not available:
         logger.warning(f"Audio playback not available: {error}")
-        return None, error
+        return MidiToMp3Result(path=None, error=error)
 
     # Determine output path
     if output_path is None:
@@ -300,7 +295,7 @@ def _midi_to_mp3_with_error(
     if soundfont_path is None:
         error = "No SoundFont file available"
         logger.error(error)
-        return None, error
+        return MidiToMp3Result(path=None, error=error)
 
     try:
         global AudioSegment, FluidSynth
@@ -345,12 +340,12 @@ def _midi_to_mp3_with_error(
         os.replace(temp_mp3_path, output_path)
 
         logger.info(f"Successfully created MP3: {output_path}")
-        return output_path, None
+        return MidiToMp3Result(path=output_path, error=None)
 
     except Exception as e:
         error = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
         logger.error(f"Failed to convert MIDI to MP3: {error}")
-        return None, error
+        return MidiToMp3Result(path=None, error=error)
 
     finally:
         # Clean up temporary WAV file
