@@ -13,8 +13,8 @@ import atexit
 import logging
 import os
 import shutil
+import subprocess
 import tempfile
-import wave
 from contextlib import ExitStack
 from dataclasses import dataclass
 from importlib import resources
@@ -22,7 +22,6 @@ from threading import Lock
 
 logger = logging.getLogger(__name__)
 
-FluidSynth = None
 AudioSegment = None
 
 # Optional filesystem override retained for applications that provide their own
@@ -53,18 +52,29 @@ class MidiToMp3Result:
     error: str | None
 
 
-def _validate_wav_has_audio(wav_path: str) -> None:
-    """Raise when FluidSynth output is missing, malformed, or has no audio frames."""
-    if not os.path.exists(wav_path):
-        raise RuntimeError("FluidSynth did not produce a WAV file")
-
-    try:
-        with wave.open(wav_path, "rb") as wav_file:
-            if wav_file.getnframes() == 0 or not wav_file.readframes(1):
-                raise RuntimeError("FluidSynth produced a WAV file with no audio frames")
-    except (EOFError, wave.Error) as exc:
-        detail = f": {exc}" if str(exc) else ""
-        raise RuntimeError(f"FluidSynth produced an invalid WAV file{detail}") from exc
+def _render_midi_to_wav(midi_path: str, wav_path: str, soundfont_path: str) -> None:
+    """Render MIDI with FluidSynth and raise when the process reports failure."""
+    completed_process = subprocess.run(
+        [
+            "fluidsynth",
+            "-ni",
+            soundfont_path,
+            midi_path,
+            "-F",
+            wav_path,
+            "-r",
+            "44100",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed_process.returncode != 0:
+        detail = (completed_process.stderr or completed_process.stdout or "").strip()
+        message = f"FluidSynth exited with code {completed_process.returncode}"
+        if detail:
+            message = f"{message}: {detail}"
+        raise RuntimeError(message)
 
 
 def _soundfont_search_dirs() -> list[str]:
@@ -84,11 +94,10 @@ def _packaged_soundfont_dir():
 
 def _packaged_soundfont_files():
     """Return built-in SoundFont resources without assuming filesystem paths."""
-    soundfont_dir = _packaged_soundfont_dir()
-    if soundfont_dir is None:
-        return []
-
     try:
+        soundfont_dir = _packaged_soundfont_dir()
+        if soundfont_dir is None:
+            return []
         return [
             resource
             for resource in soundfont_dir.iterdir()
@@ -291,33 +300,29 @@ def midi_to_mp3(
     if not os.path.exists(midi_path):
         raise FileNotFoundError(f"MIDI file not found: {midi_path}")
 
-    # Check if playback is available
-    available, error = is_playback_available(soundfont_name)
-    if not available:
-        logger.warning(f"Audio playback not available: {error}")
-        return MidiToMp3Result(path=None, error=error)
-
-    # Determine output path
-    if output_path is None:
-        base_name = os.path.splitext(midi_path)[0]
-        output_path = f"{base_name}.mp3"
-
-    output_directory = os.path.dirname(os.path.abspath(output_path))
-
-    # Find the soundfont
-    soundfont_path = find_soundfont(soundfont_name)
-    if soundfont_path is None:
-        error = "No SoundFont file available"
-        logger.error(error)
-        return MidiToMp3Result(path=None, error=error)
-
     try:
-        global AudioSegment, FluidSynth
+        # Check if playback is available
+        available, error = is_playback_available(soundfont_name)
+        if not available:
+            logger.warning(f"Audio playback not available: {error}")
+            return MidiToMp3Result(path=None, error=error)
 
-        if FluidSynth is None:
-            from midi2audio import FluidSynth as _FluidSynth
+        # Determine output path
+        if output_path is None:
+            base_name = os.path.splitext(midi_path)[0]
+            output_path = f"{base_name}.mp3"
 
-            FluidSynth = _FluidSynth
+        output_directory = os.path.dirname(os.path.abspath(output_path))
+
+        # Find the soundfont
+        soundfont_path = find_soundfont(soundfont_name)
+        if soundfont_path is None:
+            error = "No SoundFont file available"
+            logger.error(error)
+            return MidiToMp3Result(path=None, error=error)
+
+        global AudioSegment
+
         if AudioSegment is None:
             from pydub import AudioSegment as _AudioSegment
 
@@ -337,9 +342,7 @@ def midi_to_mp3(
 
         # Use FluidSynth to render MIDI to WAV
         logger.info(f"Rendering MIDI to WAV using SoundFont: {soundfont_path}")
-        fs = FluidSynth(soundfont_path)
-        fs.midi_to_audio(midi_path, temp_wav_path)
-        _validate_wav_has_audio(temp_wav_path)
+        _render_midi_to_wav(midi_path, temp_wav_path, soundfont_path)
 
         # Convert WAV to MP3 using pydub
         logger.info(f"Converting WAV to MP3: {output_path}")

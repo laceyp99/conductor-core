@@ -19,7 +19,6 @@ anthropic = ["anthropic>=0.115.0"]
 google = ["google-genai>=1.65.0"]
 ollama = ["ollama>=0.6.1"]
 playback = [
-	"midi2audio>=0.1.1,<1",
 	"pydub>=0.25.1,<1",
 ]
 providers = [

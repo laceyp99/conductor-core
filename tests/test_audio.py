@@ -1,4 +1,4 @@
-import wave
+import subprocess
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -15,14 +15,6 @@ def reset_extra_soundfont_dirs(monkeypatch):
 def _write_file(path: Path, content: bytes = b"data") -> Path:
     path.write_bytes(content)
     return path
-
-
-def _write_wav(path: str | Path, frames: bytes = b"\x00\x00") -> None:
-    with wave.open(str(path), "wb") as wav_file:
-        wav_file.setnchannels(1)
-        wav_file.setsampwidth(2)
-        wav_file.setframerate(44100)
-        wav_file.writeframes(frames)
 
 
 def test_list_soundfonts_returns_sorted_sf2_files(monkeypatch, tmp_path):
@@ -153,13 +145,11 @@ def test_midi_to_mp3_uses_requested_soundfont(monkeypatch, tmp_path):
     monkeypatch.setattr(audio, "SOUNDFONT_DIR", str(tmp_path))
     monkeypatch.setattr(audio, "is_playback_available", lambda soundfont_name=None: (True, None))
 
-    class FakeFluidSynth:
-        def __init__(self, selected_soundfont):
-            captured["soundfont_path"] = selected_soundfont
-
-        def midi_to_audio(self, input_midi_path, temp_wav_path):
-            captured["input_midi_path"] = input_midi_path
-            _write_wav(temp_wav_path)
+    def fake_run(command, **kwargs):
+        captured["command"] = command
+        captured["run_kwargs"] = kwargs
+        Path(command[5]).write_bytes(b"wav")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
     class FakeAudioSegment:
         @staticmethod
@@ -175,7 +165,7 @@ def test_midi_to_mp3_uses_requested_soundfont(monkeypatch, tmp_path):
 
             return FakeExport()
 
-    monkeypatch.setattr(audio, "FluidSynth", FakeFluidSynth)
+    monkeypatch.setattr(audio.subprocess, "run", fake_run)
     monkeypatch.setattr(audio, "AudioSegment", FakeAudioSegment)
 
     result = audio.midi_to_mp3(
@@ -186,8 +176,21 @@ def test_midi_to_mp3_uses_requested_soundfont(monkeypatch, tmp_path):
 
     assert result.path == str(output_path)
     assert result.error is None
-    assert captured["soundfont_path"] == str(soundfont_path)
-    assert captured["input_midi_path"] == str(midi_path)
+    assert captured["command"] == [
+        "fluidsynth",
+        "-ni",
+        str(soundfont_path),
+        str(midi_path),
+        "-F",
+        captured["command"][5],
+        "-r",
+        "44100",
+    ]
+    assert captured["run_kwargs"] == {
+        "capture_output": True,
+        "text": True,
+        "check": False,
+    }
     rendered_temp_path = Path(captured["output_path"])
     assert rendered_temp_path.parent == output_path.parent
     assert rendered_temp_path != output_path
@@ -204,12 +207,9 @@ def test_midi_to_mp3_removes_partial_output_when_export_fails(monkeypatch, tmp_p
     monkeypatch.setattr(audio, "SOUNDFONT_DIR", str(tmp_path))
     monkeypatch.setattr(audio, "is_playback_available", lambda soundfont_name=None: (True, None))
 
-    class FakeFluidSynth:
-        def __init__(self, selected_soundfont):
-            pass
-
-        def midi_to_audio(self, input_midi_path, temp_wav_path):
-            _write_wav(temp_wav_path)
+    def fake_run(command, **kwargs):
+        Path(command[5]).write_bytes(b"wav")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
     class FakeAudioSegment:
         @staticmethod
@@ -223,7 +223,7 @@ def test_midi_to_mp3_removes_partial_output_when_export_fails(monkeypatch, tmp_p
 
             return FailedExport()
 
-    monkeypatch.setattr(audio, "FluidSynth", FakeFluidSynth)
+    monkeypatch.setattr(audio.subprocess, "run", fake_run)
     monkeypatch.setattr(audio, "AudioSegment", FakeAudioSegment)
 
     result = audio.midi_to_mp3(
@@ -240,7 +240,7 @@ def test_midi_to_mp3_removes_partial_output_when_export_fails(monkeypatch, tmp_p
     assert not output_path.exists()
 
 
-def test_midi_to_mp3_reports_invalid_fluidsynth_output(monkeypatch, tmp_path):
+def test_midi_to_mp3_reports_fluidsynth_process_failure(monkeypatch, tmp_path):
     midi_path = _write_file(tmp_path / "loop.mid")
     _write_file(tmp_path / "custom.sf2")
     output_path = tmp_path / "loop.mp3"
@@ -248,19 +248,21 @@ def test_midi_to_mp3_reports_invalid_fluidsynth_output(monkeypatch, tmp_path):
     monkeypatch.setattr(audio, "SOUNDFONT_DIR", str(tmp_path))
     monkeypatch.setattr(audio, "is_playback_available", lambda soundfont_name=None: (True, None))
 
-    class FakeFluidSynth:
-        def __init__(self, selected_soundfont):
-            pass
-
-        def midi_to_audio(self, input_midi_path, temp_wav_path):
-            _write_wav(temp_wav_path, frames=b"")
+    def fake_run(command, **kwargs):
+        Path(command[5]).write_bytes(b"apparently valid output")
+        return subprocess.CompletedProcess(
+            command,
+            1,
+            stdout="",
+            stderr="FluidSynth: failed to load SoundFont\n",
+        )
 
     class UnexpectedAudioSegment:
         @staticmethod
         def from_wav(temp_wav_path):
             pytest.fail("Invalid WAV output should not be passed to pydub")
 
-    monkeypatch.setattr(audio, "FluidSynth", FakeFluidSynth)
+    monkeypatch.setattr(audio.subprocess, "run", fake_run)
     monkeypatch.setattr(audio, "AudioSegment", UnexpectedAudioSegment)
 
     result = audio.midi_to_mp3(
@@ -270,5 +272,25 @@ def test_midi_to_mp3_reports_invalid_fluidsynth_output(monkeypatch, tmp_path):
     )
 
     assert result.path is None
-    assert result.error == "RuntimeError: FluidSynth produced a WAV file with no audio frames"
+    assert result.error == (
+        "RuntimeError: FluidSynth exited with code 1: FluidSynth: failed to load SoundFont"
+    )
     assert not output_path.exists()
+
+
+def test_midi_to_mp3_reports_soundfont_discovery_failure(monkeypatch, tmp_path):
+    midi_path = _write_file(tmp_path / "loop.mid")
+
+    def fail_discovery(soundfont_name=None):
+        raise OSError("resource extraction failed")
+
+    monkeypatch.setattr(
+        audio,
+        "is_playback_available",
+        fail_discovery,
+    )
+
+    result = audio.midi_to_mp3(str(midi_path))
+
+    assert result.path is None
+    assert result.error == "OSError: resource extraction failed"
