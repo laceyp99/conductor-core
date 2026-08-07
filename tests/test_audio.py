@@ -1,3 +1,4 @@
+import wave
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -14,6 +15,14 @@ def reset_extra_soundfont_dirs(monkeypatch):
 def _write_file(path: Path, content: bytes = b"data") -> Path:
     path.write_bytes(content)
     return path
+
+
+def _write_wav(path: str | Path, frames: bytes = b"\x00\x00") -> None:
+    with wave.open(str(path), "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(44100)
+        wav_file.writeframes(frames)
 
 
 def test_list_soundfonts_returns_sorted_sf2_files(monkeypatch, tmp_path):
@@ -150,7 +159,7 @@ def test_midi_to_mp3_uses_requested_soundfont(monkeypatch, tmp_path):
 
         def midi_to_audio(self, input_midi_path, temp_wav_path):
             captured["input_midi_path"] = input_midi_path
-            Path(temp_wav_path).write_bytes(b"wav" * 16)
+            _write_wav(temp_wav_path)
 
     class FakeAudioSegment:
         @staticmethod
@@ -200,7 +209,7 @@ def test_midi_to_mp3_removes_partial_output_when_export_fails(monkeypatch, tmp_p
             pass
 
         def midi_to_audio(self, input_midi_path, temp_wav_path):
-            Path(temp_wav_path).write_bytes(b"wav" * 16)
+            _write_wav(temp_wav_path)
 
     class FakeAudioSegment:
         @staticmethod
@@ -244,7 +253,7 @@ def test_midi_to_mp3_reports_invalid_fluidsynth_output(monkeypatch, tmp_path):
             pass
 
         def midi_to_audio(self, input_midi_path, temp_wav_path):
-            Path(temp_wav_path).write_bytes(b"")
+            _write_wav(temp_wav_path, frames=b"")
 
     class UnexpectedAudioSegment:
         @staticmethod
@@ -261,8 +270,5 @@ def test_midi_to_mp3_reports_invalid_fluidsynth_output(monkeypatch, tmp_path):
     )
 
     assert result.path is None
-    assert result.error == (
-        "RuntimeError: FluidSynth did not produce a valid WAV file "
-        "(expected more than 44 bytes, got 0)"
-    )
+    assert result.error == "RuntimeError: FluidSynth produced a WAV file with no audio frames"
     assert not output_path.exists()

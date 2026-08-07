@@ -14,6 +14,7 @@ import logging
 import os
 import shutil
 import tempfile
+import wave
 from contextlib import ExitStack
 from dataclasses import dataclass
 from importlib import resources
@@ -32,7 +33,6 @@ _EXTRA_SOUNDFONT_DIRS: list[str] = []
 _PACKAGED_SOUNDFONT_PATHS: dict[str, str] = {}
 _PACKAGED_SOUNDFONT_STACK = ExitStack()
 _PACKAGED_SOUNDFONT_LOCK = Lock()
-_MINIMUM_WAV_SIZE = 44
 atexit.register(_PACKAGED_SOUNDFONT_STACK.close)
 # Preferred SoundFont filenames searched in order.
 DEFAULT_SOUNDFONT_CANDIDATES = [
@@ -51,6 +51,20 @@ class MidiToMp3Result:
 
     path: str | None
     error: str | None
+
+
+def _validate_wav_has_audio(wav_path: str) -> None:
+    """Raise when FluidSynth output is missing, malformed, or has no audio frames."""
+    if not os.path.exists(wav_path):
+        raise RuntimeError("FluidSynth did not produce a WAV file")
+
+    try:
+        with wave.open(wav_path, "rb") as wav_file:
+            if wav_file.getnframes() == 0 or not wav_file.readframes(1):
+                raise RuntimeError("FluidSynth produced a WAV file with no audio frames")
+    except (EOFError, wave.Error) as exc:
+        detail = f": {exc}" if str(exc) else ""
+        raise RuntimeError(f"FluidSynth produced an invalid WAV file{detail}") from exc
 
 
 def _soundfont_search_dirs() -> list[str]:
@@ -325,13 +339,7 @@ def midi_to_mp3(
         logger.info(f"Rendering MIDI to WAV using SoundFont: {soundfont_path}")
         fs = FluidSynth(soundfont_path)
         fs.midi_to_audio(midi_path, temp_wav_path)
-
-        wav_size = os.path.getsize(temp_wav_path) if os.path.exists(temp_wav_path) else 0
-        if wav_size <= _MINIMUM_WAV_SIZE:
-            raise RuntimeError(
-                "FluidSynth did not produce a valid WAV file "
-                f"(expected more than {_MINIMUM_WAV_SIZE} bytes, got {wav_size})"
-            )
+        _validate_wav_has_audio(temp_wav_path)
 
         # Convert WAV to MP3 using pydub
         logger.info(f"Converting WAV to MP3: {output_path}")
