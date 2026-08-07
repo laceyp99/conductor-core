@@ -13,6 +13,7 @@ from conductor_core.config import (
     GenerationResult,
     ProgressEvent,
 )
+from conductor_core.errors import AudioRenderingError
 from conductor_core.midi import loop_to_midi
 from conductor_core.storage import FilesystemArtifactStore
 
@@ -90,14 +91,24 @@ class LoopGenerationEngine:
             resolved_soundfont = None
             if request.render_audio:
                 self._emit(progress_callback, "audio", "Rendering Audio...")
-                resolved_soundfont = playback.resolve_soundfont(requested_soundfont)
-                audio_path = playback.midi_to_mp3(
-                    workspace.midi_path,
-                    output_path=workspace.audio_path,
-                    soundfont_name=resolved_soundfont or requested_soundfont,
-                )
+                audio_error = None
+                try:
+                    resolved_soundfont = playback.resolve_soundfont(requested_soundfont)
+                    audio_path = playback.midi_to_mp3(
+                        workspace.midi_path,
+                        output_path=workspace.audio_path,
+                        soundfont_name=resolved_soundfont or requested_soundfont,
+                    )
+                except AudioRenderingError as exc:
+                    audio_error = str(exc)
+                except Exception as exc:
+                    audio_error = f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
+
                 if audio_path is None:
-                    warnings.append("Audio rendering was skipped or failed.")
+                    warning = "Audio rendering was skipped or failed."
+                    if audio_error:
+                        warning = f"{warning} {audio_error}"
+                    warnings.append(warning)
 
             with open(workspace.messages_path, "w", encoding="utf-8") as messages_file:
                 json.dump(messages, messages_file, indent=2)

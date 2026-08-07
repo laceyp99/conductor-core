@@ -1,7 +1,11 @@
+import subprocess
+import wave
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
 
+from conductor_core import AudioRenderingError
 from conductor_core import playback as audio
 
 
@@ -13,6 +17,18 @@ def reset_extra_soundfont_dirs(monkeypatch):
 def _write_file(path: Path, content: bytes = b"data") -> Path:
     path.write_bytes(content)
     return path
+
+
+def _write_wav(path: str | Path, frames: bytes = b"\x00\x00") -> None:
+    with wave.open(str(path), "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(44100)
+        wav_file.writeframes(frames)
+
+
+def _fluidsynth_output_path(command: list[str]) -> str:
+    return command[command.index("-F") + 1]
 
 
 def test_list_soundfonts_returns_sorted_sf2_files(monkeypatch, tmp_path):
@@ -73,6 +89,41 @@ def test_application_soundfont_directory_is_searchable(monkeypatch, tmp_path):
     assert audio.resolve_soundfont("personal.sf2") == str(expected)
 
 
+def test_packaged_soundfont_is_resolved_lazily_with_as_file(monkeypatch, tmp_path):
+    materialized_soundfont = _write_file(tmp_path / "packaged.sf2")
+    calls = []
+
+    class FakeResource:
+        name = "packaged.sf2"
+
+        def is_file(self):
+            return True
+
+    class FakeResourceDirectory:
+        def iterdir(self):
+            calls.append("iterdir")
+            return [FakeResource()]
+
+    class FakeResources:
+        def joinpath(self, name):
+            assert name == "soundfonts"
+            return FakeResourceDirectory()
+
+    @contextmanager
+    def fake_as_file(resource):
+        calls.append(("as_file", resource.name))
+        yield materialized_soundfont
+
+    monkeypatch.setattr(audio, "SOUNDFONT_DIR", None)
+    monkeypatch.setattr(audio.resources, "files", lambda package: FakeResources())
+    monkeypatch.setattr(audio.resources, "as_file", fake_as_file)
+    monkeypatch.setattr(audio, "_PACKAGED_SOUNDFONT_PATHS", {})
+
+    assert calls == []
+    assert audio.resolve_soundfont("packaged.sf2") == str(materialized_soundfont)
+    assert calls == ["iterdir", ("as_file", "packaged.sf2")]
+
+
 def test_is_playback_available_reports_missing_requested_soundfont(monkeypatch, tmp_path):
     monkeypatch.setattr(audio, "SOUNDFONT_DIR", str(tmp_path))
     monkeypatch.setattr(audio, "is_fluidsynth_available", lambda: True)
@@ -99,6 +150,21 @@ def test_get_playback_status_message_prioritizes_missing_dependencies(monkeypatc
     assert "Add the requested SoundFont" not in status_message
 
 
+def test_midi_to_mp3_raises_when_playback_is_unavailable(monkeypatch, tmp_path):
+    midi_path = _write_file(tmp_path / "loop.mid")
+    monkeypatch.setattr(
+        audio,
+        "is_playback_available",
+        lambda soundfont_name=None: (False, "FluidSynth is not installed or not in PATH"),
+    )
+
+    with pytest.raises(
+        AudioRenderingError,
+        match="FluidSynth is not installed or not in PATH",
+    ):
+        audio.midi_to_mp3(str(midi_path))
+
+
 def test_midi_to_mp3_uses_requested_soundfont(monkeypatch, tmp_path):
     midi_path = _write_file(tmp_path / "loop.mid")
     soundfont_path = _write_file(tmp_path / "custom.sf2")
@@ -108,13 +174,11 @@ def test_midi_to_mp3_uses_requested_soundfont(monkeypatch, tmp_path):
     monkeypatch.setattr(audio, "SOUNDFONT_DIR", str(tmp_path))
     monkeypatch.setattr(audio, "is_playback_available", lambda soundfont_name=None: (True, None))
 
-    class FakeFluidSynth:
-        def __init__(self, selected_soundfont):
-            captured["soundfont_path"] = selected_soundfont
-
-        def midi_to_audio(self, input_midi_path, temp_wav_path):
-            captured["input_midi_path"] = input_midi_path
-            Path(temp_wav_path).write_bytes(b"wav")
+    def fake_run(command, **kwargs):
+        captured["command"] = command
+        captured["run_kwargs"] = kwargs
+        _write_wav(_fluidsynth_output_path(command))
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
     class FakeAudioSegment:
         @staticmethod
@@ -130,18 +194,36 @@ def test_midi_to_mp3_uses_requested_soundfont(monkeypatch, tmp_path):
 
             return FakeExport()
 
-    monkeypatch.setattr(audio, "FluidSynth", FakeFluidSynth)
+    monkeypatch.setattr(audio.subprocess, "run", fake_run)
     monkeypatch.setattr(audio, "AudioSegment", FakeAudioSegment)
 
-    rendered_output = audio.midi_to_mp3(
+    rendered_path = audio.midi_to_mp3(
         str(midi_path),
         output_path=str(output_path),
         soundfont_name="custom.sf2",
     )
 
-    assert rendered_output == str(output_path)
-    assert captured["soundfont_path"] == str(soundfont_path)
-    assert captured["input_midi_path"] == str(midi_path)
+    assert rendered_path == str(output_path)
+    assert captured["command"] == [
+        "fluidsynth",
+        "-ni",
+        "-T",
+        "wav",
+        "-O",
+        "s16",
+        "-F",
+        _fluidsynth_output_path(captured["command"]),
+        "-r",
+        "44100",
+        str(soundfont_path),
+        str(midi_path),
+    ]
+    assert captured["run_kwargs"] == {
+        "capture_output": True,
+        "text": True,
+        "check": False,
+        "timeout": audio._FLUIDSYNTH_TIMEOUT_SECONDS,
+    }
     rendered_temp_path = Path(captured["output_path"])
     assert rendered_temp_path.parent == output_path.parent
     assert rendered_temp_path != output_path
@@ -158,12 +240,9 @@ def test_midi_to_mp3_removes_partial_output_when_export_fails(monkeypatch, tmp_p
     monkeypatch.setattr(audio, "SOUNDFONT_DIR", str(tmp_path))
     monkeypatch.setattr(audio, "is_playback_available", lambda soundfont_name=None: (True, None))
 
-    class FakeFluidSynth:
-        def __init__(self, selected_soundfont):
-            pass
-
-        def midi_to_audio(self, input_midi_path, temp_wav_path):
-            Path(temp_wav_path).write_bytes(b"wav")
+    def fake_run(command, **kwargs):
+        _write_wav(_fluidsynth_output_path(command))
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
     class FakeAudioSegment:
         @staticmethod
@@ -177,17 +256,134 @@ def test_midi_to_mp3_removes_partial_output_when_export_fails(monkeypatch, tmp_p
 
             return FailedExport()
 
-    monkeypatch.setattr(audio, "FluidSynth", FakeFluidSynth)
+    monkeypatch.setattr(audio.subprocess, "run", fake_run)
     monkeypatch.setattr(audio, "AudioSegment", FakeAudioSegment)
 
-    rendered_output = audio.midi_to_mp3(
-        str(midi_path),
-        output_path=str(output_path),
-        soundfont_name="custom.sf2",
-    )
+    with pytest.raises(AudioRenderingError, match="RuntimeError: export failed") as raised:
+        audio.midi_to_mp3(
+            str(midi_path),
+            output_path=str(output_path),
+            soundfont_name="custom.sf2",
+        )
 
-    assert rendered_output is None
+    assert isinstance(raised.value.__cause__, RuntimeError)
     assert partial_path is not None
     assert partial_path.parent == output_path.parent
     assert not partial_path.exists()
     assert not output_path.exists()
+
+
+def test_midi_to_mp3_reports_fluidsynth_process_failure(monkeypatch, tmp_path):
+    midi_path = _write_file(tmp_path / "loop.mid")
+    _write_file(tmp_path / "custom.sf2")
+    output_path = tmp_path / "loop.mp3"
+
+    monkeypatch.setattr(audio, "SOUNDFONT_DIR", str(tmp_path))
+    monkeypatch.setattr(audio, "is_playback_available", lambda soundfont_name=None: (True, None))
+
+    def fake_run(command, **kwargs):
+        Path(_fluidsynth_output_path(command)).write_bytes(b"apparently valid output")
+        return subprocess.CompletedProcess(
+            command,
+            1,
+            stdout="",
+            stderr="FluidSynth: failed to load SoundFont\n",
+        )
+
+    class UnexpectedAudioSegment:
+        @staticmethod
+        def from_wav(temp_wav_path):
+            pytest.fail("Invalid WAV output should not be passed to pydub")
+
+    monkeypatch.setattr(audio.subprocess, "run", fake_run)
+    monkeypatch.setattr(audio, "AudioSegment", UnexpectedAudioSegment)
+
+    with pytest.raises(
+        AudioRenderingError,
+        match="FluidSynth exited with code 1: FluidSynth: failed to load SoundFont",
+    ):
+        audio.midi_to_mp3(
+            str(midi_path),
+            output_path=str(output_path),
+            soundfont_name="custom.sf2",
+        )
+
+    assert not output_path.exists()
+
+
+def test_midi_to_mp3_reports_fluidsynth_timeout(monkeypatch, tmp_path):
+    midi_path = _write_file(tmp_path / "loop.mid")
+    _write_file(tmp_path / "custom.sf2")
+    output_path = tmp_path / "loop.mp3"
+
+    monkeypatch.setattr(audio, "SOUNDFONT_DIR", str(tmp_path))
+    monkeypatch.setattr(audio, "is_playback_available", lambda soundfont_name=None: (True, None))
+
+    def fake_run(command, **kwargs):
+        raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+
+    monkeypatch.setattr(audio.subprocess, "run", fake_run)
+
+    with pytest.raises(
+        AudioRenderingError,
+        match=f"FluidSynth timed out after {audio._FLUIDSYNTH_TIMEOUT_SECONDS} seconds",
+    ) as raised:
+        audio.midi_to_mp3(
+            str(midi_path),
+            output_path=str(output_path),
+            soundfont_name="custom.sf2",
+        )
+
+    assert isinstance(raised.value.__cause__, subprocess.TimeoutExpired)
+    assert not output_path.exists()
+
+
+def test_midi_to_mp3_rejects_wav_without_audio_frames(monkeypatch, tmp_path):
+    midi_path = _write_file(tmp_path / "loop.mid")
+    _write_file(tmp_path / "custom.sf2")
+    output_path = tmp_path / "loop.mp3"
+
+    monkeypatch.setattr(audio, "SOUNDFONT_DIR", str(tmp_path))
+    monkeypatch.setattr(audio, "is_playback_available", lambda soundfont_name=None: (True, None))
+
+    def fake_run(command, **kwargs):
+        _write_wav(_fluidsynth_output_path(command), frames=b"")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    class UnexpectedAudioSegment:
+        @staticmethod
+        def from_wav(temp_wav_path):
+            pytest.fail("WAV output without audio frames should not be passed to pydub")
+
+    monkeypatch.setattr(audio.subprocess, "run", fake_run)
+    monkeypatch.setattr(audio, "AudioSegment", UnexpectedAudioSegment)
+
+    with pytest.raises(
+        AudioRenderingError,
+        match="FluidSynth produced a WAV file with no audio frames",
+    ):
+        audio.midi_to_mp3(
+            str(midi_path),
+            output_path=str(output_path),
+            soundfont_name="custom.sf2",
+        )
+
+    assert not output_path.exists()
+
+
+def test_midi_to_mp3_reports_soundfont_discovery_failure(monkeypatch, tmp_path):
+    midi_path = _write_file(tmp_path / "loop.mid")
+
+    def fail_discovery(soundfont_name=None):
+        raise OSError("resource extraction failed")
+
+    monkeypatch.setattr(
+        audio,
+        "is_playback_available",
+        fail_discovery,
+    )
+
+    with pytest.raises(AudioRenderingError, match="OSError: resource extraction failed") as raised:
+        audio.midi_to_mp3(str(midi_path))
+
+    assert isinstance(raised.value.__cause__, OSError)

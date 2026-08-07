@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from conductor_core import (
+    AudioRenderingError,
     EngineConfig,
     GenerationRequest,
     LoopGenerationEngine,
@@ -155,7 +156,7 @@ def test_engine_discards_partial_audio_when_renderer_reports_failure(
 ):
     def failed_render(midi_path, output_path=None, soundfont_name=None):
         Path(output_path).write_bytes(b"partial")
-        return None
+        raise AudioRenderingError("FluidSynth exited without producing audio")
 
     monkeypatch.setattr(
         engine_module.routing,
@@ -183,11 +184,58 @@ def test_engine_discards_partial_audio_when_renderer_reports_failure(
     )
 
     generation_dir = tmp_path / "generations" / f"gen_{result.generation_id}"
-    assert result.warnings == ["Audio rendering was skipped or failed."]
+    assert result.warnings == [
+        "Audio rendering was skipped or failed. FluidSynth exited without producing audio"
+    ]
     assert result.audio_path is None
     assert result.metadata.audio_path is None
     assert result.metadata.soundfont is None
     assert not (generation_dir / "loop.mp3").exists()
+
+
+def test_engine_preserves_midi_when_soundfont_resolution_raises(
+    monkeypatch,
+    tmp_path,
+    sample_loop,
+):
+    def fail_resolution(soundfont_name):
+        raise OSError("resource extraction failed")
+
+    monkeypatch.setattr(
+        engine_module.routing,
+        "generate_midi",
+        lambda **kwargs: (sample_loop, [], 0.25, "OpenAI"),
+    )
+    monkeypatch.setattr(
+        engine_module.playback,
+        "resolve_soundfont",
+        fail_resolution,
+    )
+    monkeypatch.setattr(
+        engine_module.playback,
+        "midi_to_mp3",
+        lambda *args, **kwargs: pytest.fail("Rendering should not start without a SoundFont"),
+    )
+
+    engine = LoopGenerationEngine(
+        EngineConfig.from_defaults(artifact_root=tmp_path / "generations")
+    )
+    result = engine.generate(
+        GenerationRequest(
+            key="C",
+            scale="Major",
+            description="warm rhodes loop",
+            model="gpt-4o-mini",
+            render_audio=True,
+        )
+    )
+
+    assert result.warnings == [
+        "Audio rendering was skipped or failed. OSError: resource extraction failed"
+    ]
+    assert Path(result.midi_path).exists()
+    assert result.audio_path is None
+    assert result.metadata.soundfont is None
 
 
 def test_engine_surfaces_warning_for_defensively_dropped_pitch(

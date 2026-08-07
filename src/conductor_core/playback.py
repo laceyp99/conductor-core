@@ -9,19 +9,33 @@ Requires:
     - At least one SoundFont file in the soundfonts directory
 """
 
+import atexit
 import logging
 import os
 import shutil
+import subprocess
 import tempfile
+import wave
+from contextlib import ExitStack
 from importlib import resources
+from threading import Lock
+
+from conductor_core.errors import AudioRenderingError
 
 logger = logging.getLogger(__name__)
 
-FluidSynth = None
 AudioSegment = None
 
-SOUNDFONT_DIR = str(resources.files("conductor_core.resources").joinpath("soundfonts"))
+# Optional filesystem override retained for applications that provide their own
+# packaged SoundFont directory. The built-in resource directory is resolved
+# lazily so importing Core also works from zipped and frozen distributions.
+SOUNDFONT_DIR: str | None = None
 _EXTRA_SOUNDFONT_DIRS: list[str] = []
+_PACKAGED_SOUNDFONT_PATHS: dict[str, str] = {}
+_PACKAGED_SOUNDFONT_STACK = ExitStack()
+_PACKAGED_SOUNDFONT_LOCK = Lock()
+_FLUIDSYNTH_TIMEOUT_SECONDS = 30
+atexit.register(_PACKAGED_SOUNDFONT_STACK.close)
 # Preferred SoundFont filenames searched in order.
 DEFAULT_SOUNDFONT_CANDIDATES = [
     "FM-Piano1-20190916.sf2",
@@ -33,9 +47,105 @@ DEFAULT_SOUNDFONT_CANDIDATES = [
 ]
 
 
+def _render_midi_to_wav(midi_path: str, wav_path: str, soundfont_path: str) -> None:
+    """Render MIDI with FluidSynth and raise when the process reports failure."""
+    command = [
+        "fluidsynth",
+        "-ni",
+        "-T",
+        "wav",
+        "-O",
+        "s16",
+        "-F",
+        wav_path,
+        "-r",
+        "44100",
+        soundfont_path,
+        midi_path,
+    ]
+    try:
+        completed_process = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=_FLUIDSYNTH_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise AudioRenderingError(
+            f"FluidSynth timed out after {_FLUIDSYNTH_TIMEOUT_SECONDS} seconds"
+        ) from exc
+
+    if completed_process.returncode != 0:
+        detail = (completed_process.stderr or completed_process.stdout or "").strip()
+        message = f"FluidSynth exited with code {completed_process.returncode}"
+        if detail:
+            message = f"{message}: {detail}"
+        raise AudioRenderingError(message)
+
+
+def _validate_wav_has_audio(wav_path: str) -> None:
+    """Raise when FluidSynth output is missing, malformed, or has no audio frames."""
+    if not os.path.exists(wav_path):
+        raise AudioRenderingError("FluidSynth did not produce a WAV file")
+
+    try:
+        with wave.open(wav_path, "rb") as wav_file:
+            if wav_file.getnframes() == 0 or not wav_file.readframes(1):
+                raise AudioRenderingError("FluidSynth produced a WAV file with no audio frames")
+    except (EOFError, wave.Error) as exc:
+        detail = f": {exc}" if str(exc) else ""
+        raise AudioRenderingError(f"FluidSynth produced an invalid WAV file{detail}") from exc
+
+
 def _soundfont_search_dirs() -> list[str]:
     """Return SoundFont search directories in priority order."""
-    return [*_EXTRA_SOUNDFONT_DIRS, SOUNDFONT_DIR]
+    search_dirs = list(_EXTRA_SOUNDFONT_DIRS)
+    if SOUNDFONT_DIR is not None:
+        search_dirs.append(SOUNDFONT_DIR)
+    return search_dirs
+
+
+def _packaged_soundfont_dir():
+    """Return the built-in SoundFont resource directory lazily."""
+    if SOUNDFONT_DIR is not None:
+        return None
+    return resources.files("conductor_core.resources").joinpath("soundfonts")
+
+
+def _packaged_soundfont_files():
+    """Return built-in SoundFont resources without assuming filesystem paths."""
+    try:
+        soundfont_dir = _packaged_soundfont_dir()
+        if soundfont_dir is None:
+            return []
+        return [
+            resource
+            for resource in soundfont_dir.iterdir()
+            if resource.is_file() and resource.name.lower().endswith(".sf2")
+        ]
+    except (FileNotFoundError, ModuleNotFoundError, NotADirectoryError):
+        return []
+
+
+def _materialize_packaged_soundfont(resource) -> str:
+    """Materialize a packaged SoundFont and keep its path valid until exit."""
+    with _PACKAGED_SOUNDFONT_LOCK:
+        cached_path = _PACKAGED_SOUNDFONT_PATHS.get(resource.name)
+        if cached_path is not None and os.path.exists(cached_path):
+            return cached_path
+
+        materialized_path = _PACKAGED_SOUNDFONT_STACK.enter_context(resources.as_file(resource))
+        resolved_path = os.fspath(materialized_path)
+        _PACKAGED_SOUNDFONT_PATHS[resource.name] = resolved_path
+        return resolved_path
+
+
+def _soundfont_location_label() -> str:
+    """Return a useful label for SoundFont discovery diagnostics."""
+    if SOUNDFONT_DIR is not None:
+        return SOUNDFONT_DIR
+    return "conductor_core.resources/soundfonts"
 
 
 def add_soundfont_search_dir(soundfont_dir: str | os.PathLike[str]) -> None:
@@ -52,6 +162,10 @@ def _find_soundfont_file(soundfont_name: str) -> str | None:
         candidate_path = os.path.join(soundfont_dir, requested_name)
         if os.path.exists(candidate_path):
             return candidate_path
+
+    for resource in _packaged_soundfont_files():
+        if resource.name == requested_name:
+            return _materialize_packaged_soundfont(resource)
     return None
 
 
@@ -66,6 +180,7 @@ def list_soundfonts() -> list[str]:
         if not os.path.exists(soundfont_dir):
             continue
         names.update(file for file in os.listdir(soundfont_dir) if file.lower().endswith(".sf2"))
+    names.update(resource.name for resource in _packaged_soundfont_files())
     return sorted(names, key=str.lower)
 
 
@@ -166,13 +281,16 @@ def is_playback_available(soundfont_name: str | None = None) -> tuple[bool, str 
 
     resolved_soundfont = find_soundfont(soundfont_name)
     if resolved_soundfont is None:
+        soundfont_location = _soundfont_location_label()
         if soundfont_name:
             issues.append(
-                f"Requested SoundFont '{os.path.basename(soundfont_name)}' was not found in '{SOUNDFONT_DIR}'."
+                f"Requested SoundFont '{os.path.basename(soundfont_name)}' was not found in "
+                f"'{soundfont_location}'."
             )
         else:
             issues.append(
-                f"No SoundFont file found in '{SOUNDFONT_DIR}'. Add a .sf2 file to enable audio playback."
+                f"No SoundFont file found in '{soundfont_location}'. "
+                "Add a .sf2 file to enable audio playback."
             )
 
     if issues:
@@ -185,7 +303,7 @@ def midi_to_mp3(
     midi_path: str,
     output_path: str | None = None,
     soundfont_name: str | None = None,
-) -> str | None:
+) -> str:
     """Convert a MIDI file to MP3 audio using FluidSynth.
 
     Args:
@@ -195,44 +313,35 @@ def midi_to_mp3(
         soundfont_name (str, optional): SoundFont filename or path to use.
 
     Returns:
-        str | None: Path to the generated MP3 file, or None if conversion failed.
+        str: Path to the generated MP3 file.
 
     Raises:
+        AudioRenderingError: If playback dependencies, discovery, synthesis, or encoding fail.
         FileNotFoundError: If the MIDI file doesn't exist.
     """
     if not os.path.exists(midi_path):
         raise FileNotFoundError(f"MIDI file not found: {midi_path}")
 
-    # Check if playback is available
-    available, error = is_playback_available(soundfont_name)
-    if not available:
-        logger.warning(f"Audio playback not available: {error}")
-        return None
-
-    # Determine output path
-    if output_path is None:
-        base_name = os.path.splitext(midi_path)[0]
-        output_path = f"{base_name}.mp3"
-
-    output_directory = os.path.dirname(os.path.abspath(output_path))
-
-    # Find the soundfont
-    soundfont_path = find_soundfont(soundfont_name)
-    if soundfont_path is None:
-        logger.error("No SoundFont file available")
-        return None
-
     try:
-        global AudioSegment, FluidSynth
+        # Check if playback is available
+        available, error = is_playback_available(soundfont_name)
+        if not available:
+            logger.warning(f"Audio playback not available: {error}")
+            raise AudioRenderingError(error or "Audio playback is not available")
 
-        if FluidSynth is None:
-            from midi2audio import FluidSynth as _FluidSynth
+        # Determine output path
+        if output_path is None:
+            base_name = os.path.splitext(midi_path)[0]
+            output_path = f"{base_name}.mp3"
 
-            FluidSynth = _FluidSynth
-        if AudioSegment is None:
-            from pydub import AudioSegment as _AudioSegment
+        output_directory = os.path.dirname(os.path.abspath(output_path))
 
-            AudioSegment = _AudioSegment
+        # Find the soundfont
+        soundfont_path = find_soundfont(soundfont_name)
+        if soundfont_path is None:
+            error = "No SoundFont file available"
+            logger.error(error)
+            raise AudioRenderingError(error)
 
         # Create a temporary WAV file
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_wav:
@@ -248,8 +357,15 @@ def midi_to_mp3(
 
         # Use FluidSynth to render MIDI to WAV
         logger.info(f"Rendering MIDI to WAV using SoundFont: {soundfont_path}")
-        fs = FluidSynth(soundfont_path)
-        fs.midi_to_audio(midi_path, temp_wav_path)
+        _render_midi_to_wav(midi_path, temp_wav_path, soundfont_path)
+        _validate_wav_has_audio(temp_wav_path)
+
+        global AudioSegment
+
+        if AudioSegment is None:
+            from pydub import AudioSegment as _AudioSegment
+
+            AudioSegment = _AudioSegment
 
         # Convert WAV to MP3 using pydub
         logger.info(f"Converting WAV to MP3: {output_path}")
@@ -260,9 +376,14 @@ def midi_to_mp3(
         logger.info(f"Successfully created MP3: {output_path}")
         return output_path
 
-    except Exception as e:
-        logger.error(f"Failed to convert MIDI to MP3: {e}")
-        return None
+    except AudioRenderingError as exc:
+        logger.error(f"Failed to convert MIDI to MP3: {exc}")
+        raise
+    except Exception as exc:
+        detail = f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
+        error = AudioRenderingError(detail)
+        logger.error(f"Failed to convert MIDI to MP3: {error}")
+        raise error from exc
 
     finally:
         # Clean up temporary WAV file
