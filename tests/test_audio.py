@@ -27,6 +27,10 @@ def _write_wav(path: str | Path, frames: bytes = b"\x00\x00") -> None:
         wav_file.writeframes(frames)
 
 
+def _fluidsynth_output_path(command: list[str]) -> str:
+    return command[command.index("-F") + 1]
+
+
 def test_list_soundfonts_returns_sorted_sf2_files(monkeypatch, tmp_path):
     monkeypatch.setattr(audio, "SOUNDFONT_DIR", str(tmp_path))
     _write_file(tmp_path / "zeta.sf2")
@@ -173,7 +177,7 @@ def test_midi_to_mp3_uses_requested_soundfont(monkeypatch, tmp_path):
     def fake_run(command, **kwargs):
         captured["command"] = command
         captured["run_kwargs"] = kwargs
-        _write_wav(command[5])
+        _write_wav(_fluidsynth_output_path(command))
         return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
     class FakeAudioSegment:
@@ -203,17 +207,22 @@ def test_midi_to_mp3_uses_requested_soundfont(monkeypatch, tmp_path):
     assert captured["command"] == [
         "fluidsynth",
         "-ni",
-        str(soundfont_path),
-        str(midi_path),
+        "-T",
+        "wav",
+        "-O",
+        "s16",
         "-F",
-        captured["command"][5],
+        _fluidsynth_output_path(captured["command"]),
         "-r",
         "44100",
+        str(soundfont_path),
+        str(midi_path),
     ]
     assert captured["run_kwargs"] == {
         "capture_output": True,
         "text": True,
         "check": False,
+        "timeout": audio._FLUIDSYNTH_TIMEOUT_SECONDS,
     }
     rendered_temp_path = Path(captured["output_path"])
     assert rendered_temp_path.parent == output_path.parent
@@ -232,7 +241,7 @@ def test_midi_to_mp3_removes_partial_output_when_export_fails(monkeypatch, tmp_p
     monkeypatch.setattr(audio, "is_playback_available", lambda soundfont_name=None: (True, None))
 
     def fake_run(command, **kwargs):
-        _write_wav(command[5])
+        _write_wav(_fluidsynth_output_path(command))
         return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
     class FakeAudioSegment:
@@ -273,7 +282,7 @@ def test_midi_to_mp3_reports_fluidsynth_process_failure(monkeypatch, tmp_path):
     monkeypatch.setattr(audio, "is_playback_available", lambda soundfont_name=None: (True, None))
 
     def fake_run(command, **kwargs):
-        Path(command[5]).write_bytes(b"apparently valid output")
+        Path(_fluidsynth_output_path(command)).write_bytes(b"apparently valid output")
         return subprocess.CompletedProcess(
             command,
             1,
@@ -302,6 +311,33 @@ def test_midi_to_mp3_reports_fluidsynth_process_failure(monkeypatch, tmp_path):
     assert not output_path.exists()
 
 
+def test_midi_to_mp3_reports_fluidsynth_timeout(monkeypatch, tmp_path):
+    midi_path = _write_file(tmp_path / "loop.mid")
+    _write_file(tmp_path / "custom.sf2")
+    output_path = tmp_path / "loop.mp3"
+
+    monkeypatch.setattr(audio, "SOUNDFONT_DIR", str(tmp_path))
+    monkeypatch.setattr(audio, "is_playback_available", lambda soundfont_name=None: (True, None))
+
+    def fake_run(command, **kwargs):
+        raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+
+    monkeypatch.setattr(audio.subprocess, "run", fake_run)
+
+    with pytest.raises(
+        AudioRenderingError,
+        match=f"FluidSynth timed out after {audio._FLUIDSYNTH_TIMEOUT_SECONDS} seconds",
+    ) as raised:
+        audio.midi_to_mp3(
+            str(midi_path),
+            output_path=str(output_path),
+            soundfont_name="custom.sf2",
+        )
+
+    assert isinstance(raised.value.__cause__, subprocess.TimeoutExpired)
+    assert not output_path.exists()
+
+
 def test_midi_to_mp3_rejects_wav_without_audio_frames(monkeypatch, tmp_path):
     midi_path = _write_file(tmp_path / "loop.mid")
     _write_file(tmp_path / "custom.sf2")
@@ -311,7 +347,7 @@ def test_midi_to_mp3_rejects_wav_without_audio_frames(monkeypatch, tmp_path):
     monkeypatch.setattr(audio, "is_playback_available", lambda soundfont_name=None: (True, None))
 
     def fake_run(command, **kwargs):
-        _write_wav(command[5], frames=b"")
+        _write_wav(_fluidsynth_output_path(command), frames=b"")
         return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
     class UnexpectedAudioSegment:

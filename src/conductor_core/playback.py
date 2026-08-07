@@ -34,6 +34,7 @@ _EXTRA_SOUNDFONT_DIRS: list[str] = []
 _PACKAGED_SOUNDFONT_PATHS: dict[str, str] = {}
 _PACKAGED_SOUNDFONT_STACK = ExitStack()
 _PACKAGED_SOUNDFONT_LOCK = Lock()
+_FLUIDSYNTH_TIMEOUT_SECONDS = 30
 atexit.register(_PACKAGED_SOUNDFONT_STACK.close)
 # Preferred SoundFont filenames searched in order.
 DEFAULT_SOUNDFONT_CANDIDATES = [
@@ -48,21 +49,33 @@ DEFAULT_SOUNDFONT_CANDIDATES = [
 
 def _render_midi_to_wav(midi_path: str, wav_path: str, soundfont_path: str) -> None:
     """Render MIDI with FluidSynth and raise when the process reports failure."""
-    completed_process = subprocess.run(
-        [
-            "fluidsynth",
-            "-ni",
-            soundfont_path,
-            midi_path,
-            "-F",
-            wav_path,
-            "-r",
-            "44100",
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    command = [
+        "fluidsynth",
+        "-ni",
+        "-T",
+        "wav",
+        "-O",
+        "s16",
+        "-F",
+        wav_path,
+        "-r",
+        "44100",
+        soundfont_path,
+        midi_path,
+    ]
+    try:
+        completed_process = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=_FLUIDSYNTH_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise AudioRenderingError(
+            f"FluidSynth timed out after {_FLUIDSYNTH_TIMEOUT_SECONDS} seconds"
+        ) from exc
+
     if completed_process.returncode != 0:
         detail = (completed_process.stderr or completed_process.stdout or "").strip()
         message = f"FluidSynth exited with code {completed_process.returncode}"
