@@ -1,4 +1,8 @@
-"""Public exceptions for normalized provider failures."""
+"""Public exceptions raised by Conductor Core."""
+
+
+class AudioRenderingError(RuntimeError):
+    """Core could not render a MIDI file to audio."""
 
 
 class ProviderError(RuntimeError):

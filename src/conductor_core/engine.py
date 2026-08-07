@@ -13,6 +13,7 @@ from conductor_core.config import (
     GenerationResult,
     ProgressEvent,
 )
+from conductor_core.errors import AudioRenderingError
 from conductor_core.midi import loop_to_midi
 from conductor_core.storage import FilesystemArtifactStore
 
@@ -93,13 +94,13 @@ class LoopGenerationEngine:
                 audio_error = None
                 try:
                     resolved_soundfont = playback.resolve_soundfont(requested_soundfont)
-                    audio_result = playback.midi_to_mp3(
+                    audio_path = playback.midi_to_mp3(
                         workspace.midi_path,
                         output_path=workspace.audio_path,
                         soundfont_name=resolved_soundfont or requested_soundfont,
                     )
-                    audio_path = audio_result.path
-                    audio_error = audio_result.error
+                except AudioRenderingError as exc:
+                    audio_error = str(exc)
                 except Exception as exc:
                     audio_error = f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
 

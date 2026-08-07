@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from conductor_core import AudioRenderingError
 from conductor_core import playback as audio
 
 
@@ -136,6 +137,21 @@ def test_get_playback_status_message_prioritizes_missing_dependencies(monkeypatc
     assert "Add the requested SoundFont" not in status_message
 
 
+def test_midi_to_mp3_raises_when_playback_is_unavailable(monkeypatch, tmp_path):
+    midi_path = _write_file(tmp_path / "loop.mid")
+    monkeypatch.setattr(
+        audio,
+        "is_playback_available",
+        lambda soundfont_name=None: (False, "FluidSynth is not installed or not in PATH"),
+    )
+
+    with pytest.raises(
+        AudioRenderingError,
+        match="FluidSynth is not installed or not in PATH",
+    ):
+        audio.midi_to_mp3(str(midi_path))
+
+
 def test_midi_to_mp3_uses_requested_soundfont(monkeypatch, tmp_path):
     midi_path = _write_file(tmp_path / "loop.mid")
     soundfont_path = _write_file(tmp_path / "custom.sf2")
@@ -168,14 +184,13 @@ def test_midi_to_mp3_uses_requested_soundfont(monkeypatch, tmp_path):
     monkeypatch.setattr(audio.subprocess, "run", fake_run)
     monkeypatch.setattr(audio, "AudioSegment", FakeAudioSegment)
 
-    result = audio.midi_to_mp3(
+    rendered_path = audio.midi_to_mp3(
         str(midi_path),
         output_path=str(output_path),
         soundfont_name="custom.sf2",
     )
 
-    assert result.path == str(output_path)
-    assert result.error is None
+    assert rendered_path == str(output_path)
     assert captured["command"] == [
         "fluidsynth",
         "-ni",
@@ -226,14 +241,14 @@ def test_midi_to_mp3_removes_partial_output_when_export_fails(monkeypatch, tmp_p
     monkeypatch.setattr(audio.subprocess, "run", fake_run)
     monkeypatch.setattr(audio, "AudioSegment", FakeAudioSegment)
 
-    result = audio.midi_to_mp3(
-        str(midi_path),
-        output_path=str(output_path),
-        soundfont_name="custom.sf2",
-    )
+    with pytest.raises(AudioRenderingError, match="RuntimeError: export failed") as raised:
+        audio.midi_to_mp3(
+            str(midi_path),
+            output_path=str(output_path),
+            soundfont_name="custom.sf2",
+        )
 
-    assert result.path is None
-    assert result.error == "RuntimeError: export failed"
+    assert isinstance(raised.value.__cause__, RuntimeError)
     assert partial_path is not None
     assert partial_path.parent == output_path.parent
     assert not partial_path.exists()
@@ -265,16 +280,16 @@ def test_midi_to_mp3_reports_fluidsynth_process_failure(monkeypatch, tmp_path):
     monkeypatch.setattr(audio.subprocess, "run", fake_run)
     monkeypatch.setattr(audio, "AudioSegment", UnexpectedAudioSegment)
 
-    result = audio.midi_to_mp3(
-        str(midi_path),
-        output_path=str(output_path),
-        soundfont_name="custom.sf2",
-    )
+    with pytest.raises(
+        AudioRenderingError,
+        match="FluidSynth exited with code 1: FluidSynth: failed to load SoundFont",
+    ):
+        audio.midi_to_mp3(
+            str(midi_path),
+            output_path=str(output_path),
+            soundfont_name="custom.sf2",
+        )
 
-    assert result.path is None
-    assert result.error == (
-        "RuntimeError: FluidSynth exited with code 1: FluidSynth: failed to load SoundFont"
-    )
     assert not output_path.exists()
 
 
@@ -290,7 +305,7 @@ def test_midi_to_mp3_reports_soundfont_discovery_failure(monkeypatch, tmp_path):
         fail_discovery,
     )
 
-    result = audio.midi_to_mp3(str(midi_path))
+    with pytest.raises(AudioRenderingError, match="OSError: resource extraction failed") as raised:
+        audio.midi_to_mp3(str(midi_path))
 
-    assert result.path is None
-    assert result.error == "OSError: resource extraction failed"
+    assert isinstance(raised.value.__cause__, OSError)

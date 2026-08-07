@@ -11,6 +11,7 @@ from conductor_core.config import (
 )
 from conductor_core.engine import LoopGenerationEngine
 from conductor_core.errors import (
+    AudioRenderingError,
     ProviderAuthenticationError,
     ProviderConnectionError,
     ProviderError,
@@ -30,6 +31,7 @@ from conductor_core.paths import (
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
+    "AudioRenderingError",
     "EngineConfig",
     "GenerationRequest",
     "GenerationResult",
