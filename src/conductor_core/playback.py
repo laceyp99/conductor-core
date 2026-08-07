@@ -343,13 +343,6 @@ def midi_to_mp3(
             logger.error(error)
             raise AudioRenderingError(error)
 
-        global AudioSegment
-
-        if AudioSegment is None:
-            from pydub import AudioSegment as _AudioSegment
-
-            AudioSegment = _AudioSegment
-
         # Create a temporary WAV file
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_wav:
             temp_wav_path = temp_wav.name
@@ -366,6 +359,13 @@ def midi_to_mp3(
         logger.info(f"Rendering MIDI to WAV using SoundFont: {soundfont_path}")
         _render_midi_to_wav(midi_path, temp_wav_path, soundfont_path)
         _validate_wav_has_audio(temp_wav_path)
+
+        global AudioSegment
+
+        if AudioSegment is None:
+            from pydub import AudioSegment as _AudioSegment
+
+            AudioSegment = _AudioSegment
 
         # Convert WAV to MP3 using pydub
         logger.info(f"Converting WAV to MP3: {output_path}")
