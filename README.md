@@ -298,6 +298,10 @@ error occurs after a workspace is allocated, Core removes the unfinished
 workspace. Callers should catch exceptions at their application boundary and
 decide how to display, retry, or log them.
 
+Lower-level audio rendering failures raise `AudioRenderingError`. The generation
+engine treats optional audio failure as non-fatal, returning the generated MIDI
+with `audio_path=None` and the rendering diagnostic in `warnings`.
+
 Hosted providers fail before constructing an SDK client when their required API
 key is missing or blank. These failures, along with credentials rejected by a
 provider, raise `ProviderAuthenticationError`. Other provider SDK failures use
