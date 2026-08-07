@@ -15,6 +15,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import wave
 from contextlib import ExitStack
 from importlib import resources
 from threading import Lock
@@ -68,6 +69,20 @@ def _render_midi_to_wav(midi_path: str, wav_path: str, soundfont_path: str) -> N
         if detail:
             message = f"{message}: {detail}"
         raise AudioRenderingError(message)
+
+
+def _validate_wav_has_audio(wav_path: str) -> None:
+    """Raise when FluidSynth output is missing, malformed, or has no audio frames."""
+    if not os.path.exists(wav_path):
+        raise AudioRenderingError("FluidSynth did not produce a WAV file")
+
+    try:
+        with wave.open(wav_path, "rb") as wav_file:
+            if wav_file.getnframes() == 0 or not wav_file.readframes(1):
+                raise AudioRenderingError("FluidSynth produced a WAV file with no audio frames")
+    except (EOFError, wave.Error) as exc:
+        detail = f": {exc}" if str(exc) else ""
+        raise AudioRenderingError(f"FluidSynth produced an invalid WAV file{detail}") from exc
 
 
 def _soundfont_search_dirs() -> list[str]:
@@ -337,6 +352,7 @@ def midi_to_mp3(
         # Use FluidSynth to render MIDI to WAV
         logger.info(f"Rendering MIDI to WAV using SoundFont: {soundfont_path}")
         _render_midi_to_wav(midi_path, temp_wav_path, soundfont_path)
+        _validate_wav_has_audio(temp_wav_path)
 
         # Convert WAV to MP3 using pydub
         logger.info(f"Converting WAV to MP3: {output_path}")

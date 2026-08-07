@@ -1,4 +1,5 @@
 import subprocess
+import wave
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -16,6 +17,14 @@ def reset_extra_soundfont_dirs(monkeypatch):
 def _write_file(path: Path, content: bytes = b"data") -> Path:
     path.write_bytes(content)
     return path
+
+
+def _write_wav(path: str | Path, frames: bytes = b"\x00\x00") -> None:
+    with wave.open(str(path), "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(44100)
+        wav_file.writeframes(frames)
 
 
 def test_list_soundfonts_returns_sorted_sf2_files(monkeypatch, tmp_path):
@@ -164,7 +173,7 @@ def test_midi_to_mp3_uses_requested_soundfont(monkeypatch, tmp_path):
     def fake_run(command, **kwargs):
         captured["command"] = command
         captured["run_kwargs"] = kwargs
-        Path(command[5]).write_bytes(b"wav")
+        _write_wav(command[5])
         return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
     class FakeAudioSegment:
@@ -223,7 +232,7 @@ def test_midi_to_mp3_removes_partial_output_when_export_fails(monkeypatch, tmp_p
     monkeypatch.setattr(audio, "is_playback_available", lambda soundfont_name=None: (True, None))
 
     def fake_run(command, **kwargs):
-        Path(command[5]).write_bytes(b"wav")
+        _write_wav(command[5])
         return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
     class FakeAudioSegment:
@@ -283,6 +292,39 @@ def test_midi_to_mp3_reports_fluidsynth_process_failure(monkeypatch, tmp_path):
     with pytest.raises(
         AudioRenderingError,
         match="FluidSynth exited with code 1: FluidSynth: failed to load SoundFont",
+    ):
+        audio.midi_to_mp3(
+            str(midi_path),
+            output_path=str(output_path),
+            soundfont_name="custom.sf2",
+        )
+
+    assert not output_path.exists()
+
+
+def test_midi_to_mp3_rejects_wav_without_audio_frames(monkeypatch, tmp_path):
+    midi_path = _write_file(tmp_path / "loop.mid")
+    _write_file(tmp_path / "custom.sf2")
+    output_path = tmp_path / "loop.mp3"
+
+    monkeypatch.setattr(audio, "SOUNDFONT_DIR", str(tmp_path))
+    monkeypatch.setattr(audio, "is_playback_available", lambda soundfont_name=None: (True, None))
+
+    def fake_run(command, **kwargs):
+        _write_wav(command[5], frames=b"")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    class UnexpectedAudioSegment:
+        @staticmethod
+        def from_wav(temp_wav_path):
+            pytest.fail("WAV output without audio frames should not be passed to pydub")
+
+    monkeypatch.setattr(audio.subprocess, "run", fake_run)
+    monkeypatch.setattr(audio, "AudioSegment", UnexpectedAudioSegment)
+
+    with pytest.raises(
+        AudioRenderingError,
+        match="FluidSynth produced a WAV file with no audio frames",
     ):
         audio.midi_to_mp3(
             str(midi_path),
