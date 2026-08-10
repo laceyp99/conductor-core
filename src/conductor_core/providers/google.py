@@ -83,10 +83,7 @@ def calc_cost(model, usage):
     else:
         input_cost = model_cost["input"] / 1000000
         output_cost = model_cost["output"] / 1000000
-        if "cache" in model_cost:
-            cache_cost = model_cost["cache"]["text"] / 1000000
-        else:
-            cache_cost = 0
+        cache_cost = model_cost["cache"]["text"] / 1000000 if "cache" in model_cost else 0
 
     new_input_tokens, cached = utils.split_reported_cache_tokens(
         prompt_tokens,

@@ -16,7 +16,7 @@ import shutil
 import subprocess
 import tempfile
 import wave
-from contextlib import ExitStack
+from contextlib import ExitStack, suppress
 from importlib import resources
 from threading import Lock
 
@@ -388,15 +388,11 @@ def midi_to_mp3(
     finally:
         # Clean up temporary WAV file
         if "temp_wav_path" in locals() and os.path.exists(temp_wav_path):
-            try:
+            with suppress(OSError):
                 os.remove(temp_wav_path)
-            except OSError:
-                pass
         if "temp_mp3_path" in locals() and os.path.exists(temp_mp3_path):
-            try:
+            with suppress(OSError):
                 os.remove(temp_mp3_path)
-            except OSError:
-                pass
 
 
 def get_playback_status_message(soundfont_name: str | None = None) -> str:
@@ -405,7 +401,7 @@ def get_playback_status_message(soundfont_name: str | None = None) -> str:
     Returns:
         str: A message describing the playback status and any setup required.
     """
-    available, error = is_playback_available(soundfont_name)
+    available, _error = is_playback_available(soundfont_name)
 
     if available:
         soundfont = find_soundfont(soundfont_name)

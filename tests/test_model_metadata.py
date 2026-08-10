@@ -13,9 +13,9 @@ def test_selectable_cloud_models_have_normalized_rate_limits():
             assert set(rate_limits) == {"RPM", "TPM", "RPD"}, f"{provider}/{model}"
 
             rpm = rate_limits["RPM"]
-            assert isinstance(rpm, int) and not isinstance(rpm, bool) and rpm > 0, (
-                f"{provider}/{model}"
-            )
+            assert isinstance(rpm, int), f"{provider}/{model}"
+            assert not isinstance(rpm, bool), f"{provider}/{model}"
+            assert rpm > 0, f"{provider}/{model}"
 
             for field in ("TPM", "RPD"):
                 value = rate_limits[field]

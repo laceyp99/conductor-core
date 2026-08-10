@@ -63,8 +63,8 @@ class FilesystemArtifactStore:
     def update_generation_audio(
         self,
         gen_id: str,
-        audio_path: Optional[str],
-        soundfont: Optional[str] = None,
+        audio_path: str | None,
+        soundfont: str | None = None,
     ) -> Optional["GenerationMetadata"]:
         return _update_generation_audio(self.artifact_root, gen_id, audio_path, soundfont=soundfont)
 
@@ -107,13 +107,13 @@ class GenerationMetadata(BaseModel):
     model: str
     provider: str
     temperature: float
-    use_thinking: Optional[bool] = None
-    effort: Optional[str] = None
-    cost: Optional[float] = None
+    use_thinking: bool | None = None
+    effort: str | None = None
+    cost: float | None = None
     midi_path: str
-    audio_path: Optional[str] = None
-    messages_path: Optional[str] = None
-    soundfont: Optional[str] = None
+    audio_path: str | None = None
+    messages_path: str | None = None
+    soundfont: str | None = None
 
 
 class GenerationWorkspace(BaseModel):
@@ -290,7 +290,7 @@ def _load_generation_metadata(artifact_root: str | Path, gen_id: str) -> Generat
     metadata_path = _validate_artifact_file(workspace.metadata_path, required=True)
     assert metadata_path is not None
 
-    with open(metadata_path, "r", encoding="utf-8") as metadata_file:
+    with open(metadata_path, encoding="utf-8") as metadata_file:
         metadata = GenerationMetadata(**json.load(metadata_file))
 
     if metadata.id != gen_id:
@@ -362,10 +362,10 @@ def finalize_generation(
     model: str,
     provider: str,
     temperature: float,
-    use_thinking: Optional[bool] = None,
-    effort: Optional[str] = None,
-    cost: Optional[float] = None,
-    soundfont: Optional[str] = None,
+    use_thinking: bool | None = None,
+    effort: str | None = None,
+    cost: float | None = None,
+    soundfont: str | None = None,
     audio_render_succeeded: bool | None = None,
 ) -> GenerationMetadata:
     """Finalize a generation after its artifacts have been written.
@@ -416,10 +416,10 @@ def _finalize_generation(
     model: str,
     provider: str,
     temperature: float,
-    use_thinking: Optional[bool] = None,
-    effort: Optional[str] = None,
-    cost: Optional[float] = None,
-    soundfont: Optional[str] = None,
+    use_thinking: bool | None = None,
+    effort: str | None = None,
+    cost: float | None = None,
+    soundfont: str | None = None,
     audio_render_succeeded: bool | None = None,
     max_generations: int | None = MAX_GENERATIONS,
 ) -> GenerationMetadata:
@@ -512,9 +512,9 @@ def _cleanup_generation_workspace(
 
 def update_generation_audio(
     gen_id: str,
-    audio_path: Optional[str],
-    soundfont: Optional[str] = None,
-) -> Optional[GenerationMetadata]:
+    audio_path: str | None,
+    soundfont: str | None = None,
+) -> GenerationMetadata | None:
     """Update the stored audio path and SoundFont for an existing generation.
 
     Args:
@@ -533,9 +533,9 @@ def update_generation_audio(
 def _update_generation_audio(
     artifact_root: str | Path,
     gen_id: str,
-    audio_path: Optional[str],
-    soundfont: Optional[str] = None,
-) -> Optional[GenerationMetadata]:
+    audio_path: str | None,
+    soundfont: str | None = None,
+) -> GenerationMetadata | None:
     """Update stored audio metadata under an explicit artifact root."""
     metadata = _get_generation(artifact_root, gen_id)
     if metadata is None:
@@ -608,7 +608,7 @@ def _load_history(artifact_root: str | Path) -> list[GenerationMetadata]:
     return generations
 
 
-def get_generation(gen_id: str) -> Optional[GenerationMetadata]:
+def get_generation(gen_id: str) -> GenerationMetadata | None:
     """Get a specific generation by ID.
 
     Args:
@@ -620,7 +620,7 @@ def get_generation(gen_id: str) -> Optional[GenerationMetadata]:
     return _get_generation(_resolve_artifact_root(), gen_id)
 
 
-def _get_generation(artifact_root: str | Path, gen_id: str) -> Optional[GenerationMetadata]:
+def _get_generation(artifact_root: str | Path, gen_id: str) -> GenerationMetadata | None:
     """Get a specific generation from an explicit artifact root."""
     _validate_generation_id(gen_id)
     try:
@@ -663,7 +663,7 @@ def _delete_generation(artifact_root: str | Path, gen_id: str) -> bool:
 
 def _enforce_limit(
     artifact_root: str | Path | None = None,
-    max_generations: int | None | object = _DEFAULT_MAX_GENERATIONS,
+    max_generations: int | object | None = _DEFAULT_MAX_GENERATIONS,
 ) -> None:
     """Delete oldest generations if over the limit."""
     if max_generations is _DEFAULT_MAX_GENERATIONS:

@@ -32,7 +32,7 @@ providers = [
 [dependency-groups]
 dev = [
 	"pytest>=9.0.3,<10",
-	"ruff>=0.11,<1",
+	"ruff>=0.16,<0.17",
 ]
 
 [tool.uv]
@@ -62,5 +62,31 @@ target-version = "py310"
 line-length = 100
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "W"]
+select = [
+	"A",
+	"ASYNC",
+	"B",
+	"C4",
+	"E4",
+	"E7",
+	"E9",
+	"F",
+	"FLY",
+	"FURB",
+	"I",
+	"NPY",
+	"PERF",
+	"PGH",
+	"PIE",
+	"PT",
+	"RET",
+	"RSE",
+	"RUF",
+	"SIM",
+	"UP",
+	"W605",
+]
 ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/test_audio.py" = ["A002"]

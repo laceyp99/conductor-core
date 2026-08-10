@@ -287,11 +287,11 @@ def scale(scale_letter, scale_mode):
     if scale_mode not in SCALE_INTERVALS:
         raise ValueError(f"Invalid scale mode: {scale_mode}")
 
-    result = []
-    for interval in SCALE_INTERVALS[scale_mode]:
-        for note in ENHARMONIC_NOTE_NAMES[(start_index + interval) % 12]:
-            result.append(note)
-    return result
+    return [
+        note
+        for interval in SCALE_INTERVALS[scale_mode]
+        for note in ENHARMONIC_NOTE_NAMES[(start_index + interval) % 12]
+    ]
 
 
 def calculate_midi_number(note):
@@ -314,8 +314,7 @@ def calculate_midi_number(note):
     if cleaned_pitch not in base_midi_numbers:
         raise ValueError(f"Unrecognized note name: {note.pitch}")
     base_number = base_midi_numbers[cleaned_pitch]
-    midi_number = base_number + ((note.octave + 1) * 12)
-    return midi_number
+    return base_number + ((note.octave + 1) * 12)
 
 
 def midi_number_to_name_and_octave(midi_number):

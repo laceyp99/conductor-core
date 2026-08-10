@@ -75,9 +75,12 @@ def get_ollama_status(
 
     host = _resolve_host(host_address)
     cache_key = (host,)
-    if _ollama_status_cache is not None and not force_refresh:
-        if _ollama_status_cache.get("cache_key") == cache_key:
-            return {k: v for k, v in _ollama_status_cache.items() if k != "cache_key"}
+    if (
+        _ollama_status_cache is not None
+        and not force_refresh
+        and _ollama_status_cache.get("cache_key") == cache_key
+    ):
+        return {k: v for k, v in _ollama_status_cache.items() if k != "cache_key"}
 
     status = {
         "available": False,

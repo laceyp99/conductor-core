@@ -80,7 +80,7 @@ class LoopGenerationEngine:
                 loop_to_midi(
                     midi,
                     loop,
-                    times_as_string=request.model in model_info["models"]["Google"].keys(),
+                    times_as_string=request.model in model_info["models"]["Google"],
                 )
             )
             midi.save(workspace.midi_path)
