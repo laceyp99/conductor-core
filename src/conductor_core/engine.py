@@ -42,7 +42,9 @@ class LoopGenerationEngine:
         detail: str | None = None,
     ) -> None:
         if progress_callback:
-            progress_callback(ProgressEvent(stage=stage, message=message, detail=detail))
+            progress_callback(
+                ProgressEvent(stage=stage, message=message, detail=detail)
+            )
 
     def generate(
         self,
@@ -55,7 +57,9 @@ class LoopGenerationEngine:
         warnings = []
         prompt = f"{request.key} {request.scale} {request.description}."
         system_prompt = (
-            request.prompt_override or self.config.prompt_override or music.get_loop_prompt()
+            request.prompt_override
+            or self.config.prompt_override
+            or music.get_loop_prompt()
         )
 
         try:
@@ -80,14 +84,18 @@ class LoopGenerationEngine:
                 loop_to_midi(
                     midi,
                     loop,
-                    times_as_string=request.model in model_info["models"]["Google"].keys(),
+                    times_as_string=request.model in model_info["models"]["Google"],
                 )
             )
             midi.save(workspace.midi_path)
 
             audio_path = None
-            selected_soundfont = request.soundfont_path or self.config.default_soundfont_path
-            requested_soundfont = str(selected_soundfont) if selected_soundfont else None
+            selected_soundfont = (
+                request.soundfont_path or self.config.default_soundfont_path
+            )
+            requested_soundfont = (
+                str(selected_soundfont) if selected_soundfont else None
+            )
             resolved_soundfont = None
             if request.render_audio:
                 self._emit(progress_callback, "audio", "Rendering Audio...")
@@ -102,7 +110,11 @@ class LoopGenerationEngine:
                 except AudioRenderingError as exc:
                     audio_error = str(exc)
                 except Exception as exc:
-                    audio_error = f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
+                    audio_error = (
+                        f"{type(exc).__name__}: {exc}"
+                        if str(exc)
+                        else type(exc).__name__
+                    )
 
                 if audio_path is None:
                     warning = "Audio rendering was skipped or failed."

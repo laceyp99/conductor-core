@@ -56,7 +56,9 @@ def initialize_gemini_client(api_key: str | None = None, timeout: float | None =
 
     client_args = {"api_key": resolved_api_key}
     if timeout is not None:
-        client_args["http_options"] = types.HttpOptions(timeout=max(1, round(timeout * 1000)))
+        client_args["http_options"] = types.HttpOptions(
+            timeout=max(1, round(timeout * 1000))
+        )
     try:
         return genai.Client(**client_args)
     except (genai_errors.APIError, httpx.TimeoutException, httpx.NetworkError) as exc:
@@ -83,16 +85,19 @@ def calc_cost(model, usage):
     else:
         input_cost = model_cost["input"] / 1000000
         output_cost = model_cost["output"] / 1000000
-        if "cache" in model_cost:
-            cache_cost = model_cost["cache"]["text"] / 1000000
-        else:
-            cache_cost = 0
+        cache_cost = (
+            model_cost["cache"]["text"] / 1000000 if "cache" in model_cost else 0
+        )
 
     new_input_tokens, cached = utils.split_reported_cache_tokens(
         prompt_tokens,
         cached,
     )
-    return new_input_tokens * input_cost + output_tokens * output_cost + cached * cache_cost
+    return (
+        new_input_tokens * input_cost
+        + output_tokens * output_cost
+        + cached * cache_cost
+    )
 
 
 def process_output(response):

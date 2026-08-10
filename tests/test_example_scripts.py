@@ -22,7 +22,9 @@ def load_script(name):
     ["generate_midi", "midi_loop_roundtrip", "inspect_models", "check_copied_history"],
 )
 def test_example_script_imports_without_running_main(name, monkeypatch):
-    monkeypatch.setattr("conductor_core.engine.LoopGenerationEngine.generate", lambda *args: None)
+    monkeypatch.setattr(
+        "conductor_core.engine.LoopGenerationEngine.generate", lambda *args: None
+    )
     module = load_script(name)
 
     assert callable(module.main)
@@ -43,7 +45,9 @@ def test_generate_midi_builds_expected_paid_request(capsys):
         def generate(self, request, progress_callback=None):
             captured["request"] = request
             progress_callback(
-                SimpleNamespace(stage="provider_call", message="Generating MIDI...", detail=None)
+                SimpleNamespace(
+                    stage="provider_call", message="Generating MIDI...", detail=None
+                )
             )
             return result
 
@@ -111,7 +115,9 @@ def test_check_copied_history_reports_reconstructed_paths(tmp_path, capsys):
         "audio_path": "C:/old-root/gen_fixed_id/loop.mp3",
         "messages_path": "C:/old-root/gen_fixed_id/messages.json",
     }
-    (generation_dir / "metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
+    (generation_dir / "metadata.json").write_text(
+        json.dumps(metadata), encoding="utf-8"
+    )
 
     assert script.check_history(root) is True
 

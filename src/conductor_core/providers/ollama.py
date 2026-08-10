@@ -25,7 +25,9 @@ _ollama_status_cache = None
 
 
 def _resolve_host(host_address: str | None = None) -> str:
-    return host_address or os.getenv("OLLAMA_API_HOST_ADDRESS") or "http://localhost:11434"
+    return (
+        host_address or os.getenv("OLLAMA_API_HOST_ADDRESS") or "http://localhost:11434"
+    )
 
 
 def _raise_ollama_error(exc: Exception, operation: str) -> None:
@@ -45,7 +47,9 @@ def _raise_ollama_error(exc: Exception, operation: str) -> None:
     raise error from exc
 
 
-def initialize_ollama_client(host_address: str | None = None, timeout: float | None = None):
+def initialize_ollama_client(
+    host_address: str | None = None, timeout: float | None = None
+):
     """Initialize and return an Ollama client."""
     if ollama is None:
         raise ImportError("Install conductor-core[ollama] to use Ollama models.")
@@ -75,9 +79,12 @@ def get_ollama_status(
 
     host = _resolve_host(host_address)
     cache_key = (host,)
-    if _ollama_status_cache is not None and not force_refresh:
-        if _ollama_status_cache.get("cache_key") == cache_key:
-            return {k: v for k, v in _ollama_status_cache.items() if k != "cache_key"}
+    if (
+        _ollama_status_cache is not None
+        and not force_refresh
+        and _ollama_status_cache.get("cache_key") == cache_key
+    ):
+        return {k: v for k, v in _ollama_status_cache.items() if k != "cache_key"}
 
     status = {
         "available": False,

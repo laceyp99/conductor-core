@@ -59,7 +59,9 @@ def check_history(artifact_root: Path) -> bool:
 
             matches = loaded_path == expected_value
             exists = expected_path.is_file()
-            status = "PASS" if matches and (exists or field_name != "midi_path") else "FAIL"
+            status = (
+                "PASS" if matches and (exists or field_name != "midi_path") else "FAIL"
+            )
             print(f"  {field_name}:")
             print(f"    stored: {stored_path!r}")
             print(f"    loaded: {loaded_path!r}")
@@ -74,12 +76,16 @@ def check_history(artifact_root: Path) -> bool:
 def main() -> int:
     """Parse the artifact root and return a process-friendly status code."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("artifact_root", type=Path, help="Directory containing gen_* folders")
+    parser.add_argument(
+        "artifact_root", type=Path, help="Directory containing gen_* folders"
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")
 
     if not args.artifact_root.is_dir():
-        parser.error(f"artifact root does not exist or is not a directory: {args.artifact_root}")
+        parser.error(
+            f"artifact root does not exist or is not a directory: {args.artifact_root}"
+        )
 
     return 0 if check_history(args.artifact_root) else 1
 

@@ -25,7 +25,9 @@ class EngineConfig:
     """Environment, resource, and storage configuration for the core engine."""
 
     artifact_root: str | Path = field(default_factory=resolve_default_artifact_root)
-    provider_credentials: ProviderCredentials = field(default_factory=ProviderCredentials)
+    provider_credentials: ProviderCredentials = field(
+        default_factory=ProviderCredentials
+    )
     prompt_override: str | None = None
     default_soundfont_path: str | Path | None = None
     max_generations: int | None = MAX_GENERATIONS
@@ -54,7 +56,9 @@ class EngineConfig:
         """Create a config using Core defaults plus caller-provided overrides."""
         return cls(
             artifact_root=(
-                artifact_root if artifact_root is not None else resolve_default_artifact_root()
+                artifact_root
+                if artifact_root is not None
+                else resolve_default_artifact_root()
             ),
             provider_credentials=provider_credentials or ProviderCredentials(),
             prompt_override=prompt_override,
@@ -82,7 +86,9 @@ class GenerationRequest:
     def __post_init__(self) -> None:
         valid_keys = tuple(note for notes in ENHARMONIC_NOTE_NAMES for note in notes)
         if self.key not in valid_keys:
-            raise ValueError(f"Invalid key {self.key!r}. Expected one of: {', '.join(valid_keys)}")
+            raise ValueError(
+                f"Invalid key {self.key!r}. Expected one of: {', '.join(valid_keys)}"
+            )
 
         if not isinstance(self.scale, str) or self.scale.lower() not in SCALE_INTERVALS:
             raise ValueError(

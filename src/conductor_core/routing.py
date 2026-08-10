@@ -66,7 +66,11 @@ def generate_midi(
             effort=effort,
             api_key=credentials.openai_api_key,
             system_prompt=system_prompt,
-            **({"request_timeout": request_timeout} if request_timeout is not None else {}),
+            **(
+                {"request_timeout": request_timeout}
+                if request_timeout is not None
+                else {}
+            ),
         )
     elif model_choice in model_info["models"]["Google"]:
         _validate_reasoning_options(
@@ -84,7 +88,11 @@ def generate_midi(
             effort=effort,
             api_key=credentials.google_api_key,
             system_prompt=system_prompt,
-            **({"request_timeout": request_timeout} if request_timeout is not None else {}),
+            **(
+                {"request_timeout": request_timeout}
+                if request_timeout is not None
+                else {}
+            ),
         )
     elif model_choice in model_info["models"]["Anthropic"]:
         _validate_reasoning_options(
@@ -102,13 +110,21 @@ def generate_midi(
             effort=effort,
             api_key=credentials.anthropic_api_key,
             system_prompt=system_prompt,
-            **({"request_timeout": request_timeout} if request_timeout is not None else {}),
+            **(
+                {"request_timeout": request_timeout}
+                if request_timeout is not None
+                else {}
+            ),
         )
     else:
         ollama_status = ollama_api.get_ollama_status(
             force_refresh=True,
             host_address=credentials.ollama_host,
-            **({"request_timeout": request_timeout} if request_timeout is not None else {}),
+            **(
+                {"request_timeout": request_timeout}
+                if request_timeout is not None
+                else {}
+            ),
         )
 
         if model_choice in ollama_status["models"]:
@@ -120,7 +136,11 @@ def generate_midi(
                 temp=temp,
                 host_address=credentials.ollama_host,
                 system_prompt=system_prompt,
-                **({"request_timeout": request_timeout} if request_timeout is not None else {}),
+                **(
+                    {"request_timeout": request_timeout}
+                    if request_timeout is not None
+                    else {}
+                ),
             )
         elif not ollama_status["available"]:
             raise ValueError(

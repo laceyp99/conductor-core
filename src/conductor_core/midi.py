@@ -207,19 +207,20 @@ def midi_to_loop(midi_filename, times_as_string=True):
         if msg.type == "note_on":
             # If velocity is greater than 0, it's a note_on event.
             if msg.velocity > 0:
-                active_notes.setdefault(msg.note, []).append((absolute_time, msg.velocity))
+                active_notes.setdefault(msg.note, []).append(
+                    (absolute_time, msg.velocity)
+                )
             else:
                 # A note_on with velocity 0 signifies note_off.
                 # Check if the note is active and remove it from the active notes.
-                if msg.note in active_notes and active_notes[msg.note]:
+                if active_notes.get(msg.note):
                     start_tick, velocity = active_notes[msg.note].pop(0)
                     note_events.append((msg.note, start_tick, absolute_time, velocity))
         # Handle note_off messages.
-        elif msg.type == "note_off":
+        elif msg.type == "note_off" and active_notes.get(msg.note):
             # Check if the note is active and remove it from the active notes.
-            if msg.note in active_notes and active_notes[msg.note]:
-                start_tick, velocity = active_notes[msg.note].pop(0)
-                note_events.append((msg.note, start_tick, absolute_time, velocity))
+            start_tick, velocity = active_notes[msg.note].pop(0)
+            note_events.append((msg.note, start_tick, absolute_time, velocity))
 
     # Create empty bars for the first four bars.
     bars = {0: [], 1: [], 2: [], 3: []}
@@ -235,7 +236,9 @@ def midi_to_loop(midi_filename, times_as_string=True):
         # Determine the sixteenth-note position (1-based indexing).
         start_sixteenth = (start_tick * 4 // ticks_per_beat) + 1
         duration_ticks = (end_tick - start_tick) * 4
-        duration_sixteenth = max(1, (duration_ticks + ticks_per_beat - 1) // ticks_per_beat)
+        duration_sixteenth = max(
+            1, (duration_ticks + ticks_per_beat - 1) // ticks_per_beat
+        )
 
         # Determine the bar (each bar has 16 sixteenth notes).
         bar_index = (start_sixteenth - 1) // 16

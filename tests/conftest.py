@@ -110,7 +110,9 @@ def sample_loop_g(loop_g_factory):
 
 @pytest.fixture
 def midi_builder(tmp_path):
-    def factory(loop, *, times_as_string=False, ticks_per_beat=480, filename="test_loop.mid"):
+    def factory(
+        loop, *, times_as_string=False, ticks_per_beat=480, filename="test_loop.mid"
+    ):
         midi = MidiFile(ticks_per_beat=ticks_per_beat)
         loop_to_midi(midi, loop, times_as_string=times_as_string)
 

@@ -23,7 +23,9 @@ try:
         RateLimitError,
     )
 except ImportError:  # pragma: no cover - exercised only in minimal installs
-    APIConnectionError = APIError = APITimeoutError = AuthenticationError = RateLimitError = ()
+    APIConnectionError = APIError = APITimeoutError = AuthenticationError = (
+        RateLimitError
+    ) = ()
     OpenAI = None
 
 logger = logging.getLogger(__name__)
@@ -75,7 +77,9 @@ def calc_price(model, response):
     model_info = utils.get_model_info()
     usage = response.usage
     input_cost = model_info["models"]["OpenAI"][model]["cost"].get("input", 0) / 1000000
-    output_cost = model_info["models"]["OpenAI"][model]["cost"].get("output", 0) / 1000000
+    output_cost = (
+        model_info["models"]["OpenAI"][model]["cost"].get("output", 0) / 1000000
+    )
     cached_input_cost = (
         model_info["models"]["OpenAI"][model]["cost"].get("cached input", 0) / 1000000
     )

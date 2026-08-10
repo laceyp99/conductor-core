@@ -42,7 +42,9 @@ def test_engine_generates_persisted_artifacts_with_mocked_provider(
         "resolve_soundfont",
         lambda soundfont_name: str(soundfont_path),
     )
-    monkeypatch.setattr(engine_module.music, "get_loop_prompt", lambda: "default prompt")
+    monkeypatch.setattr(
+        engine_module.music, "get_loop_prompt", lambda: "default prompt"
+    )
 
     engine = LoopGenerationEngine(
         EngineConfig.from_defaults(
@@ -68,7 +70,9 @@ def test_engine_generates_persisted_artifacts_with_mocked_provider(
     )
 
     generation_dir = tmp_path / "generations" / f"gen_{result.generation_id}"
-    metadata_json = json.loads((generation_dir / "metadata.json").read_text(encoding="utf-8"))
+    metadata_json = json.loads(
+        (generation_dir / "metadata.json").read_text(encoding="utf-8")
+    )
     loaded_metadata = engine.store.get_generation(result.generation_id)
 
     assert result.midi_path == str(generation_dir / "loop.mid")
@@ -83,9 +87,9 @@ def test_engine_generates_persisted_artifacts_with_mocked_provider(
     assert loaded_metadata.effort == "medium"
     assert Path(result.midi_path).exists()
     assert Path(result.audio_path).read_bytes() == b"audio"
-    assert json.loads((generation_dir / "messages.json").read_text(encoding="utf-8")) == [
-        {"role": "user", "content": "prompt"}
-    ]
+    assert json.loads(
+        (generation_dir / "messages.json").read_text(encoding="utf-8")
+    ) == [{"role": "user", "content": "prompt"}]
     assert captured["model_choice"] == "gpt-4o-mini"
     assert captured["prompt"] == "C Major warm rhodes loop."
     assert captured["provider_credentials"].openai_api_key == "openai-key"
@@ -214,7 +218,9 @@ def test_engine_preserves_midi_when_soundfont_resolution_raises(
     monkeypatch.setattr(
         engine_module.playback,
         "midi_to_mp3",
-        lambda *args, **kwargs: pytest.fail("Rendering should not start without a SoundFont"),
+        lambda *args, **kwargs: pytest.fail(
+            "Rendering should not start without a SoundFont"
+        ),
     )
 
     engine = LoopGenerationEngine(
@@ -264,7 +270,9 @@ def test_engine_surfaces_warning_for_defensively_dropped_pitch(
         )
     )
 
-    assert result.warnings == ["Dropped out-of-range MIDI note C12 (156); valid range is 0-127."]
+    assert result.warnings == [
+        "Dropped out-of-range MIDI note C12 (156); valid range is 0-127."
+    ]
 
 
 @pytest.mark.parametrize("max_generations", [None, 1])
@@ -281,7 +289,9 @@ def test_engine_config_passes_storage_limit_to_default_store(tmp_path, max_gener
 
 @pytest.mark.parametrize("max_generations", [0, -1])
 def test_engine_config_rejects_non_positive_storage_limit(max_generations):
-    with pytest.raises(ValueError, match="max_generations must be None or a positive integer"):
+    with pytest.raises(
+        ValueError, match="max_generations must be None or a positive integer"
+    ):
         EngineConfig.from_defaults(max_generations=max_generations)
 
 
