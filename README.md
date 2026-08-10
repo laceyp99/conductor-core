@@ -38,6 +38,7 @@ Run the project checks with:
 ```powershell
 uv run --locked --all-extras ruff format --check .
 uv run --locked --all-extras ruff check .
+uv run --locked --all-extras ty check
 uv run --locked --all-extras pytest -q
 uv build
 ```
