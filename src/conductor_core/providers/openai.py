@@ -2,6 +2,7 @@
 
 import logging
 import os
+from typing import Any
 
 from conductor_core import models as objects
 from conductor_core import music as utils
@@ -13,20 +14,27 @@ from conductor_core.errors import (
     ProviderTimeoutError,
 )
 
+APIConnectionError: Any
+APIError: Any
+APITimeoutError: Any
+AuthenticationError: Any
+OpenAI: Any
+RateLimitError: Any
+
 try:
-    from openai import (
-        APIConnectionError,
-        APIError,
-        APITimeoutError,
-        AuthenticationError,
-        OpenAI,
-        RateLimitError,
-    )
+    import openai as _openai
 except ImportError:  # pragma: no cover - exercised only in minimal installs
     APIConnectionError = APIError = APITimeoutError = AuthenticationError = (
         RateLimitError
     ) = ()
     OpenAI = None
+else:
+    APIConnectionError = _openai.APIConnectionError
+    APIError = _openai.APIError
+    APITimeoutError = _openai.APITimeoutError
+    AuthenticationError = _openai.AuthenticationError
+    OpenAI = _openai.OpenAI
+    RateLimitError = _openai.RateLimitError
 
 logger = logging.getLogger(__name__)
 
@@ -57,11 +65,10 @@ def initialize_openai_client(api_key: str | None = None, timeout: float | None =
             "OPENAI_API_KEY is not set and no usable api_key was provided",
             operation="client initialization",
         )
-    client_args = {"api_key": resolved_api_key}
-    if timeout is not None:
-        client_args["timeout"] = timeout
     try:
-        return OpenAI(**client_args)
+        if timeout is None:
+            return OpenAI(api_key=resolved_api_key)
+        return OpenAI(api_key=resolved_api_key, timeout=timeout)
     except (
         AuthenticationError,
         RateLimitError,

@@ -12,6 +12,8 @@ SCRIPTS_ROOT = Path(__file__).parents[1] / "scripts"
 def load_script(name):
     script_path = SCRIPTS_ROOT / f"{name}.py"
     spec = importlib.util.spec_from_file_location(f"example_{name}", script_path)
+    assert spec is not None
+    assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -44,6 +46,7 @@ def test_generate_midi_builds_expected_paid_request(capsys):
     class FakeEngine:
         def generate(self, request, progress_callback=None):
             captured["request"] = request
+            assert progress_callback is not None
             progress_callback(
                 SimpleNamespace(
                     stage="provider_call", message="Generating MIDI...", detail=None

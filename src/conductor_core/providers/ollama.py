@@ -2,6 +2,7 @@
 
 import logging
 import os
+from typing import Any
 
 from conductor_core import models as objects
 from conductor_core import music as utils
@@ -12,12 +13,18 @@ from conductor_core.errors import (
     error_for_status,
 )
 
+httpx: Any
+ollama: Any
+
 try:
-    import httpx
-    import ollama
+    import httpx as _httpx
+    import ollama as _ollama
 except ImportError:  # pragma: no cover - exercised only in minimal installs
     httpx = None
     ollama = None
+else:
+    httpx = _httpx
+    ollama = _ollama
 
 logger = logging.getLogger(__name__)
 

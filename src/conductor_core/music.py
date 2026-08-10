@@ -1,5 +1,6 @@
 import json
 from importlib import resources
+from typing import TypedDict
 
 from conductor_core import models as objects
 
@@ -89,8 +90,16 @@ SCALE_INTERVALS = {
     "melodic minor": [0, 2, 3, 5, 7, 9, 11],
 }
 
+
 # Canonical duration definitions: name -> beats, sixteenths, display string, and aliases
-DURATION_MAP = {
+class _DurationDefinition(TypedDict):
+    beats: float
+    sixteenths: int
+    display: str
+    aliases: list[str]
+
+
+DURATION_MAP: dict[str, _DurationDefinition] = {
     "sixteenth": {
         "beats": 0.25,
         "sixteenths": 1,
@@ -193,9 +202,10 @@ def get_model_info():
 
 def get_loop_prompt():
     """Load the packaged default loop generation prompt."""
-    prompt_resource = resources.files("conductor_core.resources").joinpath(
-        "prompts",
-        "loop_gen.txt",
+    prompt_resource = (
+        resources.files("conductor_core.resources")
+        .joinpath("prompts")
+        .joinpath("loop_gen.txt")
     )
     with prompt_resource.open("r", encoding="utf-8") as prompt_file:
         return prompt_file.read()

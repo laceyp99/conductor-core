@@ -33,6 +33,7 @@ providers = [
 dev = [
 	"pytest>=9.0.3,<10",
 	"ruff>=0.16,<0.17",
+	"ty>=0.0.69,<0.1",
 ]
 
 [tool.uv]

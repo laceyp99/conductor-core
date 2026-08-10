@@ -55,7 +55,9 @@ def test_engine_config_rejects_invalid_request_timeouts():
         with pytest.raises(
             ValueError, match="request_timeout must be None or a positive finite number"
         ):
-            EngineConfig.from_defaults(request_timeout=timeout)
+            EngineConfig.from_defaults(
+                request_timeout=timeout  # ty: ignore[invalid-argument-type]
+            )
 
 
 @pytest.mark.parametrize(

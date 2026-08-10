@@ -50,9 +50,10 @@ loop_prompt = get_loop_prompt()
 assert isinstance(loop_prompt, str)
 assert loop_prompt.strip()
 
-soundfont = resources.files("conductor_core.resources").joinpath(
-    "soundfonts",
-    "FM-Piano1-20190916.sf2",
+soundfont = (
+    resources.files("conductor_core.resources")
+    .joinpath("soundfonts")
+    .joinpath("FM-Piano1-20190916.sf2")
 )
 assert soundfont.is_file()
 with soundfont.open("rb") as soundfont_file:

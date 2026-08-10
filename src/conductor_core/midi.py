@@ -4,6 +4,7 @@ It supports converting a loop into MIDI (with proper absolute and delta timing) 
 """
 
 import logging
+from typing import cast
 
 from mido import Message, MetaMessage, MidiFile, MidiTrack, merge_tracks
 
@@ -57,6 +58,7 @@ def loop_to_midi(midi, loop, times_as_string=True) -> list[str]:
         raise ValueError(
             "One or more bars in the loop object are None. Ensure all bars are initialized."
         )
+    initialized_bars = cast(list[objects.Bar | objects.Bar_G], bars)
 
     warnings = []
 
@@ -70,7 +72,7 @@ def loop_to_midi(midi, loop, times_as_string=True) -> list[str]:
     # Initialize a list to hold all note events (on and off).
     events = []
     # Iterate through each bar and its notes to schedule events.
-    for bar_index, bar in enumerate(bars):
+    for bar_index, bar in enumerate(initialized_bars):
         bar_offset = bar_index * bar_length
         # Iterate through each note in the bar.
         for note in bar.notes:
@@ -127,11 +129,11 @@ def loop_to_midi(midi, loop, times_as_string=True) -> list[str]:
 
             # Get the note's time information from either style loop object.
             if times_as_string:
-                start_beat = utils.convert_sixteenth(note.time.start_beat)
-                duration = utils.convert_sixteenth(note.time.duration)
+                start_beat = cast(int, utils.convert_sixteenth(note.time.start_beat))
+                duration = cast(int, utils.convert_sixteenth(note.time.duration))
             else:
-                start_beat = note.time.start_beat
-                duration = note.time.duration
+                start_beat = cast(int, note.time.start_beat)
+                duration = cast(int, note.time.duration)
 
             # Convert the note's time information to absolute ticks.
             note_start_tick = bar_offset + (start_beat - 1) * ticks_per_sixteenth

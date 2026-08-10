@@ -2,6 +2,7 @@
 
 import logging
 import os
+from typing import Any
 
 from conductor_core import models as objects
 from conductor_core import music as utils
@@ -12,16 +13,26 @@ from conductor_core.errors import (
     error_for_status,
 )
 
+genai: Any
+genai_errors: Any
+httpx: Any
+types: Any
+
 try:
-    import httpx
-    from google import genai
-    from google.genai import errors as genai_errors
-    from google.genai import types
+    import httpx as _httpx
+    from google import genai as _genai
+    from google.genai import errors as _genai_errors
+    from google.genai import types as _types
 except ImportError:  # pragma: no cover - exercised only in minimal installs
     genai = None
     genai_errors = None
     httpx = None
     types = None
+else:
+    genai = _genai
+    genai_errors = _genai_errors
+    httpx = _httpx
+    types = _types
 
 logger = logging.getLogger(__name__)
 
@@ -54,13 +65,11 @@ def initialize_gemini_client(api_key: str | None = None, timeout: float | None =
             operation="client initialization",
         )
 
-    client_args = {"api_key": resolved_api_key}
-    if timeout is not None:
-        client_args["http_options"] = types.HttpOptions(
-            timeout=max(1, round(timeout * 1000))
-        )
     try:
-        return genai.Client(**client_args)
+        if timeout is None:
+            return genai.Client(api_key=resolved_api_key)
+        http_options = types.HttpOptions(timeout=max(1, round(timeout * 1000)))
+        return genai.Client(api_key=resolved_api_key, http_options=http_options)
     except (genai_errors.APIError, httpx.TimeoutException, httpx.NetworkError) as exc:
         _raise_google_error(exc, "client initialization")
 

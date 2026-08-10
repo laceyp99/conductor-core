@@ -2,6 +2,7 @@
 
 import logging
 import os
+from typing import Any
 
 from conductor_core import models as objects
 from conductor_core import music as utils
@@ -13,20 +14,27 @@ from conductor_core.errors import (
     ProviderTimeoutError,
 )
 
+Anthropic: Any
+APIConnectionError: Any
+APIError: Any
+APITimeoutError: Any
+AuthenticationError: Any
+RateLimitError: Any
+
 try:
-    from anthropic import (
-        Anthropic,
-        APIConnectionError,
-        APIError,
-        APITimeoutError,
-        AuthenticationError,
-        RateLimitError,
-    )
+    import anthropic as _anthropic
 except ImportError:  # pragma: no cover - exercised only in minimal installs
     APIConnectionError = APIError = APITimeoutError = AuthenticationError = (
         RateLimitError
     ) = ()
     Anthropic = None
+else:
+    Anthropic = _anthropic.Anthropic
+    APIConnectionError = _anthropic.APIConnectionError
+    APIError = _anthropic.APIError
+    APITimeoutError = _anthropic.APITimeoutError
+    AuthenticationError = _anthropic.AuthenticationError
+    RateLimitError = _anthropic.RateLimitError
 
 logger = logging.getLogger(__name__)
 
@@ -61,11 +69,10 @@ def initialize_anthropic_client(
             "ANTHROPIC_API_KEY is not set and no usable api_key was provided",
             operation="client initialization",
         )
-    client_args = {"api_key": resolved_api_key}
-    if timeout is not None:
-        client_args["timeout"] = timeout
     try:
-        return Anthropic(**client_args)
+        if timeout is None:
+            return Anthropic(api_key=resolved_api_key)
+        return Anthropic(api_key=resolved_api_key, timeout=timeout)
     except (
         AuthenticationError,
         RateLimitError,

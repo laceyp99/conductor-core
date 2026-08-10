@@ -26,6 +26,7 @@ def test_engine_generates_persisted_artifacts_with_mocked_provider(
         return sample_loop, [{"role": "user", "content": "prompt"}], 0.25, "OpenAI"
 
     def fake_midi_to_mp3(midi_path, output_path=None, soundfont_name=None):
+        assert output_path is not None
         Path(output_path).write_bytes(b"audio")
         captured["audio"] = {
             "midi_path": midi_path,
@@ -115,6 +116,7 @@ def test_engine_records_resolved_default_soundfont(
     default_soundfont = tmp_path / "FM-Piano1-20190916.sf2"
 
     def fake_midi_to_mp3(midi_path, output_path=None, soundfont_name=None):
+        assert output_path is not None
         Path(output_path).write_bytes(b"audio")
         captured["soundfont_name"] = soundfont_name
         return output_path
@@ -159,6 +161,7 @@ def test_engine_discards_partial_audio_when_renderer_reports_failure(
     sample_loop,
 ):
     def failed_render(midi_path, output_path=None, soundfont_name=None):
+        assert output_path is not None
         Path(output_path).write_bytes(b"partial")
         raise AudioRenderingError("FluidSynth exited without producing audio")
 
@@ -330,7 +333,7 @@ def test_generation_request_rejects_removed_provider():
             scale="Major",
             description="provider conflict",
             model="gpt-4o-mini",
-            provider="Anthropic",
+            provider="Anthropic",  # ty: ignore[unknown-argument]
         )
 
 

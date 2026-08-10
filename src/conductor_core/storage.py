@@ -21,7 +21,7 @@ import stat
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, cast
 
 from pydantic import BaseModel, PrivateAttr
 
@@ -682,7 +682,7 @@ def _enforce_limit(
     """Delete oldest generations if over the limit."""
     if max_generations is _DEFAULT_MAX_GENERATIONS:
         max_generations = MAX_GENERATIONS
-    max_generations = _validate_max_generations(max_generations)
+    max_generations = _validate_max_generations(cast(int | None, max_generations))
     if max_generations is None:
         return
 
