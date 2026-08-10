@@ -53,7 +53,10 @@ def test_pitch_class_to_interval_uses_wrapped_distance(
     root_pitch_class,
     expected_interval,
 ):
-    assert utils.pitch_class_to_interval(pitch_class, root_pitch_class) == expected_interval
+    assert (
+        utils.pitch_class_to_interval(pitch_class, root_pitch_class)
+        == expected_interval
+    )
 
 
 @pytest.mark.parametrize(
@@ -65,7 +68,9 @@ def test_pitch_class_to_interval_uses_wrapped_distance(
         (1.5, "1.5 beats"),
     ],
 )
-def test_beats_to_duration_name_formats_standard_and_nonstandard_lengths(beats, expected):
+def test_beats_to_duration_name_formats_standard_and_nonstandard_lengths(
+    beats, expected
+):
     assert utils.beats_to_duration_name(beats) == expected
 
 
@@ -198,11 +203,15 @@ def test_midi_to_note_name_accepts_plain_python_lists():
 
 
 @pytest.mark.parametrize("filename", ["messages", "messages.json"])
-def test_save_messages_to_json_normalizes_suffix_and_round_trips_utf8(tmp_path, filename):
+def test_save_messages_to_json_normalizes_suffix_and_round_trips_utf8(
+    tmp_path, filename
+):
     output_path = tmp_path / filename
     messages = [{"content": "Lydian ♯4 and “quotes”"}]
     expected_path = (
-        output_path if output_path.suffix == ".json" else output_path.with_suffix(".json")
+        output_path
+        if output_path.suffix == ".json"
+        else output_path.with_suffix(".json")
     )
 
     utils.save_messages_to_json(messages, output_path)

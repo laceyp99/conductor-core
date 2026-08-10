@@ -102,7 +102,9 @@ DURATION_SIXTEENTH_G_TO_INT = {
     "sixty_three": 63,
     "sixty_four": 64,
 }
-DURATION_SIXTEENTH_INT_TO_G = {value: key for key, value in DURATION_SIXTEENTH_G_TO_INT.items()}
+DURATION_SIXTEENTH_INT_TO_G = {
+    value: key for key, value in DURATION_SIXTEENTH_G_TO_INT.items()
+}
 
 
 # Sixteenth Note Objects
@@ -279,7 +281,10 @@ def _validate_loop_note_boundaries(loop: "Loop | Loop_G"):
             duration_value = getattr(note.time.duration, "value", note.time.duration)
             start = SIXTEENTH_NOTE_G_TO_INT.get(start_value, start_value)
             duration = DURATION_SIXTEENTH_G_TO_INT.get(duration_value, duration_value)
-            if bar_index * SIXTEENTHS_PER_BAR + (start - 1) + duration > SIXTEENTHS_PER_LOOP:
+            if (
+                bar_index * SIXTEENTHS_PER_BAR + (start - 1) + duration
+                > SIXTEENTHS_PER_LOOP
+            ):
                 raise ValueError(
                     "Note duration extends beyond the four-bar loop boundary. "
                     "Shorten the duration or start the note earlier."

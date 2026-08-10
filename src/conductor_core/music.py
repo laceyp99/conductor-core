@@ -91,7 +91,12 @@ SCALE_INTERVALS = {
 
 # Canonical duration definitions: name -> beats, sixteenths, display string, and aliases
 DURATION_MAP = {
-    "sixteenth": {"beats": 0.25, "sixteenths": 1, "display": "1/16", "aliases": ["16th"]},
+    "sixteenth": {
+        "beats": 0.25,
+        "sixteenths": 1,
+        "display": "1/16",
+        "aliases": ["16th"],
+    },
     "eighth": {"beats": 0.5, "sixteenths": 2, "display": "1/8", "aliases": ["8th"]},
     "quarter": {"beats": 1.0, "sixteenths": 4, "display": "1/4", "aliases": []},
     "half": {"beats": 2.0, "sixteenths": 8, "display": "1/2", "aliases": []},
@@ -100,7 +105,9 @@ DURATION_MAP = {
 
 # Derived lookups from DURATION_MAP
 DURATION_BEATS = {name: d["beats"] for name, d in DURATION_MAP.items()}
-DURATION_SIXTEENTHS_TO_DISPLAY = {d["sixteenths"]: d["display"] for d in DURATION_MAP.values()}
+DURATION_SIXTEENTHS_TO_DISPLAY = {
+    d["sixteenths"]: d["display"] for d in DURATION_MAP.values()
+}
 DURATION_KEYWORDS = {name: name for name in DURATION_MAP}
 for name, d in DURATION_MAP.items():
     for alias in d["aliases"]:
@@ -140,9 +147,13 @@ def _validate_model_info(model_info):
         for model, model_config in models.items():
             rate_limits = model_config.get("rate_limits")
             model_label = f"{provider}/{model}"
-            always_on_adaptive_thinking = model_config.get("always_on_adaptive_thinking", False)
+            always_on_adaptive_thinking = model_config.get(
+                "always_on_adaptive_thinking", False
+            )
             if not isinstance(always_on_adaptive_thinking, bool):
-                raise ValueError(f"{model_label} always_on_adaptive_thinking must be a boolean")
+                raise ValueError(
+                    f"{model_label} always_on_adaptive_thinking must be a boolean"
+                )
             if not isinstance(rate_limits, dict):
                 raise ValueError(f"{model_label} must define rate_limits")
             if set(rate_limits) != expected_rate_limit_fields:
@@ -159,7 +170,9 @@ def _validate_model_info(model_info):
                 if value is not None and (
                     isinstance(value, bool) or not isinstance(value, int) or value <= 0
                 ):
-                    raise ValueError(f"{model_label} {field} must be a positive integer or null")
+                    raise ValueError(
+                        f"{model_label} {field} must be a positive integer or null"
+                    )
 
 
 def get_model_info():
@@ -379,6 +392,8 @@ def int_to_sixteenth_g(sixteenth):
 def int_to_duration_sixteenth_g(duration):
     """Convert an integer duration into Gemini's duration enum."""
     try:
-        return objects.DurationSixteenth_G(objects.DURATION_SIXTEENTH_INT_TO_G[duration])
+        return objects.DurationSixteenth_G(
+            objects.DURATION_SIXTEENTH_INT_TO_G[duration]
+        )
     except KeyError as exc:
         raise ValueError(f"Invalid duration sixteenth value: {duration}") from exc

@@ -23,7 +23,9 @@ try:
         RateLimitError,
     )
 except ImportError:  # pragma: no cover - exercised only in minimal installs
-    APIConnectionError = APIError = APITimeoutError = AuthenticationError = RateLimitError = ()
+    APIConnectionError = APIError = APITimeoutError = AuthenticationError = (
+        RateLimitError
+    ) = ()
     Anthropic = None
 
 logger = logging.getLogger(__name__)
@@ -45,7 +47,9 @@ def _raise_anthropic_error(exc: Exception, operation: str) -> None:
     raise error from exc
 
 
-def initialize_anthropic_client(api_key: str | None = None, timeout: float | None = None):
+def initialize_anthropic_client(
+    api_key: str | None = None, timeout: float | None = None
+):
     """Initialize and return an Anthropic client."""
     if Anthropic is None:
         raise ImportError("Install conductor-core[anthropic] to use Anthropic models.")
@@ -117,8 +121,12 @@ def process_streaming_response(completion):
     for chunk in completion:
         if chunk.type == "message_start":
             if hasattr(chunk, "message") and hasattr(chunk.message, "usage"):
-                output["input_tokens"] += getattr(chunk.message.usage, "input_tokens", 0)
-                output["output_tokens"] += getattr(chunk.message.usage, "output_tokens", 0)
+                output["input_tokens"] += getattr(
+                    chunk.message.usage, "input_tokens", 0
+                )
+                output["output_tokens"] += getattr(
+                    chunk.message.usage, "output_tokens", 0
+                )
                 output["cache_creation"] += getattr(
                     chunk.message.usage,
                     "cache_creation_input_tokens",
@@ -209,7 +217,9 @@ def loop_gen(
         }
         api_params["temperature"] = 1.0
     elif use_thinking and not model_config.get("extended_thinking"):
-        logger.warning("Extended thinking requested but not supported by model: %s", model)
+        logger.warning(
+            "Extended thinking requested but not supported by model: %s", model
+        )
 
     try:
         completion = client.messages.create(**api_params)

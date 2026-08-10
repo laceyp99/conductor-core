@@ -64,7 +64,9 @@ def _anthropic_completion(payload):
     )
     return [
         SimpleNamespace(type="message_start", message=SimpleNamespace(usage=usage)),
-        SimpleNamespace(type="content_block_delta", delta=SimpleNamespace(partial_json=payload)),
+        SimpleNamespace(
+            type="content_block_delta", delta=SimpleNamespace(partial_json=payload)
+        ),
         SimpleNamespace(type="message_stop"),
     ]
 
@@ -86,7 +88,9 @@ def test_openai_calc_price_uses_reported_cached_tokens():
 
     cost = openai_api.calc_price("gpt-4o-mini", response)
 
-    expected = (600 * 0.15 / 1_000_000) + (400 * 0.075 / 1_000_000) + (200 * 0.60 / 1_000_000)
+    expected = (
+        (600 * 0.15 / 1_000_000) + (400 * 0.075 / 1_000_000) + (200 * 0.60 / 1_000_000)
+    )
     assert cost == pytest.approx(expected)
 
 
@@ -139,7 +143,9 @@ def test_claude_calc_price_tolerates_missing_cache_pricing(monkeypatch):
         claude_api.utils,
         "get_model_info",
         lambda: {
-            "models": {"Anthropic": {"test-model": {"cost": {"input": 3.00, "output": 15.00}}}}
+            "models": {
+                "Anthropic": {"test-model": {"cost": {"input": 3.00, "output": 15.00}}}
+            }
         },
     )
     output = {
@@ -158,14 +164,20 @@ def test_claude_calc_price_tolerates_missing_cache_pricing(monkeypatch):
 def test_gemini_process_output_rejects_empty_candidates():
     response = SimpleNamespace(candidates=[])
 
-    with pytest.raises(ValueError, match="Google response did not include any candidates"):
+    with pytest.raises(
+        ValueError, match="Google response did not include any candidates"
+    ):
         gemini_api.process_output(response)
 
 
 def test_gemini_process_output_rejects_missing_parts():
-    response = SimpleNamespace(candidates=[SimpleNamespace(content=SimpleNamespace(parts=[]))])
+    response = SimpleNamespace(
+        candidates=[SimpleNamespace(content=SimpleNamespace(parts=[]))]
+    )
 
-    with pytest.raises(ValueError, match="Google response did not include generated content parts"):
+    with pytest.raises(
+        ValueError, match="Google response did not include generated content parts"
+    ):
         gemini_api.process_output(response)
 
 
@@ -178,8 +190,12 @@ def test_claude_loop_gen_omits_cache_control_for_short_system_prompt(monkeypatch
         return _anthropic_completion(payload)
 
     fake_client = SimpleNamespace(messages=SimpleNamespace(create=fake_create))
-    monkeypatch.setattr(claude_api, "initialize_anthropic_client", lambda api_key: fake_client)
-    monkeypatch.setattr(claude_api.utils, "get_loop_prompt", lambda: "short system prompt")
+    monkeypatch.setattr(
+        claude_api, "initialize_anthropic_client", lambda api_key: fake_client
+    )
+    monkeypatch.setattr(
+        claude_api.utils, "get_loop_prompt", lambda: "short system prompt"
+    )
     monkeypatch.setattr(claude_api.utils, "save_messages_to_json", _fail_save_messages)
 
     midi_loop, messages, cost = claude_api.loop_gen(
@@ -203,7 +219,9 @@ def test_claude_loop_gen_adds_cache_control_for_large_system_prompt(monkeypatch)
 
     fake_client = SimpleNamespace(messages=SimpleNamespace(create=fake_create))
     long_prompt = "x" * claude_api.ANTHROPIC_CACHE_CONTROL_MIN_CHARS
-    monkeypatch.setattr(claude_api, "initialize_anthropic_client", lambda api_key: fake_client)
+    monkeypatch.setattr(
+        claude_api, "initialize_anthropic_client", lambda api_key: fake_client
+    )
     monkeypatch.setattr(claude_api.utils, "get_loop_prompt", lambda: long_prompt)
     monkeypatch.setattr(claude_api.utils, "save_messages_to_json", _fail_save_messages)
 
@@ -221,7 +239,9 @@ def test_claude_opus_5_uses_adaptive_thinking_and_effort(monkeypatch):
         return _anthropic_completion(payload)
 
     fake_client = SimpleNamespace(messages=SimpleNamespace(create=fake_create))
-    monkeypatch.setattr(claude_api, "initialize_anthropic_client", lambda api_key: fake_client)
+    monkeypatch.setattr(
+        claude_api, "initialize_anthropic_client", lambda api_key: fake_client
+    )
     monkeypatch.setattr(claude_api.utils, "get_loop_prompt", lambda: "system prompt")
     monkeypatch.setattr(claude_api.utils, "save_messages_to_json", _fail_save_messages)
 
@@ -242,7 +262,9 @@ def test_claude_fable_5_uses_metadata_driven_always_on_thinking(monkeypatch):
         return _anthropic_completion(payload)
 
     fake_client = SimpleNamespace(messages=SimpleNamespace(create=fake_create))
-    monkeypatch.setattr(claude_api, "initialize_anthropic_client", lambda api_key: fake_client)
+    monkeypatch.setattr(
+        claude_api, "initialize_anthropic_client", lambda api_key: fake_client
+    )
     monkeypatch.setattr(claude_api.utils, "get_loop_prompt", lambda: "system prompt")
     monkeypatch.setattr(claude_api.utils, "save_messages_to_json", _fail_save_messages)
 
@@ -282,9 +304,13 @@ def test_openai_loop_gen_does_not_write_message_log(monkeypatch):
             input_tokens_details=SimpleNamespace(cached_tokens=0),
         ),
     )
-    fake_client = SimpleNamespace(responses=SimpleNamespace(parse=lambda **kwargs: response))
+    fake_client = SimpleNamespace(
+        responses=SimpleNamespace(parse=lambda **kwargs: response)
+    )
 
-    monkeypatch.setattr(openai_api, "initialize_openai_client", lambda api_key: fake_client)
+    monkeypatch.setattr(
+        openai_api, "initialize_openai_client", lambda api_key: fake_client
+    )
     monkeypatch.setattr(openai_api.utils, "get_loop_prompt", lambda: "system prompt")
     monkeypatch.setattr(openai_api.utils, "save_messages_to_json", _fail_save_messages)
 
@@ -300,7 +326,11 @@ def test_gemini_loop_gen_logs_unsupported_effort(monkeypatch, caplog, capsys):
         candidates=[
             SimpleNamespace(
                 content=SimpleNamespace(
-                    parts=[SimpleNamespace(text=json.dumps(_loop_g_payload()), thought=False)]
+                    parts=[
+                        SimpleNamespace(
+                            text=json.dumps(_loop_g_payload()), thought=False
+                        )
+                    ]
                 )
             )
         ],
@@ -315,7 +345,9 @@ def test_gemini_loop_gen_logs_unsupported_effort(monkeypatch, caplog, capsys):
         models=SimpleNamespace(generate_content=lambda **kwargs: response)
     )
 
-    monkeypatch.setattr(gemini_api, "initialize_gemini_client", lambda api_key: fake_client)
+    monkeypatch.setattr(
+        gemini_api, "initialize_gemini_client", lambda api_key: fake_client
+    )
 
     monkeypatch.setattr(gemini_api.utils, "get_loop_prompt", lambda: "system prompt")
     monkeypatch.setattr(gemini_api.utils, "save_messages_to_json", _fail_save_messages)
@@ -331,7 +363,9 @@ def test_gemini_loop_gen_logs_unsupported_effort(monkeypatch, caplog, capsys):
     assert messages[-1]["content"] == json.dumps(_loop_g_payload())
     assert cost == 0
     assert capsys.readouterr().out == ""
-    assert "Effort 'bogus' is not supported by model gemini-3.1-flash-lite" in caplog.text
+    assert (
+        "Effort 'bogus' is not supported by model gemini-3.1-flash-lite" in caplog.text
+    )
 
 
 @pytest.mark.parametrize(
@@ -364,5 +398,7 @@ def test_ollama_loop_gen_rejects_missing_content(monkeypatch):
     )
     monkeypatch.setattr(ollama_api.utils, "get_loop_prompt", lambda: "system prompt")
 
-    with pytest.raises(ValueError, match="Ollama response did not include generated content"):
+    with pytest.raises(
+        ValueError, match="Ollama response did not include generated content"
+    ):
         ollama_api.loop_gen("write a loop", "llama3")

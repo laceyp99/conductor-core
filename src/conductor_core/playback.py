@@ -92,10 +92,14 @@ def _validate_wav_has_audio(wav_path: str) -> None:
     try:
         with wave.open(wav_path, "rb") as wav_file:
             if wav_file.getnframes() == 0 or not wav_file.readframes(1):
-                raise AudioRenderingError("FluidSynth produced a WAV file with no audio frames")
+                raise AudioRenderingError(
+                    "FluidSynth produced a WAV file with no audio frames"
+                )
     except (EOFError, wave.Error) as exc:
         detail = f": {exc}" if str(exc) else ""
-        raise AudioRenderingError(f"FluidSynth produced an invalid WAV file{detail}") from exc
+        raise AudioRenderingError(
+            f"FluidSynth produced an invalid WAV file{detail}"
+        ) from exc
 
 
 def _soundfont_search_dirs() -> list[str]:
@@ -135,7 +139,9 @@ def _materialize_packaged_soundfont(resource) -> str:
         if cached_path is not None and os.path.exists(cached_path):
             return cached_path
 
-        materialized_path = _PACKAGED_SOUNDFONT_STACK.enter_context(resources.as_file(resource))
+        materialized_path = _PACKAGED_SOUNDFONT_STACK.enter_context(
+            resources.as_file(resource)
+        )
         resolved_path = os.fspath(materialized_path)
         _PACKAGED_SOUNDFONT_PATHS[resource.name] = resolved_path
         return resolved_path
@@ -179,7 +185,9 @@ def list_soundfonts() -> list[str]:
     for soundfont_dir in _soundfont_search_dirs():
         if not os.path.exists(soundfont_dir):
             continue
-        names.update(file for file in os.listdir(soundfont_dir) if file.lower().endswith(".sf2"))
+        names.update(
+            file for file in os.listdir(soundfont_dir) if file.lower().endswith(".sf2")
+        )
     names.update(resource.name for resource in _packaged_soundfont_files())
     return sorted(names, key=str.lower)
 
@@ -416,7 +424,9 @@ def get_playback_status_message(soundfont_name: str | None = None) -> str:
         )
 
     if not is_ffmpeg_available():
-        dependency_instructions.append("  - Install FFmpeg: https://ffmpeg.org/download.html")
+        dependency_instructions.append(
+            "  - Install FFmpeg: https://ffmpeg.org/download.html"
+        )
 
     if dependency_instructions:
         return "\n".join(

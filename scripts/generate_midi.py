@@ -63,7 +63,9 @@ def main(engine=None):
     print(f"ID: {result.generation_id}")
     print(f"MIDI: {result.midi_path}")
     print(f"Audio: {result.audio_path or 'not rendered'}")
-    print(f"Estimated provider cost: {result.cost if result.cost is not None else 'unavailable'}")
+    print(
+        f"Estimated provider cost: {result.cost if result.cost is not None else 'unavailable'}"
+    )
     if result.warnings:
         print("Warnings:")
         for warning in result.warnings:

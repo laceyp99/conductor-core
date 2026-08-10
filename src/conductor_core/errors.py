@@ -13,7 +13,9 @@ class ProviderError(RuntimeError):
         operation: Provider operation that failed, when known.
     """
 
-    def __init__(self, provider: str, message: str, *, operation: str | None = None) -> None:
+    def __init__(
+        self, provider: str, message: str, *, operation: str | None = None
+    ) -> None:
         self.provider = provider
         self.operation = operation
         context = f" {operation}" if operation else ""

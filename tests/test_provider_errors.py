@@ -180,7 +180,9 @@ def test_openai_request_normalizes_rate_limit_error(monkeypatch):
 
     original = OpenAIRateLimitError("slow down")
     client = SimpleNamespace(
-        responses=SimpleNamespace(parse=lambda **kwargs: (_ for _ in ()).throw(original))
+        responses=SimpleNamespace(
+            parse=lambda **kwargs: (_ for _ in ()).throw(original)
+        )
     )
     monkeypatch.setattr(openai_api, "RateLimitError", OpenAIRateLimitError)
     monkeypatch.setattr(openai_api, "initialize_openai_client", lambda **kwargs: client)
@@ -205,9 +207,13 @@ def test_anthropic_stream_normalizes_timeout_error(monkeypatch):
         def __next__(self):
             raise original
 
-    client = SimpleNamespace(messages=SimpleNamespace(create=lambda **kwargs: FailingStream()))
+    client = SimpleNamespace(
+        messages=SimpleNamespace(create=lambda **kwargs: FailingStream())
+    )
     monkeypatch.setattr(anthropic_api, "APITimeoutError", AnthropicTimeoutError)
-    monkeypatch.setattr(anthropic_api, "initialize_anthropic_client", lambda **kwargs: client)
+    monkeypatch.setattr(
+        anthropic_api, "initialize_anthropic_client", lambda **kwargs: client
+    )
 
     with pytest.raises(ProviderTimeoutError) as raised:
         anthropic_api.loop_gen("write a loop", "claude-sonnet-4-5")
@@ -225,9 +231,13 @@ def test_google_request_normalizes_rate_limit_error(monkeypatch):
 
     original = GoogleAPIError(429)
     client = SimpleNamespace(
-        models=SimpleNamespace(generate_content=lambda **kwargs: (_ for _ in ()).throw(original))
+        models=SimpleNamespace(
+            generate_content=lambda **kwargs: (_ for _ in ()).throw(original)
+        )
     )
-    monkeypatch.setattr(google_api, "genai_errors", SimpleNamespace(APIError=GoogleAPIError))
+    monkeypatch.setattr(
+        google_api, "genai_errors", SimpleNamespace(APIError=GoogleAPIError)
+    )
     monkeypatch.setattr(google_api, "initialize_gemini_client", lambda **kwargs: client)
 
     with pytest.raises(ProviderRateLimitError) as raised:
@@ -252,7 +262,9 @@ def test_ollama_request_normalizes_authentication_error(monkeypatch):
     monkeypatch.setattr(
         ollama_api,
         "ollama",
-        SimpleNamespace(RequestError=OllamaRequestError, ResponseError=OllamaResponseError),
+        SimpleNamespace(
+            RequestError=OllamaRequestError, ResponseError=OllamaResponseError
+        ),
     )
     monkeypatch.setattr(ollama_api, "initialize_ollama_client", lambda **kwargs: client)
 
@@ -284,10 +296,14 @@ def test_ollama_request_normalizes_sdk_connection_error(monkeypatch):
         (anthropic_api.initialize_anthropic_client, "Anthropic"),
     ],
 )
-def test_openai_and_anthropic_initializers_pass_timeout(monkeypatch, initializer, client_attr):
+def test_openai_and_anthropic_initializers_pass_timeout(
+    monkeypatch, initializer, client_attr
+):
     module = openai_api if client_attr == "OpenAI" else anthropic_api
     captured = {}
-    monkeypatch.setattr(module, client_attr, lambda **kwargs: captured.update(kwargs) or object())
+    monkeypatch.setattr(
+        module, client_attr, lambda **kwargs: captured.update(kwargs) or object()
+    )
 
     initializer(api_key="test-key", timeout=2.5)
 
@@ -349,7 +365,9 @@ def test_ollama_status_forwards_request_timeout(monkeypatch):
         (ollama_api, "initialize_ollama_client", "ollama"),
     ],
 )
-def test_initializers_omit_timeout_when_unset(monkeypatch, module, initializer_name, client_attr):
+def test_initializers_omit_timeout_when_unset(
+    monkeypatch, module, initializer_name, client_attr
+):
     captured = {}
     if client_attr == "genai":
         monkeypatch.setattr(

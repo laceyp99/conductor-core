@@ -55,11 +55,15 @@ def _write_generation_metadata(
     )
     (gen_dir / "loop.mid").write_bytes(b"midi")
     (gen_dir / "loop.mp3").write_bytes(b"audio")
-    (gen_dir / "metadata.json").write_text(metadata.model_dump_json(indent=2), encoding="utf-8")
+    (gen_dir / "metadata.json").write_text(
+        metadata.model_dump_json(indent=2), encoding="utf-8"
+    )
     return gen_dir
 
 
-def test_create_generation_workspace_allocates_canonical_paths(isolated_history_dir, monkeypatch):
+def test_create_generation_workspace_allocates_canonical_paths(
+    isolated_history_dir, monkeypatch
+):
     monkeypatch.setattr(history, "_generate_id", lambda: "fixed_id")
 
     workspace = history.create_generation_workspace()
@@ -173,7 +177,9 @@ def test_finalize_generation_discards_audio_after_reported_render_failure(
     assert not Path(workspace.audio_path).exists()
 
 
-def test_finalize_generation_requires_direct_written_midi(isolated_history_dir, monkeypatch):
+def test_finalize_generation_requires_direct_written_midi(
+    isolated_history_dir, monkeypatch
+):
     monkeypatch.setattr(history, "_generate_id", lambda: "fixed_id")
     workspace = history.create_generation_workspace()
 
@@ -295,7 +301,9 @@ def test_store_rejects_workspace_with_mixed_canonical_paths(tmp_path, monkeypatc
     workspace = store.create_generation_workspace()
     victim = tmp_path / "victim"
     victim.mkdir()
-    mixed_workspace = workspace.model_copy(update={"metadata_path": str(victim / "metadata.json")})
+    mixed_workspace = workspace.model_copy(
+        update={"metadata_path": str(victim / "metadata.json")}
+    )
 
     with pytest.raises(ValueError, match="metadata_path does not match generation"):
         store.cleanup_generation_workspace(mixed_workspace)
@@ -380,7 +388,9 @@ def test_update_generation_audio_preserves_soundfont_when_audio_update_is_skippe
     assert updated is not None
     assert updated.audio_path == str(isolated_history_dir / "gen_fixed_id" / "loop.mp3")
     assert updated.soundfont == "old.sf2"
-    assert (isolated_history_dir / "gen_fixed_id" / "loop.mp3").read_bytes() == b"old-audio"
+    assert (
+        isolated_history_dir / "gen_fixed_id" / "loop.mp3"
+    ).read_bytes() == b"old-audio"
     assert persisted == updated
 
 
@@ -406,7 +416,9 @@ def test_load_history_allows_older_entries_without_soundfont(isolated_history_di
     assert loaded[1].soundfont is None
 
 
-def test_load_history_allows_legacy_entries_without_reasoning_settings(isolated_history_dir):
+def test_load_history_allows_legacy_entries_without_reasoning_settings(
+    isolated_history_dir,
+):
     gen_dir = _write_generation_metadata(
         isolated_history_dir,
         gen_id="legacy",
@@ -457,7 +469,9 @@ def test_load_history_skips_missing_and_malformed_metadata(isolated_history_dir)
     assert bad_dir.exists()
 
 
-def test_load_history_skips_metadata_id_mismatch_without_deleting_other_generation(tmp_path):
+def test_load_history_skips_metadata_id_mismatch_without_deleting_other_generation(
+    tmp_path,
+):
     root = tmp_path / "generations"
     attacker_dir = _write_generation_metadata(
         root,
@@ -483,7 +497,9 @@ def test_load_history_skips_metadata_id_mismatch_without_deleting_other_generati
     assert victim_dir.exists()
 
 
-def test_copied_history_reconstructs_artifact_paths_under_new_root(tmp_path, monkeypatch):
+def test_copied_history_reconstructs_artifact_paths_under_new_root(
+    tmp_path, monkeypatch
+):
     source_root = tmp_path / "source"
     source_store = history.FilesystemArtifactStore(source_root, max_generations=None)
     monkeypatch.setattr(history, "_generate_id", lambda: "fixed_id")
@@ -517,12 +533,16 @@ def test_copied_history_reconstructs_artifact_paths_under_new_root(tmp_path, mon
     assert destination_store.get_generation("fixed_id") == loaded
 
 
-def test_get_generation_returns_none_for_missing_or_invalid_metadata(isolated_history_dir):
+def test_get_generation_returns_none_for_missing_or_invalid_metadata(
+    isolated_history_dir,
+):
     missing_result = history.get_generation("missing")
 
     bad_dir = isolated_history_dir / "gen_broken"
     bad_dir.mkdir(parents=True)
-    (bad_dir / "metadata.json").write_text(json.dumps({"id": "broken"}), encoding="utf-8")
+    (bad_dir / "metadata.json").write_text(
+        json.dumps({"id": "broken"}), encoding="utf-8"
+    )
 
     broken_result = history.get_generation("broken")
 
@@ -530,8 +550,12 @@ def test_get_generation_returns_none_for_missing_or_invalid_metadata(isolated_hi
     assert broken_result is None
 
 
-def test_delete_generation_removes_directory_and_handles_missing_id(isolated_history_dir):
-    _write_generation_metadata(isolated_history_dir, gen_id="delete_me", timestamp=datetime.now())
+def test_delete_generation_removes_directory_and_handles_missing_id(
+    isolated_history_dir,
+):
+    _write_generation_metadata(
+        isolated_history_dir, gen_id="delete_me", timestamp=datetime.now()
+    )
 
     assert history.delete_generation("delete_me") is True
     assert not (isolated_history_dir / "gen_delete_me").exists()
@@ -644,8 +668,12 @@ def test_filesystem_artifact_store_allows_unlimited_history(tmp_path, monkeypatc
 
 
 @pytest.mark.parametrize("max_generations", [0, -1])
-def test_filesystem_artifact_store_rejects_non_positive_limit(tmp_path, max_generations):
-    with pytest.raises(ValueError, match="max_generations must be None or a positive integer"):
+def test_filesystem_artifact_store_rejects_non_positive_limit(
+    tmp_path, max_generations
+):
+    with pytest.raises(
+        ValueError, match="max_generations must be None or a positive integer"
+    ):
         history.FilesystemArtifactStore(
             tmp_path / "generations",
             max_generations=max_generations,
@@ -662,7 +690,9 @@ def test_filesystem_artifact_store_accepts_supported_limits(tmp_path, max_genera
     assert store.max_generations == max_generations
 
 
-def test_filesystem_artifact_store_keeps_newest_generation_with_limit_one(tmp_path, monkeypatch):
+def test_filesystem_artifact_store_keeps_newest_generation_with_limit_one(
+    tmp_path, monkeypatch
+):
     root = tmp_path / "generations"
     store = history.FilesystemArtifactStore(root, max_generations=1)
     ids = iter(["oldest", "newest"])
@@ -687,11 +717,17 @@ def test_filesystem_artifact_store_keeps_newest_generation_with_limit_one(tmp_pa
     assert Path(metadata.midi_path).exists()
 
 
-def test_history_count_and_clear_history_reflect_saved_generations(isolated_history_dir):
+def test_history_count_and_clear_history_reflect_saved_generations(
+    isolated_history_dir,
+):
     _write_generation_metadata(
-        isolated_history_dir, gen_id="one", timestamp=datetime.now() - timedelta(minutes=1)
+        isolated_history_dir,
+        gen_id="one",
+        timestamp=datetime.now() - timedelta(minutes=1),
     )
-    _write_generation_metadata(isolated_history_dir, gen_id="two", timestamp=datetime.now())
+    _write_generation_metadata(
+        isolated_history_dir, gen_id="two", timestamp=datetime.now()
+    )
 
     assert history.get_history_count() == 2
     assert history.clear_history() == 2

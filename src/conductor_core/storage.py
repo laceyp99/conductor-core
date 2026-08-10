@@ -66,7 +66,9 @@ class FilesystemArtifactStore:
         audio_path: str | None,
         soundfont: str | None = None,
     ) -> Optional["GenerationMetadata"]:
-        return _update_generation_audio(self.artifact_root, gen_id, audio_path, soundfont=soundfont)
+        return _update_generation_audio(
+            self.artifact_root, gen_id, audio_path, soundfont=soundfont
+        )
 
     def load_history(self) -> list["GenerationMetadata"]:
         return _load_history(self.artifact_root)
@@ -133,7 +135,9 @@ class GenerationWorkspace(BaseModel):
 
 
 def _resolve_artifact_root(artifact_root: str | Path | None = None) -> str:
-    selected_root = artifact_root if artifact_root is not None else resolve_default_artifact_root()
+    selected_root = (
+        artifact_root if artifact_root is not None else resolve_default_artifact_root()
+    )
     return str(selected_root)
 
 
@@ -187,7 +191,9 @@ def _validate_generation_id(gen_id: str) -> None:
         raise ValueError("generation ID must be a non-empty path component")
 
 
-def _build_workspace(gen_id: str, artifact_root: str | Path | None = None) -> GenerationWorkspace:
+def _build_workspace(
+    gen_id: str, artifact_root: str | Path | None = None
+) -> GenerationWorkspace:
     """Build the canonical path set for a generation ID."""
     root = _resolve_artifact_root(artifact_root)
     gen_dir = _get_generation_dir(gen_id, root)
@@ -245,7 +251,9 @@ def _validate_artifact_file(path: str, *, required: bool) -> str | None:
     reparse_point = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
     file_attributes = getattr(file_stat, "st_file_attributes", 0)
     if stat.S_ISLNK(file_stat.st_mode) or file_attributes & reparse_point:
-        raise ValueError(f"artifact path must not be a symbolic link or reparse point: {path}")
+        raise ValueError(
+            f"artifact path must not be a symbolic link or reparse point: {path}"
+        )
     if not stat.S_ISREG(file_stat.st_mode):
         raise ValueError(f"artifact path must be a regular file: {path}")
     if file_stat.st_nlink != 1:
@@ -284,7 +292,9 @@ def _copy_artifact_file(source: str, destination: str) -> None:
             os.unlink(temporary_path)
 
 
-def _load_generation_metadata(artifact_root: str | Path, gen_id: str) -> GenerationMetadata:
+def _load_generation_metadata(
+    artifact_root: str | Path, gen_id: str
+) -> GenerationMetadata:
     """Load metadata and bind all artifact paths to its validated directory."""
     workspace = _build_workspace(gen_id, artifact_root)
     metadata_path = _validate_artifact_file(workspace.metadata_path, required=True)
@@ -430,7 +440,9 @@ def _finalize_generation(
     try:
         _validate_artifact_file(workspace.midi_path, required=True)
     except FileNotFoundError as exc:
-        raise FileNotFoundError(f"Missing MIDI file for generation: {workspace.midi_path}") from exc
+        raise FileNotFoundError(
+            f"Missing MIDI file for generation: {workspace.midi_path}"
+        ) from exc
 
     if audio_render_succeeded is False:
         try:
@@ -620,7 +632,9 @@ def get_generation(gen_id: str) -> GenerationMetadata | None:
     return _get_generation(_resolve_artifact_root(), gen_id)
 
 
-def _get_generation(artifact_root: str | Path, gen_id: str) -> GenerationMetadata | None:
+def _get_generation(
+    artifact_root: str | Path, gen_id: str
+) -> GenerationMetadata | None:
     """Get a specific generation from an explicit artifact root."""
     _validate_generation_id(gen_id)
     try:

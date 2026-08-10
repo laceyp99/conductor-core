@@ -14,7 +14,9 @@ def test_calc_cost_uses_reported_cached_tokens_without_storage_estimate():
 
     cost = gemini_api.calc_cost("gemini-2.5-pro", usage)
 
-    expected = (600 * 1.25 / 1_000_000) + (200 * 10.00 / 1_000_000) + (400 * 0.125 / 1_000_000)
+    expected = (
+        (600 * 1.25 / 1_000_000) + (200 * 10.00 / 1_000_000) + (400 * 0.125 / 1_000_000)
+    )
     assert cost == pytest.approx(expected)
 
 

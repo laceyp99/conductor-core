@@ -81,7 +81,10 @@ def test_generate_midi_routes_to_ollama_and_forwards_temperature(monkeypatch):
     monkeypatch.setattr(
         runs.ollama_api,
         "get_ollama_status",
-        lambda force_refresh=True, host_address=None: {"available": True, "models": ["llama3"]},
+        lambda force_refresh=True, host_address=None: {
+            "available": True,
+            "models": ["llama3"],
+        },
     )
 
     def fake_loop_gen(prompt, model, temp=0.0, host_address=None, system_prompt=None):
@@ -134,7 +137,9 @@ def test_generate_midi_routes_to_openai_and_forwards_effort(monkeypatch):
     ollama_status = Mock()
     monkeypatch.setattr(runs.ollama_api, "get_ollama_status", ollama_status)
 
-    def fake_loop_gen(prompt, model, temp=0.0, effort=None, api_key=None, system_prompt=None):
+    def fake_loop_gen(
+        prompt, model, temp=0.0, effort=None, api_key=None, system_prompt=None
+    ):
         captured.update(
             {
                 "prompt": prompt,
@@ -307,7 +312,10 @@ def test_generate_midi_rejects_unknown_models_when_ollama_is_unavailable(monkeyp
     monkeypatch.setattr(
         runs.ollama_api,
         "get_ollama_status",
-        lambda force_refresh=True, host_address=None: {"available": False, "models": []},
+        lambda force_refresh=True, host_address=None: {
+            "available": False,
+            "models": [],
+        },
     )
 
     with pytest.raises(

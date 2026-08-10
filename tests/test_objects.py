@@ -159,10 +159,15 @@ def test_loop_validates_nested_bar_and_note_data_from_dicts():
 )
 def test_loop_rejects_notes_extending_beyond_its_four_bar_boundary(payload, loop_type):
     bar = {"num": 1, "notes": []}
-    final_bar = {"num": 4, "notes": [{"pitch": "C", "octave": 4, "velocity": 96, "time": payload}]}
+    final_bar = {
+        "num": 4,
+        "notes": [{"pitch": "C", "octave": 4, "velocity": 96, "time": payload}],
+    }
 
     with pytest.raises(ValidationError, match="four-bar loop boundary"):
-        loop_type(Bar_1=bar, Bar_2={**bar, "num": 2}, Bar_3={**bar, "num": 3}, Bar_4=final_bar)
+        loop_type(
+            Bar_1=bar, Bar_2={**bar, "num": 2}, Bar_3={**bar, "num": 3}, Bar_4=final_bar
+        )
 
 
 def test_loop_schema_distinguishes_duration_from_start_position():

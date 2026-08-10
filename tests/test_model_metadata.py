@@ -48,7 +48,9 @@ def test_model_metadata_rejects_non_boolean_always_on_adaptive_thinking():
         }
     }
 
-    with pytest.raises(ValueError, match="always_on_adaptive_thinking must be a boolean"):
+    with pytest.raises(
+        ValueError, match="always_on_adaptive_thinking must be a boolean"
+    ):
         music._validate_model_info(model_info)
 
 

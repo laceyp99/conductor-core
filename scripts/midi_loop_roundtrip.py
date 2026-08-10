@@ -24,7 +24,9 @@ def roundtrip_midi(input_path, output_path):
     output_path = Path(output_path)
 
     if input_path.resolve() == output_path.resolve():
-        raise ValueError("INPUT_MIDI_PATH and OUTPUT_MIDI_PATH must be different files.")
+        raise ValueError(
+            "INPUT_MIDI_PATH and OUTPUT_MIDI_PATH must be different files."
+        )
     if not input_path.is_file():
         raise FileNotFoundError(f"Input MIDI file not found: {input_path}")
 

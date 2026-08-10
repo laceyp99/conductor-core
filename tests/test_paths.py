@@ -18,8 +18,14 @@ def test_default_data_directory_uses_home(monkeypatch, tmp_path):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
     assert paths.resolve_data_dir() == tmp_path / ".conductor" / "core"
-    assert paths.resolve_default_artifact_root() == tmp_path / ".conductor" / "core" / "generations"
-    assert EngineConfig.from_defaults().artifact_root == paths.resolve_default_artifact_root()
+    assert (
+        paths.resolve_default_artifact_root()
+        == tmp_path / ".conductor" / "core" / "generations"
+    )
+    assert (
+        EngineConfig.from_defaults().artifact_root
+        == paths.resolve_default_artifact_root()
+    )
 
 
 def test_conductor_home_overrides_suite_root(monkeypatch, tmp_path):
@@ -43,7 +49,10 @@ def test_explicit_artifact_root_overrides_data_directory_policy(monkeypatch, tmp
     monkeypatch.setenv("CONDUCTOR_CORE_DATA_DIR", str(tmp_path / "project"))
     explicit_root = tmp_path / "portable-generations"
 
-    assert EngineConfig.from_defaults(artifact_root=explicit_root).artifact_root == explicit_root
+    assert (
+        EngineConfig.from_defaults(artifact_root=explicit_root).artifact_root
+        == explicit_root
+    )
     assert FilesystemArtifactStore(explicit_root).artifact_root == str(explicit_root)
     assert not explicit_root.exists()
 
@@ -75,10 +84,14 @@ def test_storage_defaults_resolve_environment_at_use_time_after_module_import(
 
     project_workspace = storage.create_generation_workspace()
 
-    assert project_workspace.directory == str(project_expected_root / "gen_runtime_default")
+    assert project_workspace.directory == str(
+        project_expected_root / "gen_runtime_default"
+    )
 
 
-def test_workspace_lifecycle_stays_pinned_after_environment_switch(monkeypatch, tmp_path):
+def test_workspace_lifecycle_stays_pinned_after_environment_switch(
+    monkeypatch, tmp_path
+):
     """Existing workspaces use their original root while new work uses the new default."""
     _clear_data_environment(monkeypatch)
     suite_root = tmp_path / "suite"
@@ -104,14 +117,18 @@ def test_workspace_lifecycle_stays_pinned_after_environment_switch(monkeypatch, 
         temperature=0.0,
     )
 
-    assert metadata.midi_path == str(suite_expected_root / "gen_to_finalize" / "loop.mid")
+    assert metadata.midi_path == str(
+        suite_expected_root / "gen_to_finalize" / "loop.mid"
+    )
     assert storage.cleanup_generation_workspace(cleanup_workspace) is True
     assert not (suite_expected_root / "gen_to_cleanup").exists()
 
     project_expected_root = project_root / "generations"
     independent_workspace = storage.create_generation_workspace()
 
-    assert independent_workspace.directory == str(project_expected_root / "gen_independent")
+    assert independent_workspace.directory == str(
+        project_expected_root / "gen_independent"
+    )
 
 
 def test_environment_paths_expand_tilde(monkeypatch, tmp_path):
@@ -132,7 +149,9 @@ def test_resolution_is_independent_of_cwd_and_module_location(monkeypatch, tmp_p
     cwd.mkdir()
     monkeypatch.setattr(Path, "home", lambda: home)
     monkeypatch.setattr(
-        paths, "__file__", str(tmp_path / "site-packages" / "conductor_core" / "paths.py")
+        paths,
+        "__file__",
+        str(tmp_path / "site-packages" / "conductor_core" / "paths.py"),
     )
     monkeypatch.chdir(cwd)
 
@@ -144,7 +163,9 @@ def test_import_and_resolution_do_not_create_directories(tmp_path):
     env = os.environ.copy()
     env["CONDUCTOR_HOME"] = str(suite_root)
     env.pop("CONDUCTOR_CORE_DATA_DIR", None)
-    code = "import conductor_core; print(conductor_core.resolve_default_artifact_root())"
+    code = (
+        "import conductor_core; print(conductor_core.resolve_default_artifact_root())"
+    )
 
     result = subprocess.run(
         [sys.executable, "-c", code],

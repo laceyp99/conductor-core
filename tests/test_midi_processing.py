@@ -15,7 +15,9 @@ def _note_events_with_absolute_times(midi):
     return events
 
 
-def test_loop_to_midi_orders_note_off_before_note_on_at_same_tick(loop_factory, note_factory):
+def test_loop_to_midi_orders_note_off_before_note_on_at_same_tick(
+    loop_factory, note_factory
+):
     loop = loop_factory(
         bars=[
             [
@@ -42,7 +44,9 @@ def test_loop_to_midi_orders_note_off_before_note_on_at_same_tick(loop_factory, 
 
 
 def test_loop_to_midi_clamps_out_of_range_velocity(loop_factory, note_factory):
-    note = note_factory(pitch="C", start_beat=1, duration=4).model_copy(update={"velocity": 200})
+    note = note_factory(pitch="C", start_beat=1, duration=4).model_copy(
+        update={"velocity": 200}
+    )
     loop = loop_factory(
         bars=[
             [note],
@@ -79,7 +83,9 @@ def test_loop_to_midi_drops_out_of_range_pitch_pairs(
             [],
         ]
     )
-    unvalidated_bar = loop.Bar_1.model_copy(update={"notes": [invalid_note, loop.Bar_1.notes[0]]})
+    unvalidated_bar = loop.Bar_1.model_copy(
+        update={"notes": [invalid_note, loop.Bar_1.notes[0]]}
+    )
     loop = loop.model_copy(update={"Bar_1": unvalidated_bar})
     midi = MidiFile(ticks_per_beat=480)
 
@@ -95,7 +101,9 @@ def test_loop_to_midi_drops_out_of_range_pitch_pairs(
 
 
 def test_loop_to_midi_drops_non_positive_velocity_pair(loop_factory, note_factory):
-    silent_note = note_factory(start_beat=1, duration=4).model_copy(update={"velocity": 0})
+    silent_note = note_factory(start_beat=1, duration=4).model_copy(
+        update={"velocity": 0}
+    )
     loop = loop_factory(bars=[[silent_note], [], [], []])
     midi = MidiFile(ticks_per_beat=480)
 
@@ -116,7 +124,9 @@ def test_loop_to_midi_drops_non_integer_note_number(loop_factory, note_factory):
     assert warnings == ["Dropped MIDI note C4.5 with invalid note number 66.0."]
 
 
-def test_loop_to_midi_allows_notes_to_cross_early_bar_boundaries(loop_factory, note_factory):
+def test_loop_to_midi_allows_notes_to_cross_early_bar_boundaries(
+    loop_factory, note_factory
+):
     loop = loop_factory(
         bars=[
             [note_factory(pitch="C", start_beat=16, duration=4)],
@@ -137,11 +147,17 @@ def test_loop_to_midi_allows_notes_to_cross_early_bar_boundaries(loop_factory, n
 
 def test_loop_rejects_notes_past_four_bar_boundary(loop_factory, note_factory):
     with pytest.raises(ValidationError, match="four-bar loop boundary"):
-        loop_factory(bars=[[], [], [], [note_factory(pitch="C", start_beat=16, duration=4)]])
+        loop_factory(
+            bars=[[], [], [], [note_factory(pitch="C", start_beat=16, duration=4)]]
+        )
 
 
-def test_loop_to_midi_preserves_note_at_exact_four_bar_boundary(loop_factory, note_factory):
-    loop = loop_factory(bars=[[], [], [], [note_factory(pitch="C", start_beat=16, duration=1)]])
+def test_loop_to_midi_preserves_note_at_exact_four_bar_boundary(
+    loop_factory, note_factory
+):
+    loop = loop_factory(
+        bars=[[], [], [], [note_factory(pitch="C", start_beat=16, duration=1)]]
+    )
     midi = MidiFile(ticks_per_beat=480)
 
     loop_to_midi(midi, loop, times_as_string=False)
@@ -153,7 +169,9 @@ def test_loop_to_midi_preserves_note_at_exact_four_bar_boundary(loop_factory, no
 
 
 @pytest.mark.parametrize("ticks_per_beat", [0, 1, 2, 3, 5, -24])
-def test_loop_to_midi_rejects_ppq_without_an_exact_sixteenth_grid(sample_loop, ticks_per_beat):
+def test_loop_to_midi_rejects_ppq_without_an_exact_sixteenth_grid(
+    sample_loop, ticks_per_beat
+):
     midi = MidiFile(ticks_per_beat=ticks_per_beat)
 
     with pytest.raises(ValueError, match="positive ticks_per_beat divisible by 4"):
@@ -167,7 +185,9 @@ def test_midi_to_loop_round_trips_integer_timing(sample_loop, midi_builder):
 
     loop = midi_to_loop(str(midi_path), times_as_string=False)
 
-    assert [bar.notes[0].pitch for bar in [loop.Bar_1, loop.Bar_2, loop.Bar_3, loop.Bar_4]] == [
+    assert [
+        bar.notes[0].pitch for bar in [loop.Bar_1, loop.Bar_2, loop.Bar_3, loop.Bar_4]
+    ] == [
         "C",
         "E",
         "G",
@@ -178,7 +198,8 @@ def test_midi_to_loop_round_trips_integer_timing(sample_loop, midi_builder):
         for bar in [loop.Bar_1, loop.Bar_2, loop.Bar_3, loop.Bar_4]
     )
     assert all(
-        bar.notes[0].time.duration == 16 for bar in [loop.Bar_1, loop.Bar_2, loop.Bar_3, loop.Bar_4]
+        bar.notes[0].time.duration == 16
+        for bar in [loop.Bar_1, loop.Bar_2, loop.Bar_3, loop.Bar_4]
     )
 
 
@@ -219,7 +240,9 @@ def test_midi_to_loop_round_trips_string_timing(sample_loop_g, midi_builder):
 
     loop = midi_to_loop(str(midi_path), times_as_string=True)
 
-    assert [bar.notes[0].pitch for bar in [loop.Bar_1, loop.Bar_2, loop.Bar_3, loop.Bar_4]] == [
+    assert [
+        bar.notes[0].pitch for bar in [loop.Bar_1, loop.Bar_2, loop.Bar_3, loop.Bar_4]
+    ] == [
         "C",
         "E",
         "G",
@@ -275,7 +298,11 @@ def test_midi_to_loop_imports_seventeen_sixteenth_sustains(
     loop = midi_to_loop(str(path), times_as_string=times_as_string)
 
     duration = loop.Bar_1.notes[0].time.duration
-    assert duration.value == expected_duration if times_as_string else duration == expected_duration
+    assert (
+        duration.value == expected_duration
+        if times_as_string
+        else duration == expected_duration
+    )
 
 
 @pytest.mark.parametrize("times_as_string", [False, True])
