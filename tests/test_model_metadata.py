@@ -24,6 +24,20 @@ def test_selectable_cloud_models_have_normalized_rate_limits():
                 ), f"{provider}/{model} {field}"
 
 
+def test_gemini_3_7_flash_capabilities_match_google_documentation():
+    model_config = music.get_model_info()["models"]["Google"]["gemini-3.7-flash"]
+
+    assert model_config["extended_thinking"] is True
+    assert model_config["effort_options"] == ["low", "medium", "high"]
+    assert model_config["temperature_supported"] is False
+    assert model_config["max_tokens"] == 65536
+    assert model_config["cost"] == {
+        "input": 0.75,
+        "cache": {"text": 0.075, "storage hour": 0.50},
+        "output": 3.75,
+    }
+
+
 def test_only_fable_5_has_always_on_adaptive_thinking():
     anthropic_models = music.get_model_info()["models"]["Anthropic"]
 

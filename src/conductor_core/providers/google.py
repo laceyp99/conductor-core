@@ -143,13 +143,14 @@ def loop_gen(
     loop_prompt = system_prompt or utils.get_loop_prompt()
 
     model_info = utils.get_model_info()
+    model_config = model_info["models"]["Google"][model]
     config = {
         "system_instruction": loop_prompt,
-        "temperature": temp,
         "response_mime_type": "application/json",
         "response_schema": objects.Loop_G,
     }
-    model_config = model_info["models"]["Google"][model]
+    if model_config.get("temperature_supported", True):
+        config["temperature"] = temp
     model_with_thinking = model_config["extended_thinking"]
     effort_options = model_config.get("effort_options", [])
 

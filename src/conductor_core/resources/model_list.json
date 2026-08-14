@@ -517,6 +517,25 @@
             }
         },
         "Google": {
+            "gemini-3.7-flash": {
+                "extended_thinking": true,
+                "effort_options": ["low", "medium", "high"],
+                "temperature_supported": false,
+                "max_tokens": 65536,
+                "cost": {
+                    "input": 0.75,
+                    "cache": {
+                        "text": 0.075,
+                        "storage hour": 0.50
+                    },
+                    "output": 3.75
+                },
+                "rate_limits": {
+                    "RPM": 1000,
+                    "TPM": 2000000,
+                    "RPD": 10000
+                }
+            },
             "gemini-3.6-flash": {
                 "extended_thinking": true,
                 "effort_options": ["minimal", "low", "medium", "high"],

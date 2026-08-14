@@ -368,6 +368,51 @@ def test_gemini_loop_gen_logs_unsupported_effort(monkeypatch, caplog, capsys):
     )
 
 
+def test_gemini_loop_gen_omits_unsupported_temperature(monkeypatch):
+    captured = {}
+    response = SimpleNamespace(
+        candidates=[
+            SimpleNamespace(
+                content=SimpleNamespace(
+                    parts=[
+                        SimpleNamespace(
+                            text=json.dumps(_loop_g_payload()), thought=False
+                        )
+                    ]
+                )
+            )
+        ],
+        parsed=objects.Loop_G.model_validate(_loop_g_payload()),
+        usage_metadata=SimpleNamespace(
+            cached_content_token_count=0,
+            prompt_token_count=0,
+            candidates_token_count=0,
+        ),
+    )
+
+    def fake_generate_content(**kwargs):
+        captured.update(kwargs)
+        return response
+
+    fake_client = SimpleNamespace(
+        models=SimpleNamespace(generate_content=fake_generate_content)
+    )
+    monkeypatch.setattr(
+        gemini_api, "initialize_gemini_client", lambda api_key: fake_client
+    )
+    monkeypatch.setattr(gemini_api.utils, "get_loop_prompt", lambda: "system prompt")
+
+    gemini_api.loop_gen(
+        "write a loop",
+        "gemini-3.7-flash",
+        temp=0.7,
+        effort="medium",
+    )
+
+    assert "temperature" not in captured["config"]
+    assert captured["config"]["thinking_config"].thinking_level.value == "MEDIUM"
+
+
 @pytest.mark.parametrize(
     ("provider", "initializer"),
     [
