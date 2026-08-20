@@ -177,13 +177,20 @@ def test_generate_midi_routes_to_openai_and_forwards_effort(monkeypatch):
     monkeypatch.setattr(runs.ollama_api, "get_ollama_status", ollama_status)
 
     def fake_loop_gen(
-        prompt, model, temp=0.0, effort=None, api_key=None, system_prompt=None
+        prompt,
+        model,
+        temp=0.0,
+        use_thinking=False,
+        effort=None,
+        api_key=None,
+        system_prompt=None,
     ):
         captured.update(
             {
                 "prompt": prompt,
                 "model": model,
                 "temp": temp,
+                "use_thinking": use_thinking,
                 "effort": effort,
                 "api_key": api_key,
                 "system_prompt": system_prompt,
@@ -197,6 +204,7 @@ def test_generate_midi_routes_to_openai_and_forwards_effort(monkeypatch):
         "gpt-4o-mini",
         "write a loop",
         temp=0.2,
+        use_thinking=True,
         effort="high",
         provider_credentials=ProviderCredentials(openai_api_key="openai-key"),
         system_prompt="system",
@@ -207,6 +215,7 @@ def test_generate_midi_routes_to_openai_and_forwards_effort(monkeypatch):
         "prompt": "write a loop",
         "model": "gpt-4o-mini",
         "temp": 0.2,
+        "use_thinking": True,
         "effort": "high",
         "api_key": "openai-key",
         "system_prompt": "system",

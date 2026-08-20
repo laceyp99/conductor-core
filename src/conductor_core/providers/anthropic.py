@@ -190,6 +190,9 @@ def loop_gen(
     model_info = utils.get_model_info()
     model_config = model_info["models"]["Anthropic"][model]
     always_on_adaptive_thinking = model_config.get("always_on_adaptive_thinking", False)
+    effort_options = model_config.get("effort_options") or []
+    if effort_options and not use_thinking:
+        effort = effort_options[0]
     api_params = {
         "model": model,
         "max_tokens": model_config["max_tokens"],
@@ -202,7 +205,7 @@ def loop_gen(
     if not always_on_adaptive_thinking:
         api_params["temperature"] = temp
 
-    if model_config.get("effort_options"):
+    if effort_options:
         api_params["tool_choice"] = {"type": "auto"}
         if not always_on_adaptive_thinking:
             api_params["thinking"] = {"type": "adaptive"}

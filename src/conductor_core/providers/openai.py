@@ -119,6 +119,7 @@ def loop_gen(
     prompt,
     model,
     temp=0.0,
+    use_thinking=False,
     effort=None,
     api_key: str | None = None,
     system_prompt: str | None = None,
@@ -145,6 +146,9 @@ def loop_gen(
     }
 
     model_config = model_info["models"]["OpenAI"][model]
+    effort_options = model_config.get("effort_options") or []
+    if effort_options and not use_thinking:
+        effort = effort_options[0]
     if model_config.get("extended_thinking") and effort:
         request_params["reasoning"] = {"effort": effort, "summary": "auto"}
     else:

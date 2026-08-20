@@ -245,7 +245,9 @@ def test_claude_opus_5_uses_adaptive_thinking_and_effort(monkeypatch):
     monkeypatch.setattr(claude_api.utils, "get_loop_prompt", lambda: "system prompt")
     monkeypatch.setattr(claude_api.utils, "save_messages_to_json", _fail_save_messages)
 
-    claude_api.loop_gen("write a loop", "claude-opus-5", effort="max")
+    claude_api.loop_gen(
+        "write a loop", "claude-opus-5", use_thinking=True, effort="max"
+    )
 
     assert captured["thinking"] == {"type": "adaptive"}
     assert captured["output_config"] == {"effort": "max"}
@@ -268,12 +270,116 @@ def test_claude_fable_5_uses_metadata_driven_always_on_thinking(monkeypatch):
     monkeypatch.setattr(claude_api.utils, "get_loop_prompt", lambda: "system prompt")
     monkeypatch.setattr(claude_api.utils, "save_messages_to_json", _fail_save_messages)
 
-    claude_api.loop_gen("write a loop", "claude-fable-5", effort="max")
+    claude_api.loop_gen(
+        "write a loop", "claude-fable-5", use_thinking=True, effort="max"
+    )
 
     assert "thinking" not in captured
     assert "temperature" not in captured
     assert captured["output_config"] == {"effort": "max"}
     assert captured["tool_choice"] == {"type": "auto"}
+
+
+@pytest.mark.parametrize(
+    ("model", "expects_thinking"),
+    [("claude-opus-5", True), ("claude-fable-5", False)],
+)
+def test_claude_disabled_thinking_uses_lowest_effort(
+    monkeypatch, model, expects_thinking
+):
+    captured = {}
+    payload = json.dumps(_loop_payload())
+
+    def fake_create(**kwargs):
+        captured.update(kwargs)
+        return _anthropic_completion(payload)
+
+    fake_client = SimpleNamespace(messages=SimpleNamespace(create=fake_create))
+    monkeypatch.setattr(
+        claude_api, "initialize_anthropic_client", lambda api_key: fake_client
+    )
+    monkeypatch.setattr(claude_api.utils, "get_loop_prompt", lambda: "system prompt")
+
+    claude_api.loop_gen("write a loop", model, use_thinking=False, effort="max")
+
+    assert captured["output_config"] == {"effort": "low"}
+    assert ("thinking" in captured) is expects_thinking
+
+
+def test_openai_disabled_thinking_uses_lowest_effort(monkeypatch):
+    captured = {}
+    response = SimpleNamespace(
+        output=[],
+        output_parsed=objects.Loop.model_validate(_loop_payload()),
+        usage=SimpleNamespace(
+            input_tokens=0,
+            output_tokens=0,
+            input_tokens_details=SimpleNamespace(cached_tokens=0),
+        ),
+    )
+
+    def fake_parse(**kwargs):
+        captured.update(kwargs)
+        return response
+
+    fake_client = SimpleNamespace(responses=SimpleNamespace(parse=fake_parse))
+    monkeypatch.setattr(
+        openai_api, "initialize_openai_client", lambda api_key: fake_client
+    )
+    monkeypatch.setattr(openai_api.utils, "get_loop_prompt", lambda: "system prompt")
+
+    openai_api.loop_gen(
+        "write a loop",
+        "gpt-5.6-sol",
+        use_thinking=False,
+        effort="max",
+    )
+
+    assert captured["reasoning"] == {"effort": "none", "summary": "auto"}
+
+
+def test_gemini_disabled_thinking_uses_lowest_effort(monkeypatch):
+    captured = {}
+    response = SimpleNamespace(
+        candidates=[
+            SimpleNamespace(
+                content=SimpleNamespace(
+                    parts=[
+                        SimpleNamespace(
+                            text=json.dumps(_loop_g_payload()), thought=False
+                        )
+                    ]
+                )
+            )
+        ],
+        parsed=objects.Loop_G.model_validate(_loop_g_payload()),
+        usage_metadata=SimpleNamespace(
+            cached_content_token_count=0,
+            prompt_token_count=0,
+            candidates_token_count=0,
+        ),
+    )
+
+    def fake_generate_content(**kwargs):
+        captured.update(kwargs)
+        return response
+
+    fake_client = SimpleNamespace(
+        models=SimpleNamespace(generate_content=fake_generate_content)
+    )
+    monkeypatch.setattr(
+        gemini_api, "initialize_gemini_client", lambda api_key: fake_client
+    )
+    monkeypatch.setattr(gemini_api.utils, "get_loop_prompt", lambda: "system prompt")
+
+    gemini_api.loop_gen(
+        "write a loop",
+        "gemini-3.7-flash",
+        use_thinking=False,
+        effort="high",
+    )
+
+    assert captured["config"]["thinking_config"].thinking_level.value == "LOW"
 
 
 def test_ollama_loop_gen_accepts_missing_thinking(monkeypatch):
@@ -356,6 +462,7 @@ def test_gemini_loop_gen_logs_unsupported_effort(monkeypatch, caplog, capsys):
         midi_loop, messages, cost = gemini_api.loop_gen(
             "write a loop",
             "gemini-3.1-flash-lite",
+            use_thinking=True,
             effort="bogus",
         )
 
@@ -406,6 +513,7 @@ def test_gemini_loop_gen_omits_unsupported_temperature(monkeypatch):
         "write a loop",
         "gemini-3.7-flash",
         temp=0.7,
+        use_thinking=True,
         effort="medium",
     )
 

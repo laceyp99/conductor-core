@@ -68,6 +68,7 @@ def generate_midi(
             prompt=prompt,
             model=model_choice,
             temp=temp,
+            use_thinking=use_thinking,
             effort=effective_effort,
             api_key=credentials.openai_api_key,
             system_prompt=system_prompt,
