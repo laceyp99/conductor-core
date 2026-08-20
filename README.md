@@ -133,8 +133,8 @@ available providers, models, and capabilities without contacting a provider, run
 | `key`, `scale`, `description` | Musical request added to the model prompt |
 | `model` | Packaged model identifier used for routing and response handling |
 | `temperature` | Sampling temperature for models that support it |
-| `use_thinking` | Toggle-style reasoning control for supported models |
-| `effort` | Model-specific reasoning effort such as `minimal`, `low`, or `high` |
+| `use_thinking` | Reasoning control; `False` selects the model's lowest supported setting |
+| `effort` | Requested reasoning effort, used unchanged when `use_thinking=True` |
 | `prompt_override` | System prompt override for only this request |
 | `render_audio` | Request an MP3 preview after MIDI generation |
 | `soundfont_path` | SoundFont name or path for this request |
@@ -143,6 +143,15 @@ Model capabilities differ. Consumers can inspect
 `conductor_core.music.get_model_info()` or run
 [`scripts/inspect_models.py`](scripts/inspect_models.py) instead of assuming
 every model accepts temperature or the same reasoning settings.
+
+For models with discrete `effort_options`, those options are ordered from
+lowest to highest. When `use_thinking=False`, Core sends the first supported
+option even if the request contains a valid higher `effort`. Depending on the
+model, that lowest option may be `none`, `minimal`, or `low`; therefore `False`
+means the lowest available reasoning setting rather than a guarantee that the
+provider performs no reasoning. When `use_thinking=True`, Core validates and
+sends the requested effort. Models that use thinking budgets retain their
+provider-specific minimum/maximum behavior.
 
 Every packaged cloud model has a `rate_limits` object with the same fields:
 `RPM`, `TPM`, and `RPD`. `RPM` is a positive integer conservative baseline for
@@ -266,8 +275,10 @@ generations. The generation script shows the most commonly consumed result
 fields after a run.
 
 For new engine generations, `GenerationMetadata.use_thinking` and
-`GenerationMetadata.effort` record the exact reasoning settings from the
-`GenerationRequest`. Both fields are optional for compatibility with history
+`GenerationMetadata.effort` record the caller-requested settings from the
+`GenerationRequest`. They do not replace a higher requested effort with the
+lowest effective provider effort when `use_thinking=False`. Both fields are
+optional for compatibility with history
 written by Core 0.2.0 and earlier: `None` means the value was not recorded, not
 that a historical default should be inferred. In particular, consumers should
 distinguish an explicit `False` value from `None`.

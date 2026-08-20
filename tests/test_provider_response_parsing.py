@@ -382,6 +382,77 @@ def test_gemini_disabled_thinking_uses_lowest_effort(monkeypatch):
     assert captured["config"]["thinking_config"].thinking_level.value == "LOW"
 
 
+@pytest.mark.parametrize(
+    ("use_thinking", "expected_budget"),
+    [(False, 128), (True, 32768)],
+)
+def test_gemini_budget_thinking_uses_metadata_bounds(
+    monkeypatch, use_thinking, expected_budget
+):
+    captured = {}
+    response = SimpleNamespace(
+        candidates=[
+            SimpleNamespace(
+                content=SimpleNamespace(
+                    parts=[
+                        SimpleNamespace(
+                            text=json.dumps(_loop_g_payload()), thought=False
+                        )
+                    ]
+                )
+            )
+        ],
+        parsed=objects.Loop_G.model_validate(_loop_g_payload()),
+        usage_metadata=SimpleNamespace(
+            cached_content_token_count=0,
+            prompt_token_count=0,
+            candidates_token_count=0,
+        ),
+    )
+
+    def fake_generate_content(**kwargs):
+        captured.update(kwargs)
+        return response
+
+    fake_client = SimpleNamespace(
+        models=SimpleNamespace(generate_content=fake_generate_content)
+    )
+    monkeypatch.setattr(
+        gemini_api, "initialize_gemini_client", lambda api_key: fake_client
+    )
+    monkeypatch.setattr(gemini_api.utils, "get_loop_prompt", lambda: "system prompt")
+
+    gemini_api.loop_gen("write a loop", "gemini-2.5-pro", use_thinking=use_thinking)
+
+    assert captured["config"]["thinking_config"].thinking_budget == expected_budget
+
+
+@pytest.mark.parametrize("use_thinking", [False, True])
+def test_claude_budget_thinking_respects_toggle(monkeypatch, use_thinking):
+    captured = {}
+    payload = json.dumps(_loop_payload())
+
+    def fake_create(**kwargs):
+        captured.update(kwargs)
+        return _anthropic_completion(payload)
+
+    fake_client = SimpleNamespace(messages=SimpleNamespace(create=fake_create))
+    monkeypatch.setattr(
+        claude_api, "initialize_anthropic_client", lambda api_key: fake_client
+    )
+    monkeypatch.setattr(claude_api.utils, "get_loop_prompt", lambda: "system prompt")
+
+    claude_api.loop_gen("write a loop", "claude-sonnet-4-5", use_thinking=use_thinking)
+
+    if use_thinking:
+        assert captured["thinking"] == {
+            "type": "enabled",
+            "budget_tokens": 59000,
+        }
+    else:
+        assert "thinking" not in captured
+
+
 def test_ollama_loop_gen_accepts_missing_thinking(monkeypatch):
     payload = json.dumps(_loop_payload())
     completion = SimpleNamespace(message=SimpleNamespace(content=payload))
