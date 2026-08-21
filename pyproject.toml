@@ -62,7 +62,7 @@ target-version = "py310"
 line-length = 88
 
 [tool.ruff.format]
-line-ending = "lf"
+line-ending = "auto"
 
 [tool.ruff.lint]
 select = [
