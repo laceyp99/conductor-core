@@ -70,7 +70,12 @@ class EngineConfig:
 
 @dataclass(frozen=True)
 class GenerationRequest:
-    """One prompt-to-loop generation request."""
+    """One prompt-to-loop generation request.
+
+    For models with configurable reasoning effort, ``use_thinking=False``
+    selects the model's lowest supported effort. The requested ``effort`` is
+    used unchanged when thinking is enabled.
+    """
 
     key: str
     scale: str
