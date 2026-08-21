@@ -3,6 +3,24 @@ import pytest
 from conductor_core import music
 
 
+def test_effort_options_are_ordered_from_lowest_to_highest():
+    effort_rank = {
+        "none": 0,
+        "minimal": 1,
+        "low": 2,
+        "medium": 3,
+        "high": 4,
+        "xhigh": 5,
+        "max": 6,
+    }
+
+    for provider, models in music.get_model_info()["models"].items():
+        for model, model_config in models.items():
+            effort_options = model_config.get("effort_options") or []
+            ranks = [effort_rank[effort] for effort in effort_options]
+            assert ranks == sorted(ranks), f"{provider}/{model}"
+
+
 def test_selectable_cloud_models_have_normalized_rate_limits():
     model_info = music.get_model_info()
 

@@ -37,15 +37,53 @@ def test_generate_midi_rejects_unsupported_effort_before_provider_call(
     loop_gen.assert_not_called()
 
 
-def test_validate_reasoning_options_warns_when_unsupported(caplog):
+@pytest.mark.parametrize(
+    ("effort_options", "expected"),
+    [
+        (["none", "low", "medium"], "none"),
+        (["minimal", "low", "medium"], "minimal"),
+        (["low", "medium", "high"], "low"),
+    ],
+)
+def test_resolve_reasoning_effort_uses_lowest_option_when_thinking_is_disabled(
+    effort_options, expected
+):
+    assert (
+        runs._resolve_reasoning_effort(
+            "reasoning-model",
+            {"extended_thinking": True, "effort_options": effort_options},
+            use_thinking=False,
+            effort="medium",
+        )
+        == expected
+    )
+
+
+def test_resolve_reasoning_effort_preserves_supported_effort_when_enabled():
+    assert (
+        runs._resolve_reasoning_effort(
+            "reasoning-model",
+            {
+                "extended_thinking": True,
+                "effort_options": ["low", "medium", "high"],
+            },
+            use_thinking=True,
+            effort="high",
+        )
+        == "high"
+    )
+
+
+def test_resolve_reasoning_effort_warns_when_unsupported(caplog):
     with caplog.at_level("WARNING", logger="conductor_core.routing"):
-        runs._validate_reasoning_options(
+        result = runs._resolve_reasoning_effort(
             "non-reasoning-model",
             {"extended_thinking": False},
             use_thinking=True,
             effort="high",
         )
 
+    assert result == "high"
     assert caplog.messages == [
         (
             "Effort 'high' was requested for non-reasoning-model, but this model "
@@ -58,15 +96,16 @@ def test_validate_reasoning_options_warns_when_unsupported(caplog):
     ]
 
 
-def test_validate_reasoning_options_does_not_warn_for_defaults(caplog):
+def test_resolve_reasoning_effort_does_not_warn_for_defaults(caplog):
     with caplog.at_level("WARNING", logger="conductor_core.routing"):
-        runs._validate_reasoning_options(
+        result = runs._resolve_reasoning_effort(
             "non-reasoning-model",
             {"extended_thinking": False},
             use_thinking=False,
             effort="low",
         )
 
+    assert result == "low"
     assert caplog.messages == []
 
 
@@ -138,13 +177,20 @@ def test_generate_midi_routes_to_openai_and_forwards_effort(monkeypatch):
     monkeypatch.setattr(runs.ollama_api, "get_ollama_status", ollama_status)
 
     def fake_loop_gen(
-        prompt, model, temp=0.0, effort=None, api_key=None, system_prompt=None
+        prompt,
+        model,
+        temp=0.0,
+        use_thinking=False,
+        effort=None,
+        api_key=None,
+        system_prompt=None,
     ):
         captured.update(
             {
                 "prompt": prompt,
                 "model": model,
                 "temp": temp,
+                "use_thinking": use_thinking,
                 "effort": effort,
                 "api_key": api_key,
                 "system_prompt": system_prompt,
@@ -158,6 +204,7 @@ def test_generate_midi_routes_to_openai_and_forwards_effort(monkeypatch):
         "gpt-4o-mini",
         "write a loop",
         temp=0.2,
+        use_thinking=True,
         effort="high",
         provider_credentials=ProviderCredentials(openai_api_key="openai-key"),
         system_prompt="system",
@@ -168,6 +215,7 @@ def test_generate_midi_routes_to_openai_and_forwards_effort(monkeypatch):
         "prompt": "write a loop",
         "model": "gpt-4o-mini",
         "temp": 0.2,
+        "use_thinking": True,
         "effort": "high",
         "api_key": "openai-key",
         "system_prompt": "system",

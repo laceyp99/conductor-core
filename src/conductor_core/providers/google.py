@@ -153,6 +153,8 @@ def loop_gen(
         config["temperature"] = temp
     model_with_thinking = model_config["extended_thinking"]
     effort_options = model_config.get("effort_options", [])
+    if effort_options and not use_thinking:
+        effort = effort_options[0]
 
     if effort_options:
         if effort in effort_options:
