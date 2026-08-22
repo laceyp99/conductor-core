@@ -203,6 +203,105 @@ def test_midi_to_loop_round_trips_integer_timing(sample_loop, midi_builder):
     )
 
 
+@pytest.mark.parametrize("note_off_type", ["note_off", "note_on"])
+def test_midi_to_loop_ignores_other_channel_note_off(tmp_path, note_off_type):
+    midi = MidiFile(ticks_per_beat=480)
+    track = MidiTrack(
+        [
+            Message("note_on", channel=0, note=60, velocity=96, time=0),
+            Message(note_off_type, channel=1, note=60, velocity=0, time=120),
+            Message("note_off", channel=0, note=60, velocity=0, time=360),
+        ]
+    )
+    midi.tracks.append(track)
+    path = tmp_path / f"cross-channel-{note_off_type}.mid"
+    midi.save(path)
+
+    loop = midi_to_loop(str(path), times_as_string=False)
+
+    assert len(loop.Bar_1.notes) == 1
+    assert loop.Bar_1.notes[0].time.duration == 4
+
+
+@pytest.mark.parametrize("first_channel", [0, 1])
+def test_midi_to_loop_pairs_same_pitch_note_offs_by_channel(tmp_path, first_channel):
+    velocities = {0: 80, 1: 100}
+    second_channel = 1 - first_channel
+    midi = MidiFile(ticks_per_beat=480)
+    track = MidiTrack(
+        [
+            Message("note_on", channel=0, note=60, velocity=velocities[0], time=0),
+            Message("note_on", channel=1, note=60, velocity=velocities[1], time=0),
+            Message("note_off", channel=first_channel, note=60, velocity=0, time=120),
+            Message("note_off", channel=second_channel, note=60, velocity=0, time=360),
+        ]
+    )
+    midi.tracks.append(track)
+    path = tmp_path / f"channel-order-{first_channel}.mid"
+    midi.save(path)
+
+    loop = midi_to_loop(str(path), times_as_string=False)
+
+    durations_by_velocity = {
+        note.velocity: note.time.duration for note in loop.Bar_1.notes
+    }
+    assert durations_by_velocity == {
+        velocities[first_channel]: 1,
+        velocities[second_channel]: 4,
+    }
+
+
+def test_midi_to_loop_pairs_overlapping_same_channel_notes_in_order(tmp_path):
+    midi = MidiFile(ticks_per_beat=480)
+    track = MidiTrack(
+        [
+            Message("note_on", channel=0, note=60, velocity=80, time=0),
+            Message("note_on", channel=0, note=60, velocity=100, time=120),
+            Message("note_off", channel=0, note=60, velocity=0, time=120),
+            Message("note_off", channel=0, note=60, velocity=0, time=240),
+        ]
+    )
+    midi.tracks.append(track)
+    path = tmp_path / "same-channel-overlap.mid"
+    midi.save(path)
+
+    loop = midi_to_loop(str(path), times_as_string=False)
+
+    assert [
+        (note.velocity, note.time.start_beat, note.time.duration)
+        for note in loop.Bar_1.notes
+    ] == [(80, 1, 2), (100, 2, 3)]
+
+
+def test_midi_to_loop_pairs_same_pitch_across_tracks_by_channel(tmp_path):
+    midi = MidiFile(ticks_per_beat=480)
+    midi.tracks.append(
+        MidiTrack(
+            [
+                Message("note_on", channel=0, note=60, velocity=80, time=0),
+                Message("note_off", channel=0, note=60, velocity=0, time=480),
+            ]
+        )
+    )
+    midi.tracks.append(
+        MidiTrack(
+            [
+                Message("note_on", channel=1, note=60, velocity=100, time=120),
+                Message("note_off", channel=1, note=60, velocity=0, time=240),
+            ]
+        )
+    )
+    path = tmp_path / "cross-track-channels.mid"
+    midi.save(path)
+
+    loop = midi_to_loop(str(path), times_as_string=False)
+
+    durations_by_velocity = {
+        note.velocity: note.time.duration for note in loop.Bar_1.notes
+    }
+    assert durations_by_velocity == {80: 4, 100: 2}
+
+
 @pytest.mark.parametrize("ticks_per_beat", [1, 2, 3, 5])
 def test_midi_to_loop_quantizes_low_ppq_timing_to_sixteenths(tmp_path, ticks_per_beat):
     midi = MidiFile(ticks_per_beat=ticks_per_beat)

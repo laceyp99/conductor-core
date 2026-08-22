@@ -179,7 +179,8 @@ def midi_to_loop(midi_filename, times_as_string=True):
     Converts a MIDI file into a loop object.
 
     The function merges all tracks, computes absolute timestamps, and then assigns notes to the
-    appropriate bar based on their timing (assuming 16 sixteenth notes per bar).
+    appropriate bar based on their timing (assuming 16 sixteenth notes per bar). MIDI channels
+    are used to pair note events correctly, but are not retained in the normalized loop model.
 
     Args:
         midi_filename (str): The path to the MIDI file.
@@ -197,7 +198,7 @@ def midi_to_loop(midi_filename, times_as_string=True):
     # Merge all tracks and compute absolute time for each message.
     merged = merge_tracks(midi.tracks)
     absolute_time = 0
-    active_notes = {}  # MIDI note number -> list of (start_tick, velocity)
+    active_notes = {}  # (MIDI channel, note number) -> list of (start_tick, velocity)
     note_events = []  # Collection of tuples: (note_number, start_tick, end_tick, velocity)
 
     # Iterate through the merged messages to process note events.
@@ -205,22 +206,25 @@ def midi_to_loop(midi_filename, times_as_string=True):
         absolute_time += msg.time
         # Handle note_on messages.
         if msg.type == "note_on":
+            note_key = (msg.channel, msg.note)
             # If velocity is greater than 0, it's a note_on event.
             if msg.velocity > 0:
-                active_notes.setdefault(msg.note, []).append(
+                active_notes.setdefault(note_key, []).append(
                     (absolute_time, msg.velocity)
                 )
             else:
                 # A note_on with velocity 0 signifies note_off.
                 # Check if the note is active and remove it from the active notes.
-                if active_notes.get(msg.note):
-                    start_tick, velocity = active_notes[msg.note].pop(0)
+                if active_notes.get(note_key):
+                    start_tick, velocity = active_notes[note_key].pop(0)
                     note_events.append((msg.note, start_tick, absolute_time, velocity))
         # Handle note_off messages.
-        elif msg.type == "note_off" and active_notes.get(msg.note):
-            # Check if the note is active and remove it from the active notes.
-            start_tick, velocity = active_notes[msg.note].pop(0)
-            note_events.append((msg.note, start_tick, absolute_time, velocity))
+        elif msg.type == "note_off":
+            note_key = (msg.channel, msg.note)
+            if active_notes.get(note_key):
+                # Check if the note is active and remove it from the active notes.
+                start_tick, velocity = active_notes[note_key].pop(0)
+                note_events.append((msg.note, start_tick, absolute_time, velocity))
 
     # Create empty bars for the first four bars.
     bars = {0: [], 1: [], 2: [], 3: []}
