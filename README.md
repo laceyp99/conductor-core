@@ -130,14 +130,22 @@ available providers, models, and capabilities without contacting a provider, run
 
 | Field | Purpose |
 |---|---|
-| `key`, `scale`, `description` | Musical request added to the model prompt |
-| `model` | Packaged model identifier used for routing and response handling |
-| `temperature` | Sampling temperature for models that support it |
-| `use_thinking` | Reasoning control; `False` selects the model's lowest supported setting |
-| `effort` | Requested reasoning effort, used unchanged when `use_thinking=True` |
-| `prompt_override` | System prompt override for only this request |
-| `render_audio` | Request an MP3 preview after MIDI generation |
-| `soundfont_path` | SoundFont name or path for this request |
+| `key`, `scale`, `description` | String musical inputs; `key` and `scale` must be supported and `description` must be nonblank |
+| `model` | Nonblank string used later for provider routing and response handling |
+| `temperature` | Finite integer or float from `0.0` through `2.0`; booleans are rejected |
+| `use_thinking` | Strict boolean reasoning control; `False` selects the model's lowest supported setting |
+| `effort` | String reasoning effort or `None` (the default), used unchanged when `use_thinking=True` |
+| `prompt_override` | `None` or a nonblank string override for only this request |
+| `render_audio` | Strict boolean requesting an MP3 preview after MIDI generation |
+| `soundfont_path` | `None`, a nonblank string, or an `os.PathLike` SoundFont name/path |
+
+`GenerationRequest` validates this provider-independent structure when it is
+constructed. Wrong Python types raise `TypeError`; values of accepted types that
+violate a field rule raise `ValueError`. Integrations that receive strings from
+forms, command lines, or environment variables must parse booleans and numbers
+before constructing a request. Validation preserves accepted strings unchanged.
+Model registration, model-specific effort choices, and SoundFont filesystem
+checks remain downstream routing and audio responsibilities.
 
 Model capabilities differ. Consumers can inspect
 `conductor_core.music.get_model_info()` or run
@@ -152,6 +160,9 @@ means the lowest available reasoning setting rather than a guarantee that the
 provider performs no reasoning. When `use_thinking=True`, Core validates and
 sends the requested effort. Models that use thinking budgets retain their
 provider-specific minimum/maximum behavior.
+
+Because `effort` defaults to `None`, callers enabling thinking for a model with
+discrete effort options must select one of that model's supported values.
 
 Every packaged cloud model has a `rate_limits` object with the same fields:
 `RPM`, `TPM`, and `RPD`. `RPM` is a positive integer conservative baseline for
@@ -184,8 +195,10 @@ Set `render_audio=True` on a request to render an MP3 after MIDI generation.
 Install the `playback` extra and provide FluidSynth and FFmpeg on the system
 `PATH`. Leaving `soundfont_path` unset uses Core's default packaged SoundFont;
 set it on the request or `default_soundfont_path` on `EngineConfig` to choose
-another. Audio failure does not discard a successful MIDI generation: Core
-returns the MIDI with a warning and `audio_path=None`.
+another. Request-level `os.PathLike` values are converted only when audio is
+requested. Paths that resolve to bytes or otherwise violate the path protocol
+produce a non-fatal audio warning. Audio failure does not discard a successful
+MIDI generation: Core returns the MIDI with a warning and `audio_path=None`.
 
 Lower-level discovery and rendering helpers live in `conductor_core.playback`.
 The generation script enables audio with the default SoundFont and reports both
