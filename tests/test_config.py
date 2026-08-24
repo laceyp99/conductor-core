@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
@@ -119,6 +120,18 @@ def test_generation_request_defaults_effort_to_none():
     assert make_request().effort is None
     assert make_request(effort=None).effort is None
     assert make_request(effort="provider-defined").effort == "provider-defined"
+
+
+def test_invalid_request_fails_before_engine_can_be_invoked():
+    generate = Mock()
+
+    def construct_and_generate():
+        generate(make_request(render_audio="false"))
+
+    with pytest.raises(TypeError, match="Invalid render_audio"):
+        construct_and_generate()
+
+    generate.assert_not_called()
 
 
 class DeferredPathLike(os.PathLike):

@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -151,6 +152,109 @@ def test_engine_records_resolved_default_soundfont(
     assert captured["requested_soundfont"] is None
     assert captured["soundfont_name"] == str(default_soundfont)
     assert result.metadata.soundfont == default_soundfont.name
+
+
+class TextPathLike(os.PathLike):
+    def __init__(self, value):
+        self.value = value
+
+    def __fspath__(self):
+        return self.value
+
+
+def test_engine_normalizes_text_pathlike_at_audio_boundary(
+    monkeypatch,
+    tmp_path,
+    sample_loop,
+):
+    captured = {}
+    soundfont_path = str(tmp_path / "custom.sf2")
+
+    monkeypatch.setattr(
+        engine_module.routing,
+        "generate_midi",
+        lambda **kwargs: (sample_loop, [], 0.25, "OpenAI"),
+    )
+    monkeypatch.setattr(
+        engine_module.playback,
+        "resolve_soundfont",
+        lambda soundfont_name: captured.setdefault("resolved", soundfont_name),
+    )
+
+    def fake_midi_to_mp3(midi_path, output_path=None, soundfont_name=None):
+        Path(output_path).write_bytes(b"audio")
+        captured["rendered"] = soundfont_name
+        return output_path
+
+    monkeypatch.setattr(engine_module.playback, "midi_to_mp3", fake_midi_to_mp3)
+
+    engine = LoopGenerationEngine(
+        EngineConfig.from_defaults(artifact_root=tmp_path / "generations")
+    )
+    result = engine.generate(
+        GenerationRequest(
+            key="C",
+            scale="Major",
+            description="warm rhodes loop",
+            model="gpt-4o-mini",
+            render_audio=True,
+            soundfont_path=TextPathLike(soundfont_path),
+        )
+    )
+
+    assert captured == {"resolved": soundfont_path, "rendered": soundfont_path}
+    assert result.audio_path is not None
+
+
+@pytest.mark.parametrize(
+    ("path_value", "warning_fragment"),
+    [
+        (
+            b"custom.sf2",
+            "soundfont_path must resolve to a text path, not bytes",
+        ),
+        (
+            123,
+            "expected TextPathLike.__fspath__() to return str or bytes, not int",
+        ),
+    ],
+)
+def test_engine_preserves_midi_when_pathlike_cannot_produce_text(
+    monkeypatch,
+    tmp_path,
+    sample_loop,
+    path_value,
+    warning_fragment,
+):
+    monkeypatch.setattr(
+        engine_module.routing,
+        "generate_midi",
+        lambda **kwargs: (sample_loop, [], 0.25, "OpenAI"),
+    )
+    monkeypatch.setattr(
+        engine_module.playback,
+        "resolve_soundfont",
+        lambda soundfont_name: pytest.fail("Invalid paths must not reach playback"),
+    )
+
+    engine = LoopGenerationEngine(
+        EngineConfig.from_defaults(artifact_root=tmp_path / "generations")
+    )
+    result = engine.generate(
+        GenerationRequest(
+            key="C",
+            scale="Major",
+            description="warm rhodes loop",
+            model="gpt-4o-mini",
+            render_audio=True,
+            soundfont_path=TextPathLike(path_value),
+        )
+    )
+
+    assert warning_fragment in result.warnings[0]
+    assert Path(result.midi_path).exists()
+    assert result.audio_path is None
+    assert result.metadata.soundfont is None
 
 
 def test_engine_discards_partial_audio_when_renderer_reports_failure(
