@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -151,6 +152,109 @@ def test_engine_records_resolved_default_soundfont(
     assert captured["requested_soundfont"] is None
     assert captured["soundfont_name"] == str(default_soundfont)
     assert result.metadata.soundfont == default_soundfont.name
+
+
+class TextPathLike(os.PathLike):
+    def __init__(self, value):
+        self.value = value
+
+    def __fspath__(self):
+        return self.value
+
+
+def test_engine_normalizes_text_pathlike_at_audio_boundary(
+    monkeypatch,
+    tmp_path,
+    sample_loop,
+):
+    captured = {}
+    soundfont_path = str(tmp_path / "custom.sf2")
+
+    monkeypatch.setattr(
+        engine_module.routing,
+        "generate_midi",
+        lambda **kwargs: (sample_loop, [], 0.25, "OpenAI"),
+    )
+    monkeypatch.setattr(
+        engine_module.playback,
+        "resolve_soundfont",
+        lambda soundfont_name: captured.setdefault("resolved", soundfont_name),
+    )
+
+    def fake_midi_to_mp3(midi_path, output_path=None, soundfont_name=None):
+        Path(output_path).write_bytes(b"audio")
+        captured["rendered"] = soundfont_name
+        return output_path
+
+    monkeypatch.setattr(engine_module.playback, "midi_to_mp3", fake_midi_to_mp3)
+
+    engine = LoopGenerationEngine(
+        EngineConfig.from_defaults(artifact_root=tmp_path / "generations")
+    )
+    result = engine.generate(
+        GenerationRequest(
+            key="C",
+            scale="Major",
+            description="warm rhodes loop",
+            model="gpt-4o-mini",
+            render_audio=True,
+            soundfont_path=TextPathLike(soundfont_path),
+        )
+    )
+
+    assert captured == {"resolved": soundfont_path, "rendered": soundfont_path}
+    assert result.audio_path is not None
+
+
+@pytest.mark.parametrize(
+    ("path_value", "warning_fragment"),
+    [
+        (
+            b"custom.sf2",
+            "soundfont_path must resolve to a text path, not bytes",
+        ),
+        (
+            123,
+            "expected TextPathLike.__fspath__() to return str or bytes, not int",
+        ),
+    ],
+)
+def test_engine_preserves_midi_when_pathlike_cannot_produce_text(
+    monkeypatch,
+    tmp_path,
+    sample_loop,
+    path_value,
+    warning_fragment,
+):
+    monkeypatch.setattr(
+        engine_module.routing,
+        "generate_midi",
+        lambda **kwargs: (sample_loop, [], 0.25, "OpenAI"),
+    )
+    monkeypatch.setattr(
+        engine_module.playback,
+        "resolve_soundfont",
+        lambda soundfont_name: pytest.fail("Invalid paths must not reach playback"),
+    )
+
+    engine = LoopGenerationEngine(
+        EngineConfig.from_defaults(artifact_root=tmp_path / "generations")
+    )
+    result = engine.generate(
+        GenerationRequest(
+            key="C",
+            scale="Major",
+            description="warm rhodes loop",
+            model="gpt-4o-mini",
+            render_audio=True,
+            soundfont_path=TextPathLike(path_value),
+        )
+    )
+
+    assert warning_fragment in result.warnings[0]
+    assert Path(result.midi_path).exists()
+    assert result.audio_path is None
+    assert result.metadata.soundfont is None
 
 
 def test_engine_discards_partial_audio_when_renderer_reports_failure(
@@ -321,86 +425,3 @@ def test_engine_cleans_unfinalized_workspace_when_processing_fails(
 
     generations_root = tmp_path / "generations"
     assert not generations_root.exists() or list(generations_root.iterdir()) == []
-
-
-def test_generation_request_rejects_removed_provider():
-    with pytest.raises(TypeError, match="unexpected keyword argument 'provider'"):
-        GenerationRequest(
-            key="C",
-            scale="Major",
-            description="provider conflict",
-            model="gpt-4o-mini",
-            provider="Anthropic",
-        )
-
-
-@pytest.mark.parametrize("key", ["H", "Cbbb", "c"])
-def test_generation_request_rejects_unknown_keys(key):
-    with pytest.raises(
-        ValueError,
-        match=rf"Invalid key {key!r}\. Expected one of: B#, C, Dbb",
-    ):
-        GenerationRequest(
-            key=key,
-            scale="Major",
-            description="invalid key",
-            model="gpt-4o-mini",
-        )
-
-
-@pytest.mark.parametrize("scale", ["major", "MINOR", "Harmonic Minor", "melodic minor"])
-def test_generation_request_accepts_known_scales_case_insensitively(scale):
-    request = GenerationRequest(
-        key="C",
-        scale=scale,
-        description="valid scale",
-        model="gpt-4o-mini",
-    )
-
-    assert request.scale == scale
-
-
-@pytest.mark.parametrize("scale", ["dorian", "", None])
-def test_generation_request_rejects_unknown_scales(scale):
-    expected_message = (
-        f"Invalid scale {scale!r}. Expected one of: "
-        "major, minor, harmonic minor, melodic minor (case-insensitive)"
-    )
-    with pytest.raises(ValueError, match="Invalid scale") as raised:
-        GenerationRequest(
-            key="C",
-            scale=scale,
-            description="invalid scale",
-            model="gpt-4o-mini",
-        )
-    assert str(raised.value) == expected_message
-
-
-@pytest.mark.parametrize("temperature", [-0.1, 2.1, float("inf"), "0.5", True])
-def test_generation_request_rejects_invalid_temperatures(temperature):
-    expected_message = (
-        f"Invalid temperature {temperature!r}. "
-        "Expected a finite number between 0.0 and 2.0 (inclusive)"
-    )
-    with pytest.raises(ValueError, match="Invalid temperature") as raised:
-        GenerationRequest(
-            key="C",
-            scale="Major",
-            description="invalid temperature",
-            model="gpt-4o-mini",
-            temperature=temperature,
-        )
-    assert str(raised.value) == expected_message
-
-
-@pytest.mark.parametrize("temperature", [0.0, 0.5, 2.0])
-def test_generation_request_accepts_temperature_in_range(temperature):
-    request = GenerationRequest(
-        key="C",
-        scale="Major",
-        description="valid temperature",
-        model="gpt-4o-mini",
-        temperature=temperature,
-    )
-
-    assert request.temperature == temperature

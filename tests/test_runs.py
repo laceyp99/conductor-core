@@ -32,7 +32,12 @@ def test_generate_midi_rejects_unsupported_effort_before_provider_call(
             r"Expected one of: low, medium"
         ),
     ):
-        runs.generate_midi(model_choice, "write a loop", effort="high")
+        runs.generate_midi(
+            model_choice,
+            "write a loop",
+            use_thinking=True,
+            effort="high",
+        )
 
     loop_gen.assert_not_called()
 
@@ -59,6 +64,21 @@ def test_resolve_reasoning_effort_uses_lowest_option_when_thinking_is_disabled(
     )
 
 
+def test_resolve_reasoning_effort_uses_lowest_option_before_validating_none():
+    assert (
+        runs._resolve_reasoning_effort(
+            "reasoning-model",
+            {
+                "extended_thinking": True,
+                "effort_options": ["minimal", "low", "medium"],
+            },
+            use_thinking=False,
+            effort=None,
+        )
+        == "minimal"
+    )
+
+
 def test_resolve_reasoning_effort_preserves_supported_effort_when_enabled():
     assert (
         runs._resolve_reasoning_effort(
@@ -72,6 +92,25 @@ def test_resolve_reasoning_effort_preserves_supported_effort_when_enabled():
         )
         == "high"
     )
+
+
+def test_resolve_reasoning_effort_rejects_none_when_thinking_is_enabled():
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"Invalid effort None for reasoning-model\. "
+            r"Expected one of: low, medium, high"
+        ),
+    ):
+        runs._resolve_reasoning_effort(
+            "reasoning-model",
+            {
+                "extended_thinking": True,
+                "effort_options": ["low", "medium", "high"],
+            },
+            use_thinking=True,
+            effort=None,
+        )
 
 
 def test_resolve_reasoning_effort_warns_when_unsupported(caplog):

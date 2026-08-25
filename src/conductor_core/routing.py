@@ -15,6 +15,9 @@ logger = logging.getLogger(__name__)
 def _resolve_reasoning_effort(model_choice, model_config, use_thinking, effort):
     """Validate reasoning options and return the effective provider effort."""
     effort_options = model_config.get("effort_options") or []
+    if effort_options and not use_thinking:
+        return effort_options[0]
+
     if effort_options and effort not in effort_options:
         supported_values = ", ".join(effort_options)
         raise ValueError(
@@ -27,9 +30,6 @@ def _resolve_reasoning_effort(model_choice, model_config, use_thinking, effort):
             effort,
             model_choice,
         )
-
-    if effort_options and not use_thinking:
-        return effort_options[0]
 
     if use_thinking and not model_config.get("extended_thinking"):
         logger.warning(

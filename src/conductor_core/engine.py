@@ -90,17 +90,25 @@ class LoopGenerationEngine:
             midi.save(workspace.midi_path)
 
             audio_path = None
-            selected_soundfont = (
-                request.soundfont_path or self.config.default_soundfont_path
-            )
-            requested_soundfont = (
-                str(selected_soundfont) if selected_soundfont else None
-            )
             resolved_soundfont = None
             if request.render_audio:
                 self._emit(progress_callback, "audio", "Rendering Audio...")
                 audio_error = None
                 try:
+                    selected_soundfont = (
+                        request.soundfont_path
+                        if request.soundfont_path is not None
+                        else self.config.default_soundfont_path
+                    )
+                    requested_soundfont = (
+                        os.fspath(selected_soundfont)
+                        if selected_soundfont is not None
+                        else None
+                    )
+                    if isinstance(requested_soundfont, bytes):
+                        raise TypeError(
+                            "soundfont_path must resolve to a text path, not bytes"
+                        )
                     resolved_soundfont = playback.resolve_soundfont(requested_soundfont)
                     audio_path = playback.midi_to_mp3(
                         workspace.midi_path,

@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 while its public API is still in initial development.
 
+## [Unreleased]
+
+### Changed
+
+- `GenerationRequest` now validates every public field at construction: wrong
+  Python types raise `TypeError`, accepted types with invalid values raise
+  `ValueError`, and boolean fields no longer coerce truthy strings or integers.
+- Request effort now defaults to `None`. Disabled thinking resolves directly to
+  the selected model's lowest supported effort, while enabled thinking still
+  requires a supported effort for models with discrete options.
+- Request SoundFont overrides accept `os.PathLike` objects and normalize them
+  only when audio is requested. Byte-valued or invalid path protocol results
+  preserve generated MIDI and return an audio warning.
+
+Integrations should parse form, command-line, and environment-variable strings
+before constructing `GenerationRequest` objects.
+
 ## [0.4.0] - 2026-08-02
 
 Version 0.4.0 makes generation inputs, provider failures, model capabilities,
