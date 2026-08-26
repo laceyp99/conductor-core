@@ -308,10 +308,11 @@ def _load_generation_metadata(
             f"metadata generation ID {metadata.id!r} does not match directory ID {gen_id!r}"
         )
 
-    _validate_artifact_file(workspace.midi_path, required=False)
+    midi_path = _validate_artifact_file(workspace.midi_path, required=True)
+    assert midi_path is not None
     audio_path = _validate_artifact_file(workspace.audio_path, required=False)
     messages_path = _validate_artifact_file(workspace.messages_path, required=False)
-    metadata.midi_path = workspace.midi_path
+    metadata.midi_path = midi_path
     metadata.audio_path = audio_path
     metadata.messages_path = messages_path
     if audio_path is None:
@@ -607,8 +608,10 @@ def _load_history(artifact_root: str | Path) -> list[GenerationMetadata]:
         try:
             metadata = _load_generation_metadata(root, item.removeprefix("gen_"))
             generations.append(metadata)
-        except FileNotFoundError:
-            logger.warning(f"Missing metadata for generation: {item}")
+        except FileNotFoundError as exc:
+            logger.warning(
+                f"Missing required artifact for generation {item}: {exc.filename}"
+            )
             continue
         except Exception as e:
             logger.warning(f"Failed to load generation {item}: {e}")
@@ -639,7 +642,12 @@ def _get_generation(
     _validate_generation_id(gen_id)
     try:
         return _load_generation_metadata(artifact_root, gen_id)
-    except FileNotFoundError:
+    except FileNotFoundError as exc:
+        workspace = _build_workspace(gen_id, artifact_root)
+        if exc.filename != workspace.metadata_path:
+            logger.warning(
+                f"Missing required artifact for generation {gen_id}: {exc.filename}"
+            )
         return None
     except Exception as e:
         logger.error(f"Failed to load generation {gen_id}: {e}")
