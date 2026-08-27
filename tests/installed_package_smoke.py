@@ -1,6 +1,10 @@
 """Smoke-test the built wheel from a consumer-style installation."""
 
+import subprocess
+import sys
 from importlib import resources
+from importlib.metadata import version
+from pathlib import Path
 
 import conductor_core
 from conductor_core import (
@@ -57,3 +61,24 @@ soundfont = resources.files("conductor_core.resources").joinpath(
 assert soundfont.is_file()
 with soundfont.open("rb") as soundfont_file:
     assert soundfont_file.read(4) == b"RIFF"
+
+expected_version = version("conductor-core")
+expected_version_line = f"conductor, version {expected_version}"
+module_version = subprocess.run(
+    [sys.executable, "-m", "conductor_core", "--version"],
+    check=True,
+    capture_output=True,
+    text=True,
+)
+assert module_version.stdout.strip() == expected_version_line
+
+executable_name = "conductor.exe" if sys.platform == "win32" else "conductor"
+conductor_executable = Path(sys.executable).parent / executable_name
+assert conductor_executable.is_file()
+console_version = subprocess.run(
+    [str(conductor_executable), "--version"],
+    check=True,
+    capture_output=True,
+    text=True,
+)
+assert console_version.stdout.strip() == expected_version_line

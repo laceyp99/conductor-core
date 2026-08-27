@@ -8,8 +8,19 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+### Added
+
+- A supported `conductor` command, also available through
+  `python -m conductor_core`, with single-request `generate` and offline
+  `models` commands.
+- Versioned JSON output for generation results, model discovery, and errors,
+  including provider-independent numeric loop timing and automation-oriented
+  exit codes.
+
 ### Changed
 
+- Click is now a normal runtime dependency used by the public command-line
+  interface.
 - `GenerationRequest` now validates every public field at construction: wrong
   Python types raise `TypeError`, accepted types with invalid values raise
   `ValueError`, and boolean fields no longer coerce truthy strings or integers.

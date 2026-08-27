@@ -64,6 +64,30 @@ Extras can be combined—for example, use `[google,playback]` for Gemini generat
 with audio previews. To upgrade, change the pinned tag and review
 [`CHANGELOG.md`](CHANGELOG.md).
 
+## Command line
+
+Installing Core also installs the `conductor` command. Discover packaged models
+offline, without credentials:
+
+```powershell
+conductor models --provider openai
+conductor models --json
+```
+
+Generate one persisted loop with named, reproducible inputs:
+
+```powershell
+conductor generate --key C --scale Major `
+  --description "warm neo-soul electric piano chords" `
+  --model gpt-4o-mini
+```
+
+Generation makes a real provider call and may incur usage charges. Credentials
+come from the existing environment variables described below; the CLI has no
+credential flags. `python -m conductor_core` provides the same commands. See
+the [complete CLI guide](docs/cli.md) for every option, JSON schemas, stream
+behavior, exit codes, audio warnings, and troubleshooting.
+
 ## Basic generation
 
 ```python
