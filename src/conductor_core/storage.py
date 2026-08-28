@@ -19,6 +19,7 @@ import os
 import shutil
 import stat
 import tempfile
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -33,6 +34,14 @@ logger = logging.getLogger(__name__)
 MAX_GENERATIONS = 20
 
 _DEFAULT_MAX_GENERATIONS = object()
+
+
+@dataclass(frozen=True)
+class _RetentionCandidate:
+    """A generation directory considered by the disk-retention policy."""
+
+    gen_id: str
+    timestamp: float
 
 
 class FilesystemArtifactStore:
@@ -695,7 +704,7 @@ def _enforce_limit(
         return
 
     root = _resolve_artifact_root(artifact_root)
-    generations = _load_history(root)
+    generations = _load_retention_candidates(root)
 
     if len(generations) <= max_generations:
         return
@@ -704,8 +713,67 @@ def _enforce_limit(
     generations_to_delete = generations[max_generations:]
 
     for gen in generations_to_delete:
-        logger.info(f"Removing old generation {gen.id} to enforce limit")
-        _delete_generation(root, gen.id)
+        logger.info(f"Removing old generation {gen.gen_id} to enforce limit")
+        _delete_generation(root, gen.gen_id)
+
+
+def _load_retention_candidates(artifact_root: str | Path) -> list[_RetentionCandidate]:
+    """Return finalized safe generations, including records missing artifacts."""
+    root = _resolve_artifact_root(artifact_root)
+    if not os.path.isdir(root):
+        return []
+
+    candidates = []
+    for item in os.listdir(root):
+        if not item.startswith("gen_"):
+            continue
+
+        gen_id = item.removeprefix("gen_")
+        try:
+            workspace = _build_workspace(gen_id, root)
+            directory_stat = os.lstat(workspace.directory)
+        except (FileNotFoundError, ValueError) as exc:
+            logger.warning(f"Skipping unsafe retention candidate {item}: {exc}")
+            continue
+
+        reparse_point = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+        file_attributes = getattr(directory_stat, "st_file_attributes", 0)
+        if (
+            not stat.S_ISDIR(directory_stat.st_mode)
+            or stat.S_ISLNK(directory_stat.st_mode)
+            or file_attributes & reparse_point
+        ):
+            logger.warning(f"Skipping unsafe retention candidate {item}")
+            continue
+
+        try:
+            metadata_path = _validate_artifact_file(
+                workspace.metadata_path, required=True
+            )
+            assert metadata_path is not None
+            with open(metadata_path, encoding="utf-8") as metadata_file:
+                metadata = GenerationMetadata(**json.load(metadata_file))
+            if metadata.id != gen_id:
+                raise ValueError(
+                    f"metadata generation ID {metadata.id!r} does not match "
+                    f"directory ID {gen_id!r}"
+                )
+            timestamp = metadata.timestamp.timestamp()
+        except FileNotFoundError:
+            # Workspaces do not receive metadata until finalization. Excluding them
+            # prevents another request's retention pass from deleting active work.
+            logger.debug(f"Skipping non-finalized retention candidate {item}")
+            continue
+        except (OSError, TypeError, ValueError) as exc:
+            logger.warning(f"Skipping invalid retention candidate {item}: {exc}")
+            continue
+
+        candidates.append(_RetentionCandidate(gen_id=gen_id, timestamp=timestamp))
+
+    candidates.sort(
+        key=lambda candidate: (candidate.timestamp, candidate.gen_id), reverse=True
+    )
+    return candidates
 
 
 def _validate_max_generations(max_generations: int | None) -> int | None:

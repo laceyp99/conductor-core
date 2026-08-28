@@ -537,7 +537,7 @@ def test_load_history_allows_missing_optional_artifacts(tmp_path, monkeypatch):
     assert loaded[0].soundfont is None
 
 
-def test_load_history_skips_metadata_id_mismatch_without_deleting_other_generation(
+def test_retention_skips_mismatched_metadata_id_without_deleting_other_generation(
     tmp_path,
 ):
     root = tmp_path / "generations"
@@ -729,6 +729,72 @@ def test_enforce_limit_removes_oldest_generations(isolated_history_dir, monkeypa
     remaining = {path.name for path in isolated_history_dir.iterdir()}
 
     assert remaining == {"gen_middle", "gen_newest"}
+
+
+def test_enforce_limit_counts_generation_missing_midi(isolated_history_dir):
+    now = datetime.now()
+    corrupt_dir = _write_generation_metadata(
+        isolated_history_dir, gen_id="corrupt", timestamp=now - timedelta(days=1)
+    )
+    (corrupt_dir / "loop.mid").unlink()
+    _write_generation_metadata(isolated_history_dir, gen_id="newer", timestamp=now)
+
+    history._enforce_limit(isolated_history_dir, max_generations=1)
+
+    assert {path.name for path in isolated_history_dir.iterdir()} == {"gen_newer"}
+
+
+def test_enforce_limit_newer_corrupt_generation_displaces_older_valid_generation(
+    isolated_history_dir,
+):
+    now = datetime.now()
+    _write_generation_metadata(
+        isolated_history_dir, gen_id="older", timestamp=now - timedelta(days=1)
+    )
+    corrupt_dir = _write_generation_metadata(
+        isolated_history_dir, gen_id="corrupt", timestamp=now
+    )
+    (corrupt_dir / "loop.mid").unlink()
+
+    history._enforce_limit(isolated_history_dir, max_generations=1)
+
+    assert {path.name for path in isolated_history_dir.iterdir()} == {"gen_corrupt"}
+
+
+def test_enforce_limit_does_not_delete_active_workspace(tmp_path, monkeypatch):
+    root = tmp_path / "generations"
+    store = history.FilesystemArtifactStore(root, max_generations=1)
+    ids = iter(["active", "completed"])
+    monkeypatch.setattr(history, "_generate_id", lambda: next(ids))
+    active_workspace = store.create_generation_workspace()
+    _write_binary_file(Path(active_workspace.midi_path), b"active-midi")
+    completed_workspace = store.create_generation_workspace()
+    _write_binary_file(Path(completed_workspace.midi_path), b"completed-midi")
+
+    store.finalize_generation(
+        workspace=completed_workspace,
+        prompt="completed prompt",
+        key="C",
+        scale="major",
+        model="model",
+        provider="OpenAI",
+        temperature=0.0,
+    )
+
+    assert Path(active_workspace.midi_path).read_bytes() == b"active-midi"
+    assert {path.name for path in root.iterdir()} == {"gen_active", "gen_completed"}
+
+    store.finalize_generation(
+        workspace=active_workspace,
+        prompt="active prompt",
+        key="D",
+        scale="minor",
+        model="model",
+        provider="OpenAI",
+        temperature=0.0,
+    )
+
+    assert {path.name for path in root.iterdir()} == {"gen_active"}
 
 
 def test_filesystem_artifact_store_enforces_its_own_limit(tmp_path, monkeypatch):
