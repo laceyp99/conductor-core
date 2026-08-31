@@ -1,7 +1,7 @@
-"""
-This file holds all the objects that will be used to generate MIDI information.
+"""Models used to generate MIDI information.
 
-Note: Gemini structured outputs do not support integer enums. To work around this limitation, _G objects are used instead.
+The ``_G`` compatibility models predate Gemini's numeric-enum support. New code
+must use the canonical numeric models; the compatibility models are deprecated.
 """
 
 from enum import Enum, IntEnum
@@ -11,6 +11,11 @@ from pydantic import BaseModel, Field, model_validator
 SIXTEENTHS_PER_BAR = 16
 BARS_PER_LOOP = 4
 SIXTEENTHS_PER_LOOP = SIXTEENTHS_PER_BAR * BARS_PER_LOOP
+
+_G_MODEL_DEPRECATION = (
+    "Gemini-specific _G models are deprecated; use the canonical numeric model "
+    "without the _G suffix instead."
+)
 
 SIXTEENTH_NOTE_G_TO_INT = {
     "one": 1,
@@ -34,8 +39,8 @@ SIXTEENTH_NOTE_INT_TO_G = {value: key for key, value in SIXTEENTH_NOTE_G_TO_INT.
 
 # Durations are deliberately a different vocabulary from positions.  A note may
 # start only within its bar (1-16), but it may sustain for any part of the
-# four-bar loop (1-64).  Gemini only accepts string enums in response schemas,
-# so its duration vocabulary mirrors the integer duration values as words.
+# four-bar loop (1-64). The deprecated Gemini compatibility vocabulary mirrors
+# the integer duration values as words.
 DURATION_SIXTEENTH_G_TO_INT = {
     "one": 1,
     "two": 2,
@@ -128,6 +133,10 @@ class SixteenthNote(IntEnum):
 
 
 class SixteenthNote_G(Enum):
+    """Deprecated string-valued compatibility enum; use :class:`SixteenthNote`."""
+
+    __deprecated__ = _G_MODEL_DEPRECATION
+
     ONE = "one"
     TWO = "two"
     THREE = "three"
@@ -163,6 +172,10 @@ DurationSixteenth_G = Enum(
     {name.upper(): name for name in DURATION_SIXTEENTH_G_TO_INT},
     type=str,
 )
+DurationSixteenth_G.__doc__ = (
+    "Deprecated string-valued compatibility enum; use DurationSixteenth."
+)
+DurationSixteenth_G.__deprecated__ = _G_MODEL_DEPRECATION
 
 
 # Time Information Objects
@@ -178,6 +191,10 @@ class TimeInformation(BaseModel):
 
 
 class TimeInformation_G(BaseModel):
+    """Deprecated Gemini compatibility model; use :class:`TimeInformation`."""
+
+    __deprecated__ = _G_MODEL_DEPRECATION
+
     start_beat: SixteenthNote_G = Field(
         ...,
         description="Starting beat of the note in sixteenth notes (e.g. 1-16). REMEMBER THIS IS BASE 1 NOT 0.",
@@ -232,6 +249,10 @@ class Note(BaseModel):
 
 
 class Note_G(BaseModel):
+    """Deprecated Gemini compatibility model; use :class:`Note`."""
+
+    __deprecated__ = _G_MODEL_DEPRECATION
+
     pitch: str = Field(
         ...,
         description='Pitch of the note (e.g. "C", "D", "E", "F", "G", "A", "B") Please do not include the octave number',
@@ -267,6 +288,10 @@ class Bar(BaseModel):
 
 
 class Bar_G(BaseModel):
+    """Deprecated Gemini compatibility model; use :class:`Bar`."""
+
+    __deprecated__ = _G_MODEL_DEPRECATION
+
     num: int = Field(..., description="Number of the bar (e.g. 1-4)")
     notes: list[Note_G] = Field(..., description="List of notes in the bar")
 
@@ -304,6 +329,10 @@ class Loop(BaseModel):
 
 
 class Loop_G(BaseModel):
+    """Deprecated Gemini compatibility model; use :class:`Loop`."""
+
+    __deprecated__ = _G_MODEL_DEPRECATION
+
     Bar_1: Bar_G = Field(..., description="The first bar of the four bar loop")
     Bar_2: Bar_G = Field(..., description="The second bar of the four bar loop")
     Bar_3: Bar_G = Field(..., description="The third bar of the four bar loop")

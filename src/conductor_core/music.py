@@ -1,4 +1,5 @@
 import json
+import warnings
 from importlib import resources
 
 from conductor_core import models as objects
@@ -378,6 +379,12 @@ def convert_sixteenth(sixteenth_g):
     Returns:
         int: The integer corresponding to the sixteenth position or duration.
     """
+    warnings.warn(
+        "convert_sixteenth() is deprecated with the _G compatibility models; "
+        "use canonical numeric timing values instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return (
         objects.SIXTEENTH_NOTE_G_TO_INT.get(sixteenth_g.value.lower())
         or objects.DURATION_SIXTEENTH_G_TO_INT[sixteenth_g.value.lower()]
@@ -386,11 +393,21 @@ def convert_sixteenth(sixteenth_g):
 
 def int_to_sixteenth_g(sixteenth):
     """Convert an integer sixteenth-note position into a SixteenthNote_G enum."""
+    warnings.warn(
+        "int_to_sixteenth_g() is deprecated; use SixteenthNote instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return objects.SixteenthNote_G.from_int(sixteenth)
 
 
 def int_to_duration_sixteenth_g(duration):
-    """Convert an integer duration into Gemini's duration enum."""
+    """Convert an integer duration into the deprecated compatibility enum."""
+    warnings.warn(
+        "int_to_duration_sixteenth_g() is deprecated; use DurationSixteenth instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     try:
         return objects.DurationSixteenth_G(
             objects.DURATION_SIXTEENTH_INT_TO_G[duration]

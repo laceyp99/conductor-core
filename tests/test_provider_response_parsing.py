@@ -31,26 +31,6 @@ def _loop_payload():
     }
 
 
-def _loop_g_payload():
-    bar = {
-        "num": 1,
-        "notes": [
-            {
-                "pitch": "C",
-                "octave": 4,
-                "velocity": 100,
-                "time": {"start_beat": "one", "duration": "one"},
-            }
-        ],
-    }
-    return {
-        "Bar_1": bar,
-        "Bar_2": {**bar, "num": 2},
-        "Bar_3": {**bar, "num": 3},
-        "Bar_4": {**bar, "num": 4},
-    }
-
-
 def _fail_save_messages(*args, **kwargs):
     raise AssertionError("provider adapters should not write message logs")
 
@@ -345,14 +325,11 @@ def test_gemini_disabled_thinking_uses_lowest_effort(monkeypatch):
             SimpleNamespace(
                 content=SimpleNamespace(
                     parts=[
-                        SimpleNamespace(
-                            text=json.dumps(_loop_g_payload()), thought=False
-                        )
+                        SimpleNamespace(text=json.dumps(_loop_payload()), thought=False)
                     ]
                 )
             )
         ],
-        parsed=objects.Loop_G.model_validate(_loop_g_payload()),
         usage_metadata=SimpleNamespace(
             cached_content_token_count=0,
             prompt_token_count=0,
@@ -372,7 +349,7 @@ def test_gemini_disabled_thinking_uses_lowest_effort(monkeypatch):
     )
     monkeypatch.setattr(gemini_api.utils, "get_loop_prompt", lambda: "system prompt")
 
-    gemini_api.loop_gen(
+    midi_loop, _, _ = gemini_api.loop_gen(
         "write a loop",
         "gemini-3.7-flash",
         use_thinking=False,
@@ -380,6 +357,11 @@ def test_gemini_disabled_thinking_uses_lowest_effort(monkeypatch):
     )
 
     assert captured["config"]["thinking_config"].thinking_level.value == "LOW"
+    assert "response_schema" not in captured["config"]
+    assert captured["config"]["response_json_schema"] == (
+        objects.Loop.model_json_schema()
+    )
+    assert isinstance(midi_loop, objects.Loop)
 
 
 @pytest.mark.parametrize(
@@ -395,14 +377,11 @@ def test_gemini_budget_thinking_uses_metadata_bounds(
             SimpleNamespace(
                 content=SimpleNamespace(
                     parts=[
-                        SimpleNamespace(
-                            text=json.dumps(_loop_g_payload()), thought=False
-                        )
+                        SimpleNamespace(text=json.dumps(_loop_payload()), thought=False)
                     ]
                 )
             )
         ],
-        parsed=objects.Loop_G.model_validate(_loop_g_payload()),
         usage_metadata=SimpleNamespace(
             cached_content_token_count=0,
             prompt_token_count=0,
@@ -504,14 +483,11 @@ def test_gemini_loop_gen_logs_unsupported_effort(monkeypatch, caplog, capsys):
             SimpleNamespace(
                 content=SimpleNamespace(
                     parts=[
-                        SimpleNamespace(
-                            text=json.dumps(_loop_g_payload()), thought=False
-                        )
+                        SimpleNamespace(text=json.dumps(_loop_payload()), thought=False)
                     ]
                 )
             )
         ],
-        parsed=objects.Loop_G.model_validate(_loop_g_payload()),
         usage_metadata=SimpleNamespace(
             cached_content_token_count=0,
             prompt_token_count=0,
@@ -537,8 +513,8 @@ def test_gemini_loop_gen_logs_unsupported_effort(monkeypatch, caplog, capsys):
             effort="bogus",
         )
 
-    assert isinstance(midi_loop, objects.Loop_G)
-    assert messages[-1]["content"] == json.dumps(_loop_g_payload())
+    assert isinstance(midi_loop, objects.Loop)
+    assert messages[-1]["content"] == json.dumps(_loop_payload())
     assert cost == 0
     assert capsys.readouterr().out == ""
     assert (
@@ -553,14 +529,11 @@ def test_gemini_loop_gen_omits_unsupported_temperature(monkeypatch):
             SimpleNamespace(
                 content=SimpleNamespace(
                     parts=[
-                        SimpleNamespace(
-                            text=json.dumps(_loop_g_payload()), thought=False
-                        )
+                        SimpleNamespace(text=json.dumps(_loop_payload()), thought=False)
                     ]
                 )
             )
         ],
-        parsed=objects.Loop_G.model_validate(_loop_g_payload()),
         usage_metadata=SimpleNamespace(
             cached_content_token_count=0,
             prompt_token_count=0,

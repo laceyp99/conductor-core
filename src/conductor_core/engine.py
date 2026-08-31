@@ -79,12 +79,11 @@ class LoopGenerationEngine:
             self._emit(progress_callback, "midi", "Processing MIDI...")
             workspace = self.store.create_generation_workspace()
             midi = MidiFile()
-            model_info = music.get_model_info()
             warnings.extend(
                 loop_to_midi(
                     midi,
                     loop,
-                    times_as_string=request.model in model_info["models"]["Google"],
+                    times_as_string=False,
                 )
             )
             midi.save(workspace.midi_path)

@@ -1,8 +1,11 @@
+from contextlib import nullcontext
+
 import pytest
 from mido import Message, MetaMessage, MidiFile, MidiTrack
 from pydantic import ValidationError
 
 from conductor_core.midi import loop_to_midi, midi_to_loop
+from conductor_core.models import Loop
 
 
 def _note_events_with_absolute_times(midi):
@@ -13,6 +16,36 @@ def _note_events_with_absolute_times(midi):
         if msg.type != "end_of_track":
             events.append((msg.type, msg.note, absolute_time))
     return events
+
+
+def test_midi_helpers_default_to_canonical_numeric_timing(tmp_path, sample_loop):
+    midi = MidiFile(ticks_per_beat=480)
+    loop_to_midi(midi, sample_loop)
+    path = tmp_path / "canonical-default.mid"
+    midi.save(path)
+
+    imported = midi_to_loop(str(path))
+
+    assert isinstance(imported, Loop)
+    assert imported.Bar_1.notes[0].time.start_beat == 1
+
+
+def test_loop_to_midi_detects_deprecated_loop_g_without_flag(sample_loop_g):
+    midi = MidiFile(ticks_per_beat=480)
+
+    with pytest.deprecated_call(match="Loop_G and string timing"):
+        loop_to_midi(midi, sample_loop_g)
+
+    assert _note_events_with_absolute_times(midi) == [
+        ("note_on", 60, 0),
+        ("note_off", 60, 1920),
+        ("note_on", 64, 1920),
+        ("note_off", 64, 3840),
+        ("note_on", 67, 3840),
+        ("note_off", 67, 5760),
+        ("note_on", 71, 5760),
+        ("note_off", 71, 7680),
+    ]
 
 
 def test_loop_to_midi_orders_note_off_before_note_on_at_same_tick(
@@ -335,9 +368,11 @@ def test_midi_to_loop_rejects_non_ppq_time_divisions(tmp_path, ticks_per_beat):
 
 
 def test_midi_to_loop_round_trips_string_timing(sample_loop_g, midi_builder):
-    midi_path = midi_builder(sample_loop_g, times_as_string=True)
+    with pytest.deprecated_call(match="Loop_G and string timing"):
+        midi_path = midi_builder(sample_loop_g, times_as_string=True)
 
-    loop = midi_to_loop(str(midi_path), times_as_string=True)
+    with pytest.deprecated_call(match="times_as_string=True"):
+        loop = midi_to_loop(str(midi_path), times_as_string=True)
 
     assert [
         bar.notes[0].pitch for bar in [loop.Bar_1, loop.Bar_2, loop.Bar_3, loop.Bar_4]
@@ -394,7 +429,13 @@ def test_midi_to_loop_imports_seventeen_sixteenth_sustains(
     path = tmp_path / "seventeen.mid"
     midi.save(path)
 
-    loop = midi_to_loop(str(path), times_as_string=times_as_string)
+    warning_context = (
+        pytest.deprecated_call(match="times_as_string=True")
+        if times_as_string
+        else nullcontext()
+    )
+    with warning_context:
+        loop = midi_to_loop(str(path), times_as_string=times_as_string)
 
     duration = loop.Bar_1.notes[0].time.duration
     assert (
@@ -417,9 +458,21 @@ def test_midi_long_note_round_trips_across_multiple_bars(tmp_path, times_as_stri
     source = tmp_path / "three_bars.mid"
     midi.save(source)
 
-    loop = midi_to_loop(str(source), times_as_string=times_as_string)
+    warning_context = (
+        pytest.deprecated_call(match="times_as_string=True")
+        if times_as_string
+        else nullcontext()
+    )
+    with warning_context:
+        loop = midi_to_loop(str(source), times_as_string=times_as_string)
     exported = MidiFile(ticks_per_beat=480)
-    loop_to_midi(exported, loop, times_as_string=times_as_string)
+    warning_context = (
+        pytest.deprecated_call(match="Loop_G and string timing")
+        if times_as_string
+        else nullcontext()
+    )
+    with warning_context:
+        loop_to_midi(exported, loop, times_as_string=times_as_string)
 
     assert _note_events_with_absolute_times(exported) == [
         ("note_on", 60, 0),

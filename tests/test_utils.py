@@ -222,7 +222,9 @@ def test_save_messages_to_json_normalizes_suffix_and_round_trips_utf8(
 
 
 def test_sixteenth_converters_round_trip_enum_values():
-    sixteenth_note = utils.int_to_sixteenth_g(16)
+    with pytest.deprecated_call(match="int_to_sixteenth_g"):
+        sixteenth_note = utils.int_to_sixteenth_g(16)
 
     assert sixteenth_note is SixteenthNote_G.SIXTEEN
-    assert utils.convert_sixteenth(sixteenth_note) == 16
+    with pytest.deprecated_call(match="convert_sixteenth"):
+        assert utils.convert_sixteenth(sixteenth_note) == 16

@@ -147,7 +147,7 @@ def loop_gen(
     config = {
         "system_instruction": loop_prompt,
         "response_mime_type": "application/json",
-        "response_schema": objects.Loop_G,
+        "response_json_schema": objects.Loop.model_json_schema(),
     }
     if model_config.get("temperature_supported", True):
         config["temperature"] = temp
@@ -201,9 +201,7 @@ def loop_gen(
         logger.error("Google request failed: %s", exc)
         _raise_google_error(exc, "request")
     content, thinking_content = process_output(response)
-    midi_loop: objects.Loop_G = response.parsed
-    if midi_loop is None:
-        raise ValueError("Google response did not include parsed loop content.")
+    midi_loop = objects.Loop.model_validate_json(content)
 
     messages = [
         {"role": "system", "content": loop_prompt},
