@@ -51,8 +51,9 @@ def loop_to_midi(midi, loop, times_as_string=False) -> list[str]:
     Args:
         midi (MidiFile): The MidiFile instance to which the track will be added.
         loop: The loop object containing 4 bars (Bar_1, Bar_2, Bar_3, Bar_4).
-        times_as_string (bool): Deprecated compatibility option for ``_G`` models.
-                                Canonical numeric timing is used by default.
+        times_as_string (bool): Deprecated compatibility option for string timing.
+                                ``Loop_G`` inputs are detected automatically, while
+                                canonical numeric timing is used by default.
 
     Returns:
         A list of warnings describing notes changed or dropped during export. The
@@ -60,10 +61,11 @@ def loop_to_midi(midi, loop, times_as_string=False) -> list[str]:
     """
     if loop is None:
         raise ValueError("The loop object is None. Ensure it is properly initialized.")
-    if times_as_string:
+    uses_legacy_timing = times_as_string or isinstance(loop, objects.Loop_G)
+    if uses_legacy_timing:
         warnings_module.warn(
-            "times_as_string=True is deprecated; pass a canonical Loop with numeric "
-            "timing values instead.",
+            "Loop_G and string timing are deprecated; pass a canonical Loop with "
+            "numeric timing values instead.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -141,7 +143,7 @@ def loop_to_midi(midi, loop, times_as_string=False) -> list[str]:
                 velocity = 127
 
             # Get the note's time information from either style loop object.
-            if times_as_string:
+            if uses_legacy_timing:
                 start_beat = _legacy_timing_to_int(note.time.start_beat)
                 duration = _legacy_timing_to_int(note.time.duration)
             else:
