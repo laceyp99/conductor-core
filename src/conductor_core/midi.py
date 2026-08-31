@@ -4,6 +4,7 @@ It supports converting a loop into MIDI (with proper absolute and delta timing) 
 """
 
 import logging
+import warnings as warnings_module
 
 from mido import Message, MetaMessage, MidiFile, MidiTrack, merge_tracks
 
@@ -32,7 +33,15 @@ def _validate_import_ppq(ticks_per_beat):
         )
 
 
-def loop_to_midi(midi, loop, times_as_string=True) -> list[str]:
+def _legacy_timing_to_int(value):
+    """Convert a deprecated string timing enum without emitting nested warnings."""
+    raw_value = value.value.lower()
+    return objects.SIXTEENTH_NOTE_G_TO_INT.get(
+        raw_value, objects.DURATION_SIXTEENTH_G_TO_INT.get(raw_value)
+    )
+
+
+def loop_to_midi(midi, loop, times_as_string=False) -> list[str]:
     """
     Converts a loop object into MIDI format.
 
@@ -42,8 +51,8 @@ def loop_to_midi(midi, loop, times_as_string=True) -> list[str]:
     Args:
         midi (MidiFile): The MidiFile instance to which the track will be added.
         loop: The loop object containing 4 bars (Bar_1, Bar_2, Bar_3, Bar_4).
-        times_as_string (bool): If True, assume note time values are string enums that need conversion
-                                via `utils.convert_sixteenth`; otherwise, they are integers.
+        times_as_string (bool): Deprecated compatibility option for ``_G`` models.
+                                Canonical numeric timing is used by default.
 
     Returns:
         A list of warnings describing notes changed or dropped during export. The
@@ -51,7 +60,13 @@ def loop_to_midi(midi, loop, times_as_string=True) -> list[str]:
     """
     if loop is None:
         raise ValueError("The loop object is None. Ensure it is properly initialized.")
-
+    if times_as_string:
+        warnings_module.warn(
+            "times_as_string=True is deprecated; pass a canonical Loop with numeric "
+            "timing values instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
     bars = [getattr(loop, f"Bar_{i}", None) for i in range(1, 5)]
     if any(bar is None for bar in bars):
         raise ValueError(
@@ -127,8 +142,8 @@ def loop_to_midi(midi, loop, times_as_string=True) -> list[str]:
 
             # Get the note's time information from either style loop object.
             if times_as_string:
-                start_beat = utils.convert_sixteenth(note.time.start_beat)
-                duration = utils.convert_sixteenth(note.time.duration)
+                start_beat = _legacy_timing_to_int(note.time.start_beat)
+                duration = _legacy_timing_to_int(note.time.duration)
             else:
                 start_beat = note.time.start_beat
                 duration = note.time.duration
@@ -174,7 +189,7 @@ def loop_to_midi(midi, loop, times_as_string=True) -> list[str]:
     return warnings
 
 
-def midi_to_loop(midi_filename, times_as_string=True):
+def midi_to_loop(midi_filename, times_as_string=False):
     """
     Converts a MIDI file into a loop object.
 
@@ -184,11 +199,20 @@ def midi_to_loop(midi_filename, times_as_string=True):
 
     Args:
         midi_filename (str): The path to the MIDI file.
-        times_as_string (bool): If True, convert timing information to string enums; else leave as integers.
+        times_as_string (bool): Deprecated compatibility option that returns a
+                                ``Loop_G``. Canonical ``Loop`` output is the default.
 
     Returns:
-        The constructed loop object (either Loop_G if times_as_string is True, or Loop otherwise).
+        A canonical ``Loop`` by default, or deprecated ``Loop_G`` compatibility
+        output when ``times_as_string`` is True.
     """
+    if times_as_string:
+        warnings_module.warn(
+            "times_as_string=True is deprecated; use the canonical numeric Loop "
+            "output instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
     # Load the MIDI file and set some basic time parameters.
     midi = MidiFile(midi_filename)
     ticks_per_beat = midi.ticks_per_beat
@@ -258,8 +282,10 @@ def midi_to_loop(midi_filename, times_as_string=True):
         # Create the note objects with time information.
         if times_as_string:
             time_info = objects.TimeInformation_G(
-                start_beat=utils.int_to_sixteenth_g(relative_start),
-                duration=utils.int_to_duration_sixteenth_g(duration_sixteenth),
+                start_beat=objects.SixteenthNote_G.from_int(relative_start),
+                duration=objects.DurationSixteenth_G(
+                    objects.DURATION_SIXTEENTH_INT_TO_G[duration_sixteenth]
+                ),
             )
             note_obj = objects.Note_G(
                 pitch=pitch_name, octave=octave, velocity=velocity, time=time_info

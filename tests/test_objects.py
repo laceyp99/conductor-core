@@ -2,6 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from conductor_core.models import (
+    Bar_G,
     DurationSixteenth,
     DurationSixteenth_G,
     Loop,
@@ -13,6 +14,21 @@ from conductor_core.models import (
     TimeInformation,
     TimeInformation_G,
 )
+
+
+def test_g_models_are_marked_deprecated():
+    deprecated_types = (
+        SixteenthNote_G,
+        DurationSixteenth_G,
+        TimeInformation_G,
+        Note_G,
+        Bar_G,
+        Loop_G,
+    )
+
+    assert all(
+        "deprecated" in model.__deprecated__.lower() for model in deprecated_types
+    )
 
 
 def test_sixteenth_note_g_from_int_returns_expected_enum_member():
