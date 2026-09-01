@@ -5,6 +5,7 @@ from importlib import resources
 import conductor_core
 from conductor_core import (
     EngineConfig,
+    GenerationMetadata,
     GenerationRequest,
     GenerationResult,
     LoopGenerationEngine,
@@ -18,6 +19,7 @@ from conductor_core.music import get_loop_prompt, get_model_info
 
 expected_public_api = {
     "EngineConfig",
+    "GenerationMetadata",
     "GenerationRequest",
     "GenerationResult",
     "LoopGenerationEngine",
@@ -31,6 +33,7 @@ assert expected_public_api <= set(conductor_core.__all__)
 
 public_imports = (
     EngineConfig,
+    GenerationMetadata,
     GenerationRequest,
     GenerationResult,
     LoopGenerationEngine,
@@ -41,6 +44,9 @@ public_imports = (
     resolve_default_artifact_root,
 )
 assert all(public_import is not None for public_import in public_imports)
+
+py_typed = resources.files("conductor_core").joinpath("py.typed")
+assert py_typed.is_file()
 
 model_info = get_model_info()
 assert isinstance(model_info.get("models"), dict)
