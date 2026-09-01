@@ -24,6 +24,7 @@ from conductor_core.paths import (
     resolve_data_dir,
     resolve_default_artifact_root,
 )
+from conductor_core.storage import GenerationMetadata
 
 # Library logging: Core emits records under the "conductor_core" namespace and
 # never configures handlers itself. Consumers attach handlers (for example via
@@ -33,6 +34,7 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 __all__ = [
     "AudioRenderingError",
     "EngineConfig",
+    "GenerationMetadata",
     "GenerationRequest",
     "GenerationResult",
     "LoopGenerationEngine",

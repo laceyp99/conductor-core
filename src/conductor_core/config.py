@@ -6,9 +6,14 @@ from math import isfinite
 from pathlib import Path
 from typing import Any
 
+from conductor_core.models import Loop
 from conductor_core.music import ENHARMONIC_NOTE_NAMES, SCALE_INTERVALS
 from conductor_core.paths import resolve_default_artifact_root
-from conductor_core.storage import MAX_GENERATIONS, _validate_max_generations
+from conductor_core.storage import (
+    MAX_GENERATIONS,
+    GenerationMetadata,
+    _validate_max_generations,
+)
 
 
 @dataclass(frozen=True)
@@ -180,10 +185,10 @@ class GenerationResult:
     """Complete result of a generated loop and its persisted artifacts."""
 
     generation_id: str
-    loop: Any
+    loop: Loop
     midi_path: str
     audio_path: str | None
     messages: list[dict[str, Any]]
     cost: float | None
-    metadata: Any
+    metadata: GenerationMetadata
     warnings: list[str] = field(default_factory=list)

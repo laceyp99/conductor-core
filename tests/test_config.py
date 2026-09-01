@@ -1,10 +1,12 @@
 import os
 from pathlib import Path
+from typing import get_type_hints
 from unittest.mock import Mock
 
 import pytest
 
-from conductor_core import GenerationRequest
+from conductor_core import GenerationMetadata, GenerationRequest, GenerationResult
+from conductor_core.models import Loop
 
 
 def make_request(**overrides):
@@ -16,6 +18,13 @@ def make_request(**overrides):
     }
     values.update(overrides)
     return GenerationRequest(**values)
+
+
+def test_generation_result_exposes_concrete_public_types():
+    type_hints = get_type_hints(GenerationResult)
+
+    assert type_hints["loop"] is Loop
+    assert type_hints["metadata"] is GenerationMetadata
 
 
 def test_generation_request_rejects_removed_provider():
