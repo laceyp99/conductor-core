@@ -2,6 +2,7 @@
 
 import logging
 import os
+import warnings
 
 from conductor_core import models as objects
 from conductor_core import music as utils
@@ -20,8 +21,6 @@ except ImportError:  # pragma: no cover - exercised only in minimal installs
     ollama = None
 
 logger = logging.getLogger(__name__)
-
-_ollama_status_cache = None
 
 
 def _resolve_host(host_address: str | None = None) -> str:
@@ -75,17 +74,14 @@ def get_ollama_status(
     request_timeout: float | None = None,
 ):
     """Get the current Ollama availability and discovered models."""
-    global _ollama_status_cache
+    if force_refresh:
+        warnings.warn(
+            "force_refresh is now a no-op and will be removed in a future release.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
     host = _resolve_host(host_address)
-    cache_key = (host,)
-    if (
-        _ollama_status_cache is not None
-        and not force_refresh
-        and _ollama_status_cache.get("cache_key") == cache_key
-    ):
-        return {k: v for k, v in _ollama_status_cache.items() if k != "cache_key"}
-
     status = {
         "available": False,
         "models": [],
@@ -95,7 +91,6 @@ def get_ollama_status(
 
     if ollama is None:
         status["error"] = "Install conductor-core[ollama] to use Ollama models."
-        _ollama_status_cache = {**status, "cache_key": cache_key}
         return status
 
     try:
@@ -109,7 +104,6 @@ def get_ollama_status(
         status["error"] = str(exc)
         logger.warning("Ollama unavailable at %s: %s", host, exc)
 
-    _ollama_status_cache = {**status, "cache_key": cache_key}
     return status
 
 

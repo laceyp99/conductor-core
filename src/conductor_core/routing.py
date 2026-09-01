@@ -124,7 +124,6 @@ def generate_midi(
         )
     else:
         ollama_status = ollama_api.get_ollama_status(
-            force_refresh=True,
             host_address=credentials.ollama_host,
             **(
                 {"request_timeout": request_timeout}
