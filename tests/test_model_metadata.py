@@ -3,6 +3,25 @@ import pytest
 from conductor_core import music
 
 
+def test_model_info_results_are_isolated_from_caller_mutations():
+    first = music.get_model_info()
+    model_name = "gemini-3.7-flash"
+    first_model = first["models"]["Google"][model_name]
+
+    first["caller_only"] = True
+    first_model["cost"]["input"] = -1
+
+    second = music.get_model_info()
+    second_model = second["models"]["Google"][model_name]
+
+    assert "caller_only" not in second
+    assert second_model["cost"]["input"] == 0.75
+    assert first is not second
+    assert first["models"] is not second["models"]
+    assert first_model is not second_model
+    assert first_model["cost"] is not second_model["cost"]
+
+
 def test_effort_options_are_ordered_from_lowest_to_highest():
     effort_rank = {
         "none": 0,

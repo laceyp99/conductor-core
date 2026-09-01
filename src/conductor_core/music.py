@@ -1,5 +1,6 @@
 import json
 import warnings
+from copy import deepcopy
 from importlib import resources
 
 from conductor_core import models as objects
@@ -189,7 +190,7 @@ def get_model_info():
         _validate_model_info(model_info)
         _model_info_cache = model_info
 
-    return _model_info_cache
+    return deepcopy(_model_info_cache)
 
 
 def get_loop_prompt():
