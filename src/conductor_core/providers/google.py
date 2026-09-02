@@ -71,7 +71,7 @@ def calc_cost(model, usage):
     model_cost = model_info["models"]["Google"][model]["cost"]
     prompt_tokens = usage.prompt_token_count or 0
     output_tokens = (usage.candidates_token_count or 0) + (
-        getattr(usage, "thoughts_token_count", 0) or 0
+        usage.thoughts_token_count or 0
     )
     cached = usage.cached_content_token_count or 0
 

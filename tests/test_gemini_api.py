@@ -9,6 +9,7 @@ def test_calc_cost_uses_reported_cached_tokens_without_storage_estimate():
     usage = SimpleNamespace(
         prompt_token_count=1000,
         candidates_token_count=200,
+        thoughts_token_count=None,
         cached_content_token_count=400,
     )
 
@@ -38,13 +39,13 @@ def test_calc_cost_includes_thought_tokens_at_output_rate():
     assert cost == pytest.approx(expected)
 
 
-@pytest.mark.parametrize("usage_overrides", [{}, {"thoughts_token_count": None}])
-def test_calc_cost_treats_optional_thought_count_as_zero(usage_overrides):
+@pytest.mark.parametrize("thoughts_token_count", [None, 0])
+def test_calc_cost_treats_empty_thought_count_as_zero(thoughts_token_count):
     usage = SimpleNamespace(
         prompt_token_count=1000,
         candidates_token_count=200,
+        thoughts_token_count=thoughts_token_count,
         cached_content_token_count=400,
-        **usage_overrides,
     )
 
     cost = gemini_api.calc_cost("gemini-2.5-flash", usage)
@@ -59,6 +60,7 @@ def test_calc_cost_clamps_cached_tokens_to_avoid_negative_input_cost():
     usage = SimpleNamespace(
         prompt_token_count=100,
         candidates_token_count=0,
+        thoughts_token_count=None,
         cached_content_token_count=150,
     )
 
@@ -71,6 +73,7 @@ def test_calc_cost_handles_models_without_cache_pricing():
     usage = SimpleNamespace(
         prompt_token_count=1000,
         candidates_token_count=200,
+        thoughts_token_count=None,
         cached_content_token_count=None,
     )
 
@@ -85,6 +88,7 @@ def test_calc_cost_treats_missing_token_counts_as_zero(model):
     usage = SimpleNamespace(
         prompt_token_count=None,
         candidates_token_count=None,
+        thoughts_token_count=None,
         cached_content_token_count=None,
     )
 
