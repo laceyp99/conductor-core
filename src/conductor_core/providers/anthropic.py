@@ -96,12 +96,12 @@ def calc_price(model, output):
     cache_creation = max(0, output.get("cache_creation", 0) or 0)
     cache_read = max(0, output.get("cache_read", 0) or 0)
     reported_1hour = max(0, output.get("cache_creation_1h", 0) or 0)
-    reported_5min = max(0, output.get("cache_creation_5m", 0) or 0)
 
+    # The aggregate cache_creation count is authoritative. Bill the reported 1h
+    # portion at the 1h rate and everything else at the 5m rate, so cache writes
+    # without a TTL breakdown deliberately land on the cheaper rate.
     cache_creation_1hour = min(cache_creation, reported_1hour)
-    remaining_creation = cache_creation - cache_creation_1hour
-    cache_creation_5min = min(remaining_creation, reported_5min)
-    cache_creation_5min += remaining_creation - cache_creation_5min
+    cache_creation_5min = cache_creation - cache_creation_1hour
 
     return (
         input_tokens * input_cost
