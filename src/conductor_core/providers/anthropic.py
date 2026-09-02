@@ -88,13 +88,27 @@ def calc_price(model, output):
     input_cost = model_cost["input"] / 1000000
     output_cost = model_cost["output"] / 1000000
     cached_5min = model_cost.get("5m cache input", 0) / 1000000
+    cached_1hour = model_cost.get("1h cache input", 0) / 1000000
     cache_hits = model_cost.get("cache hits/refreshes", 0) / 1000000
 
+    input_tokens = max(0, output.get("input_tokens", 0) or 0)
+    output_tokens = max(0, output.get("output_tokens", 0) or 0)
+    cache_creation = max(0, output.get("cache_creation", 0) or 0)
+    cache_read = max(0, output.get("cache_read", 0) or 0)
+    reported_1hour = max(0, output.get("cache_creation_1h", 0) or 0)
+    reported_5min = max(0, output.get("cache_creation_5m", 0) or 0)
+
+    cache_creation_1hour = min(cache_creation, reported_1hour)
+    remaining_creation = cache_creation - cache_creation_1hour
+    cache_creation_5min = min(remaining_creation, reported_5min)
+    cache_creation_5min += remaining_creation - cache_creation_5min
+
     return (
-        output["input_tokens"] * input_cost
-        + output["output_tokens"] * output_cost
-        + output["cache_creation"] * cached_5min
-        + output["cache_read"] * cache_hits
+        input_tokens * input_cost
+        + output_tokens * output_cost
+        + cache_creation_5min * cached_5min
+        + cache_creation_1hour * cached_1hour
+        + cache_read * cache_hits
     )
 
 
@@ -115,28 +129,30 @@ def process_streaming_response(completion):
         "input_tokens": 0,
         "output_tokens": 0,
         "cache_creation": 0,
+        "cache_creation_5m": 0,
+        "cache_creation_1h": 0,
         "cache_read": 0,
     }
+
+    def accumulate_usage(usage):
+        output["input_tokens"] += getattr(usage, "input_tokens", 0) or 0
+        output["output_tokens"] += getattr(usage, "output_tokens", 0) or 0
+        output["cache_creation"] += (
+            getattr(usage, "cache_creation_input_tokens", 0) or 0
+        )
+        output["cache_read"] += getattr(usage, "cache_read_input_tokens", 0) or 0
+        cache_creation = getattr(usage, "cache_creation", None)
+        output["cache_creation_5m"] += (
+            getattr(cache_creation, "ephemeral_5m_input_tokens", 0) or 0
+        )
+        output["cache_creation_1h"] += (
+            getattr(cache_creation, "ephemeral_1h_input_tokens", 0) or 0
+        )
 
     for chunk in completion:
         if chunk.type == "message_start":
             if hasattr(chunk, "message") and hasattr(chunk.message, "usage"):
-                output["input_tokens"] += getattr(
-                    chunk.message.usage, "input_tokens", 0
-                )
-                output["output_tokens"] += getattr(
-                    chunk.message.usage, "output_tokens", 0
-                )
-                output["cache_creation"] += getattr(
-                    chunk.message.usage,
-                    "cache_creation_input_tokens",
-                    0,
-                )
-                output["cache_read"] += getattr(
-                    chunk.message.usage,
-                    "cache_read_input_tokens",
-                    0,
-                )
+                accumulate_usage(chunk.message.usage)
         elif chunk.type == "content_block_delta":
             if hasattr(chunk.delta, "thinking"):
                 output["thinking_content"] += chunk.delta.thinking
@@ -146,18 +162,7 @@ def process_streaming_response(completion):
                 output["loop"] += chunk.delta.partial_json
         elif chunk.type == "message_delta":
             if hasattr(chunk, "usage"):
-                output["input_tokens"] += getattr(chunk.usage, "input_tokens", 0)
-                output["output_tokens"] += getattr(chunk.usage, "output_tokens", 0)
-                output["cache_creation"] += getattr(
-                    chunk.usage,
-                    "cache_creation_input_tokens",
-                    0,
-                )
-                output["cache_read"] += getattr(
-                    chunk.usage,
-                    "cache_read_input_tokens",
-                    0,
-                )
+                accumulate_usage(chunk.usage)
         elif chunk.type == "message_stop":
             break
     return output

@@ -216,6 +216,104 @@ def test_claude_calc_price_uses_reported_cache_creation_and_reads():
     assert cost == pytest.approx(expected)
 
 
+def test_claude_streaming_usage_preserves_cache_creation_ttl_breakdown():
+    message_usage = SimpleNamespace(
+        input_tokens=100,
+        output_tokens=0,
+        cache_creation_input_tokens=70,
+        cache_read_input_tokens=30,
+        cache_creation=SimpleNamespace(
+            ephemeral_5m_input_tokens=40,
+            ephemeral_1h_input_tokens=30,
+        ),
+    )
+    delta_usage = SimpleNamespace(
+        output_tokens=20,
+        cache_creation_input_tokens=None,
+        cache_read_input_tokens=None,
+        cache_creation=None,
+    )
+    completion = [
+        SimpleNamespace(
+            type="message_start",
+            message=SimpleNamespace(usage=message_usage),
+        ),
+        SimpleNamespace(type="message_delta", usage=delta_usage),
+        SimpleNamespace(type="message_stop"),
+    ]
+
+    output = claude_api.process_streaming_response(completion)
+
+    assert output["input_tokens"] == 100
+    assert output["output_tokens"] == 20
+    assert output["cache_creation"] == 70
+    assert output["cache_creation_5m"] == 40
+    assert output["cache_creation_1h"] == 30
+    assert output["cache_read"] == 30
+
+
+def test_claude_calc_price_uses_ttl_specific_cache_creation_rates():
+    output = {
+        "input_tokens": 1000,
+        "output_tokens": 200,
+        "cache_creation": 500,
+        "cache_creation_5m": 300,
+        "cache_creation_1h": 200,
+        "cache_read": 400,
+    }
+
+    cost = claude_api.calc_price("claude-sonnet-4-5", output)
+
+    expected = (
+        (1000 * 3.00 / 1_000_000)
+        + (200 * 15.00 / 1_000_000)
+        + (300 * 3.75 / 1_000_000)
+        + (200 * 6.00 / 1_000_000)
+        + (400 * 0.30 / 1_000_000)
+    )
+    assert cost == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(
+    ("ttl_usage", "expected_5min", "expected_1hour"),
+    [
+        ({}, 500, 0),
+        ({"cache_creation_5m": 100, "cache_creation_1h": 200}, 300, 200),
+        ({"cache_creation_5m": 400, "cache_creation_1h": 300}, 200, 300),
+        ({"cache_creation_5m": -100, "cache_creation_1h": -200}, 500, 0),
+        ({"cache_creation_5m": None, "cache_creation_1h": None}, 500, 0),
+    ],
+)
+def test_claude_calc_price_reconciles_ttl_breakdown_to_aggregate(
+    ttl_usage, expected_5min, expected_1hour
+):
+    output = {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_creation": 500,
+        "cache_read": 0,
+        **ttl_usage,
+    }
+
+    cost = claude_api.calc_price("claude-sonnet-4-5", output)
+
+    expected = (expected_5min * 3.75 / 1_000_000) + (expected_1hour * 6.00 / 1_000_000)
+    assert cost == pytest.approx(expected)
+
+
+def test_claude_calc_price_clamps_negative_usage():
+    output = {
+        "input_tokens": -100,
+        "output_tokens": -100,
+        "cache_creation": -100,
+        "cache_creation_5m": 50,
+        "cache_creation_1h": 50,
+        "cache_read": -100,
+    }
+
+    assert claude_api.calc_price("claude-sonnet-4-5", output) == 0
+
+
 def test_claude_calc_price_returns_none_for_unknown_model():
     output = {
         "input_tokens": 1,
