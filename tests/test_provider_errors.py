@@ -1,3 +1,4 @@
+import warnings
 from types import SimpleNamespace
 
 import pytest
@@ -347,13 +348,66 @@ def test_ollama_status_forwards_request_timeout(monkeypatch):
     )
 
     status = ollama_api.get_ollama_status(
-        force_refresh=True,
         host_address="http://ollama.test",
         request_timeout=2.5,
     )
 
     assert status["available"] is True
     assert captured == {"host_address": "http://ollama.test", "timeout": 2.5}
+
+
+def test_ollama_status_queries_each_host_on_every_call(monkeypatch):
+    calls = []
+
+    def initialize_client(**kwargs):
+        host = kwargs["host_address"]
+        calls.append(host)
+        model = f"{host.rsplit('/', 1)[-1]}-{calls.count(host)}"
+        return SimpleNamespace(
+            list=lambda: SimpleNamespace(models=[SimpleNamespace(model=model)])
+        )
+
+    monkeypatch.setattr(ollama_api, "initialize_ollama_client", initialize_client)
+
+    first = ollama_api.get_ollama_status(host_address="http://ollama.test/one")
+    second = ollama_api.get_ollama_status(host_address="http://ollama.test/one")
+    other = ollama_api.get_ollama_status(host_address="http://ollama.test/two")
+    third = ollama_api.get_ollama_status(host_address="http://ollama.test/one")
+
+    assert calls == [
+        "http://ollama.test/one",
+        "http://ollama.test/one",
+        "http://ollama.test/two",
+        "http://ollama.test/one",
+    ]
+    assert first["models"] == ["one-1"]
+    assert second["models"] == ["one-2"]
+    assert other["models"] == ["two-1"]
+    assert third["models"] == ["one-3"]
+    assert first is not second
+
+
+@pytest.mark.parametrize("entry_point", ["get_ollama_status", "get_model_list"])
+def test_ollama_force_refresh_true_warns(monkeypatch, entry_point):
+    client = SimpleNamespace(list=lambda: SimpleNamespace(models=[]))
+    monkeypatch.setattr(ollama_api, "initialize_ollama_client", lambda **kwargs: client)
+
+    with pytest.warns(
+        DeprecationWarning,
+        match="force_refresh is now a no-op and will be removed in a future release",
+    ):
+        getattr(ollama_api, entry_point)(force_refresh=True)
+
+
+@pytest.mark.parametrize("entry_point", ["get_ollama_status", "get_model_list"])
+def test_ollama_force_refresh_omitted_or_false_does_not_warn(monkeypatch, entry_point):
+    client = SimpleNamespace(list=lambda: SimpleNamespace(models=[]))
+    monkeypatch.setattr(ollama_api, "initialize_ollama_client", lambda **kwargs: client)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        getattr(ollama_api, entry_point)()
+        getattr(ollama_api, entry_point)(force_refresh=False)
 
 
 @pytest.mark.parametrize(
@@ -434,3 +488,4 @@ def test_routing_forwards_request_timeout(monkeypatch, provider, model, adapter_
     assert captured["request_timeout"] == 2.5
     if provider == "Ollama":
         assert status_captured["request_timeout"] == 2.5
+        assert "force_refresh" not in status_captured
