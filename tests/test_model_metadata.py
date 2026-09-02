@@ -56,6 +56,46 @@ def test_gemini_3_7_flash_capabilities_match_google_documentation():
     }
 
 
+@pytest.mark.parametrize(
+    ("model", "expected_cost"),
+    [
+        (
+            "gpt-5.6-sol",
+            {
+                "input": 4.00,
+                "cached input": 0.40,
+                "cache write": 5.00,
+                "output": 20.00,
+            },
+        ),
+        (
+            "gpt-5.6-terra",
+            {
+                "input": 2.00,
+                "cached input": 0.20,
+                "cache write": 2.50,
+                "output": 12.00,
+            },
+        ),
+        (
+            "gpt-5.6-luna",
+            {
+                "input": 0.20,
+                "cached input": 0.02,
+                "cache write": 0.25,
+                "output": 1.20,
+            },
+        ),
+    ],
+)
+def test_gpt_5_6_cache_write_pricing_matches_openai_documentation(
+    model, expected_cost
+):
+    model_config = music.get_model_info()["models"]["OpenAI"][model]
+
+    assert model_config["cost"] == expected_cost
+
+
 def test_claude_fable_5_1_capabilities_match_anthropic_documentation():
     model_config = music.get_model_info()["models"]["Anthropic"]["claude-fable-5-1"]
 
