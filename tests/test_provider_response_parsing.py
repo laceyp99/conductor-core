@@ -235,7 +235,8 @@ def test_claude_opus_5_uses_adaptive_thinking_and_effort(monkeypatch):
     assert captured["tool_choice"] == {"type": "auto"}
 
 
-def test_claude_fable_5_uses_metadata_driven_always_on_thinking(monkeypatch):
+@pytest.mark.parametrize("model", ["claude-fable-5", "claude-fable-5-1"])
+def test_claude_fable_uses_metadata_driven_always_on_thinking(monkeypatch, model):
     captured = {}
     payload = json.dumps(_loop_payload())
 
@@ -250,9 +251,7 @@ def test_claude_fable_5_uses_metadata_driven_always_on_thinking(monkeypatch):
     monkeypatch.setattr(claude_api.utils, "get_loop_prompt", lambda: "system prompt")
     monkeypatch.setattr(claude_api.utils, "save_messages_to_json", _fail_save_messages)
 
-    claude_api.loop_gen(
-        "write a loop", "claude-fable-5", use_thinking=True, effort="max"
-    )
+    claude_api.loop_gen("write a loop", model, use_thinking=True, effort="max")
 
     assert "thinking" not in captured
     assert "temperature" not in captured
@@ -262,7 +261,11 @@ def test_claude_fable_5_uses_metadata_driven_always_on_thinking(monkeypatch):
 
 @pytest.mark.parametrize(
     ("model", "expects_thinking"),
-    [("claude-opus-5", True), ("claude-fable-5", False)],
+    [
+        ("claude-opus-5", True),
+        ("claude-fable-5", False),
+        ("claude-fable-5-1", False),
+    ],
 )
 def test_claude_disabled_thinking_uses_lowest_effort(
     monkeypatch, model, expects_thinking

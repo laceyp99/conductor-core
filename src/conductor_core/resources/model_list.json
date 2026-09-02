@@ -327,6 +327,24 @@
             }
         },
         "Anthropic": {
+            "claude-fable-5-1":{
+                "extended_thinking": true,
+                "always_on_adaptive_thinking": true,
+                "effort_options": ["low", "medium", "high", "xhigh", "max"],
+                "max_tokens": 128000,
+                "cost": {
+                    "input": 10.00,
+                    "5m cache input": 12.50,
+                    "1h cache input": 20.00,
+                    "cache hits/refreshes": 0.25,
+                    "output": 50.00
+                },
+                "rate_limits": {
+                    "RPM": 1000,
+                    "TPM": 100000,
+                    "RPD": null
+                }
+            },
             "claude-fable-5":{
                 "extended_thinking": true,
                 "always_on_adaptive_thinking": true,
@@ -491,23 +509,6 @@
                     "5m cache input": 3.75,
                     "1h cache input": 6.00,
                     "cache hits/refreshes": 0.30
-                },
-                "rate_limits": {
-                    "RPM": 1000,
-                    "TPM": 400000,
-                    "RPD": null
-                }
-            },
-            "claude-opus-4-1-20250805": {
-                "extended_thinking": true,
-                "max_tokens": 32000,
-                "max_thinking_budget": 27000,
-                "cost": {
-                    "input": 15.00,
-                    "5m cache input": 18.75,
-                    "1h cache input": 30.00,
-                    "cache hits/refreshes": 1.50,
-                    "output": 75.00
                 },
                 "rate_limits": {
                     "RPM": 1000,
