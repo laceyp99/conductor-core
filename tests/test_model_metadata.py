@@ -88,9 +88,7 @@ def test_gemini_3_7_flash_capabilities_match_google_documentation():
         ),
     ],
 )
-def test_gpt_5_6_cache_write_pricing_matches_openai_documentation(
-    model, expected_cost
-):
+def test_gpt_5_6_cache_write_pricing_matches_openai_documentation(model, expected_cost):
     model_config = music.get_model_info()["models"]["OpenAI"][model]
 
     assert model_config["cost"] == expected_cost
