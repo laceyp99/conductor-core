@@ -88,6 +88,115 @@ def test_openai_calc_price_clamps_malformed_cached_tokens():
     assert cost == pytest.approx(100 * 0.075 / 1_000_000)
 
 
+def test_openai_calc_price_partitions_cache_writes_before_reads():
+    response = SimpleNamespace(
+        usage=SimpleNamespace(
+            input_tokens=1000,
+            output_tokens=100,
+            input_tokens_details=SimpleNamespace(
+                cached_tokens=300,
+                cache_write_tokens=200,
+            ),
+        )
+    )
+
+    cost = openai_api.calc_price("gpt-5.6-sol", response)
+
+    expected = (
+        (500 * 4.00 / 1_000_000)
+        + (300 * 0.40 / 1_000_000)
+        + (200 * 5.00 / 1_000_000)
+        + (100 * 20.00 / 1_000_000)
+    )
+    assert cost == pytest.approx(expected)
+
+
+def test_openai_calc_price_uses_input_rate_when_cache_write_rate_is_missing():
+    response = SimpleNamespace(
+        usage=SimpleNamespace(
+            input_tokens=100,
+            output_tokens=0,
+            input_tokens_details=SimpleNamespace(
+                cached_tokens=20,
+                cache_write_tokens=30,
+            ),
+        )
+    )
+
+    cost = openai_api.calc_price("gpt-4o-mini", response)
+
+    expected = (80 * 0.15 / 1_000_000) + (20 * 0.075 / 1_000_000)
+    assert cost == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(
+    "usage",
+    [
+        SimpleNamespace(input_tokens=100, output_tokens=20),
+        SimpleNamespace(
+            input_tokens=100,
+            output_tokens=20,
+            input_tokens_details=None,
+        ),
+        SimpleNamespace(
+            input_tokens=100,
+            output_tokens=20,
+            input_tokens_details=SimpleNamespace(cached_tokens=25),
+        ),
+        SimpleNamespace(
+            input_tokens=100,
+            output_tokens=20,
+            input_tokens_details=SimpleNamespace(
+                cached_tokens=None,
+                cache_write_tokens=None,
+            ),
+        ),
+    ],
+)
+def test_openai_calc_price_tolerates_missing_or_null_input_details(usage):
+    response = SimpleNamespace(usage=usage)
+
+    cost = openai_api.calc_price("gpt-4o-mini", response)
+
+    cached_tokens = (
+        getattr(getattr(usage, "input_tokens_details", None), "cached_tokens", 0) or 0
+    )
+    expected = (
+        ((100 - cached_tokens) * 0.15 / 1_000_000)
+        + (cached_tokens * 0.075 / 1_000_000)
+        + (20 * 0.60 / 1_000_000)
+    )
+    assert cost == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(
+    ("input_tokens", "cached_tokens", "cache_write_tokens", "expected"),
+    [
+        (100, 80, 150, 100 * 5.00 / 1_000_000),
+        (100, 150, -20, 100 * 0.40 / 1_000_000),
+        (-100, 50, 50, 0),
+        (100, -50, -50, 100 * 4.00 / 1_000_000),
+    ],
+)
+def test_openai_calc_price_clamps_negative_and_overreported_cache_buckets(
+    input_tokens, cached_tokens, cache_write_tokens, expected
+):
+    response = SimpleNamespace(
+        usage=SimpleNamespace(
+            input_tokens=input_tokens,
+            output_tokens=0,
+            input_tokens_details=SimpleNamespace(
+                cached_tokens=cached_tokens,
+                cache_write_tokens=cache_write_tokens,
+            ),
+        )
+    )
+
+    cost = openai_api.calc_price("gpt-5.6-sol", response)
+
+    assert cost == pytest.approx(expected)
+
+
 def test_claude_calc_price_uses_reported_cache_creation_and_reads():
     output = {
         "input_tokens": 1000,
