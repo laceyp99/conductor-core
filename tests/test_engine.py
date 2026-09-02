@@ -98,7 +98,7 @@ def test_engine_generates_persisted_artifacts_with_mocked_provider(
     assert captured["system_prompt"] == "config prompt"
     assert captured["use_thinking"] is False
     assert captured["effort"] == "medium"
-    assert captured["_return_provider"] is True
+    assert "_return_provider" not in captured
     assert captured["audio"]["soundfont_name"] == str(soundfont_path)
     assert [event.stage for event in progress_events] == [
         "provider_call",

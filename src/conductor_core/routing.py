@@ -50,9 +50,13 @@ def generate_midi(
     provider_credentials: ProviderCredentials | None = None,
     request_timeout: float | None = None,
     system_prompt: str | None = None,
-    _return_provider: bool = False,
 ):
-    """Generate MIDI loop data by routing a prompt to the selected provider."""
+    """Generate loop data by routing a prompt to the selected provider.
+
+    Returns:
+        A tuple of ``(loop, messages, total_cost, provider)``, where ``provider``
+        is the name of the provider that handled the request.
+    """
     credentials = provider_credentials or ProviderCredentials()
     model_info = get_model_info()
 
@@ -154,6 +158,4 @@ def generate_midi(
         else:
             raise ValueError("Invalid Model Selected")
 
-    if _return_provider:
-        return loop, messages, loop_cost, provider
-    return loop, messages, loop_cost
+    return loop, messages, loop_cost, provider
