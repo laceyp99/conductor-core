@@ -197,6 +197,21 @@ def test_openai_calc_price_clamps_negative_and_overreported_cache_buckets(
     assert cost == pytest.approx(expected)
 
 
+@pytest.mark.parametrize("output_tokens", [None, -50])
+def test_openai_calc_price_clamps_null_or_negative_output_tokens(output_tokens):
+    response = SimpleNamespace(
+        usage=SimpleNamespace(
+            input_tokens=100,
+            output_tokens=output_tokens,
+            input_tokens_details=None,
+        )
+    )
+
+    cost = openai_api.calc_price("gpt-4o-mini", response)
+
+    assert cost == pytest.approx(100 * 0.15 / 1_000_000)
+
+
 def test_claude_calc_price_uses_reported_cache_creation_and_reads():
     output = {
         "input_tokens": 1000,

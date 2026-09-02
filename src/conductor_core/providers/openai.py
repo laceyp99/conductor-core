@@ -84,6 +84,7 @@ def calc_price(model, response):
     cache_write_cost /= 1000000
 
     input_tokens = max(0, usage.input_tokens or 0)
+    output_tokens = max(0, usage.output_tokens or 0)
     input_details = getattr(usage, "input_tokens_details", None)
     reported_cache_writes = max(0, getattr(input_details, "cache_write_tokens", 0) or 0)
     reported_cached_tokens = max(0, getattr(input_details, "cached_tokens", 0) or 0)
@@ -96,7 +97,7 @@ def calc_price(model, response):
 
     return (
         input_cost * new_input_tokens
-        + output_cost * usage.output_tokens
+        + output_cost * output_tokens
         + cached_input_cost * cached_tokens
         + cache_write_cost * cache_write_tokens
     )
