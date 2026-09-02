@@ -29,9 +29,16 @@ while its public API is still in initial development.
 - Request SoundFont overrides accept `os.PathLike` objects and normalize them
   only when audio is requested. Byte-valued or invalid path protocol results
   preserve generated MIDI and return an audio warning.
+- `routing.generate_midi()` now always returns
+  `(loop, messages, total_cost, provider)`. The private `_return_provider`
+  switch and its conditional three- or four-element return shape were removed.
 
 Integrations should parse form, command-line, and environment-variable strings
 before constructing `GenerationRequest` objects.
+
+Downstream callers that unpack `routing.generate_midi()` must now accept the
+fourth `provider` value. Callers that passed `_return_provider=True` should
+remove that keyword argument.
 
 ## [0.4.0] - 2026-08-02
 

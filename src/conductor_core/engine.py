@@ -73,7 +73,6 @@ class LoopGenerationEngine:
                 provider_credentials=self.config.provider_credentials,
                 request_timeout=self.config.request_timeout,
                 system_prompt=system_prompt,
-                _return_provider=True,
             )
 
             self._emit(progress_callback, "midi", "Processing MIDI...")
