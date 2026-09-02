@@ -252,6 +252,69 @@ def test_claude_streaming_usage_preserves_cache_creation_ttl_breakdown():
     assert output["cache_read"] == 30
 
 
+def test_claude_streaming_usage_replaces_cumulative_message_delta_totals():
+    anthropic_types = pytest.importorskip("anthropic.types")
+    start_usage = anthropic_types.Usage(
+        input_tokens=25,
+        output_tokens=1,
+        cache_creation_input_tokens=1000,
+        cache_read_input_tokens=2000,
+        cache_creation=anthropic_types.CacheCreation(
+            ephemeral_5m_input_tokens=600,
+            ephemeral_1h_input_tokens=400,
+        ),
+    )
+    delta_usage = anthropic_types.MessageDeltaUsage(
+        input_tokens=25,
+        output_tokens=150,
+        cache_creation_input_tokens=1000,
+        cache_read_input_tokens=2000,
+    )
+    completion = [
+        SimpleNamespace(
+            type="message_start",
+            message=SimpleNamespace(usage=start_usage),
+        ),
+        SimpleNamespace(type="message_delta", usage=delta_usage),
+        SimpleNamespace(type="message_stop"),
+    ]
+
+    output = claude_api.process_streaming_response(completion)
+
+    assert output["input_tokens"] == 25
+    assert output["output_tokens"] == 150
+    assert output["cache_creation"] == 1000
+    assert output["cache_creation_5m"] == 600
+    assert output["cache_creation_1h"] == 400
+    assert output["cache_read"] == 2000
+
+
+def test_claude_streaming_usage_keeps_baseline_when_delta_omits_fields():
+    start_usage = SimpleNamespace(
+        input_tokens=100,
+        output_tokens=1,
+        cache_creation_input_tokens=70,
+        cache_read_input_tokens=30,
+        cache_creation=None,
+    )
+    delta_usage = SimpleNamespace(output_tokens=20)
+    completion = [
+        SimpleNamespace(
+            type="message_start",
+            message=SimpleNamespace(usage=start_usage),
+        ),
+        SimpleNamespace(type="message_delta", usage=delta_usage),
+        SimpleNamespace(type="message_stop"),
+    ]
+
+    output = claude_api.process_streaming_response(completion)
+
+    assert output["input_tokens"] == 100
+    assert output["output_tokens"] == 20
+    assert output["cache_creation"] == 70
+    assert output["cache_read"] == 30
+
+
 def test_claude_calc_price_uses_ttl_specific_cache_creation_rates():
     output = {
         "input_tokens": 1000,

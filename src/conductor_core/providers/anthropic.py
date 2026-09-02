@@ -134,25 +134,37 @@ def process_streaming_response(completion):
         "cache_read": 0,
     }
 
-    def accumulate_usage(usage):
-        output["input_tokens"] += getattr(usage, "input_tokens", 0) or 0
-        output["output_tokens"] += getattr(usage, "output_tokens", 0) or 0
-        output["cache_creation"] += (
-            getattr(usage, "cache_creation_input_tokens", 0) or 0
-        )
-        output["cache_read"] += getattr(usage, "cache_read_input_tokens", 0) or 0
+    usage_fields = {
+        "input_tokens": "input_tokens",
+        "output_tokens": "output_tokens",
+        "cache_creation": "cache_creation_input_tokens",
+        "cache_read": "cache_read_input_tokens",
+    }
+    ttl_fields = {
+        "cache_creation_5m": "ephemeral_5m_input_tokens",
+        "cache_creation_1h": "ephemeral_1h_input_tokens",
+    }
+
+    def apply_usage(usage):
+        # Anthropic usage snapshots are cumulative message totals: message_start
+        # reports the baseline and message_delta reports the running total, so
+        # each reported (non-None) field replaces the prior value instead of
+        # being added to it.
+        for key, attr in usage_fields.items():
+            value = getattr(usage, attr, None)
+            if value is not None:
+                output[key] = value
         cache_creation = getattr(usage, "cache_creation", None)
-        output["cache_creation_5m"] += (
-            getattr(cache_creation, "ephemeral_5m_input_tokens", 0) or 0
-        )
-        output["cache_creation_1h"] += (
-            getattr(cache_creation, "ephemeral_1h_input_tokens", 0) or 0
-        )
+        if cache_creation is not None:
+            for key, attr in ttl_fields.items():
+                value = getattr(cache_creation, attr, None)
+                if value is not None:
+                    output[key] = value
 
     for chunk in completion:
         if chunk.type == "message_start":
             if hasattr(chunk, "message") and hasattr(chunk.message, "usage"):
-                accumulate_usage(chunk.message.usage)
+                apply_usage(chunk.message.usage)
         elif chunk.type == "content_block_delta":
             if hasattr(chunk.delta, "thinking"):
                 output["thinking_content"] += chunk.delta.thinking
@@ -162,7 +174,7 @@ def process_streaming_response(completion):
                 output["loop"] += chunk.delta.partial_json
         elif chunk.type == "message_delta":
             if hasattr(chunk, "usage"):
-                accumulate_usage(chunk.usage)
+                apply_usage(chunk.usage)
         elif chunk.type == "message_stop":
             break
     return output
