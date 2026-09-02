@@ -9,6 +9,7 @@ def test_calc_cost_uses_reported_cached_tokens_without_storage_estimate():
     usage = SimpleNamespace(
         prompt_token_count=1000,
         candidates_token_count=200,
+        thoughts_token_count=None,
         cached_content_token_count=400,
     )
 
@@ -20,10 +21,46 @@ def test_calc_cost_uses_reported_cached_tokens_without_storage_estimate():
     assert cost == pytest.approx(expected)
 
 
+def test_calc_cost_includes_thought_tokens_at_output_rate():
+    usage = SimpleNamespace(
+        prompt_token_count=1000,
+        candidates_token_count=200,
+        thoughts_token_count=300,
+        cached_content_token_count=400,
+    )
+
+    cost = gemini_api.calc_cost("gemini-2.5-flash", usage)
+
+    expected = (
+        (600 * 0.30 / 1_000_000)
+        + ((200 + 300) * 2.50 / 1_000_000)
+        + (400 * 0.03 / 1_000_000)
+    )
+    assert cost == pytest.approx(expected)
+
+
+@pytest.mark.parametrize("thoughts_token_count", [None, 0])
+def test_calc_cost_treats_empty_thought_count_as_zero(thoughts_token_count):
+    usage = SimpleNamespace(
+        prompt_token_count=1000,
+        candidates_token_count=200,
+        thoughts_token_count=thoughts_token_count,
+        cached_content_token_count=400,
+    )
+
+    cost = gemini_api.calc_cost("gemini-2.5-flash", usage)
+
+    expected = (
+        (600 * 0.30 / 1_000_000) + (200 * 2.50 / 1_000_000) + (400 * 0.03 / 1_000_000)
+    )
+    assert cost == pytest.approx(expected)
+
+
 def test_calc_cost_clamps_cached_tokens_to_avoid_negative_input_cost():
     usage = SimpleNamespace(
         prompt_token_count=100,
         candidates_token_count=0,
+        thoughts_token_count=None,
         cached_content_token_count=150,
     )
 
@@ -36,6 +73,7 @@ def test_calc_cost_handles_models_without_cache_pricing():
     usage = SimpleNamespace(
         prompt_token_count=1000,
         candidates_token_count=200,
+        thoughts_token_count=None,
         cached_content_token_count=None,
     )
 
@@ -50,6 +88,7 @@ def test_calc_cost_treats_missing_token_counts_as_zero(model):
     usage = SimpleNamespace(
         prompt_token_count=None,
         candidates_token_count=None,
+        thoughts_token_count=None,
         cached_content_token_count=None,
     )
 

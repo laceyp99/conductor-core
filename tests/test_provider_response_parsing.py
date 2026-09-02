@@ -622,6 +622,7 @@ def test_gemini_disabled_thinking_uses_lowest_effort(monkeypatch):
             cached_content_token_count=0,
             prompt_token_count=0,
             candidates_token_count=0,
+            thoughts_token_count=0,
         ),
     )
 
@@ -674,6 +675,7 @@ def test_gemini_budget_thinking_uses_metadata_bounds(
             cached_content_token_count=0,
             prompt_token_count=0,
             candidates_token_count=0,
+            thoughts_token_count=0,
         ),
     )
 
@@ -780,6 +782,7 @@ def test_gemini_loop_gen_logs_unsupported_effort(monkeypatch, caplog, capsys):
             cached_content_token_count=0,
             prompt_token_count=0,
             candidates_token_count=0,
+            thoughts_token_count=0,
         ),
     )
     fake_client = SimpleNamespace(
@@ -826,6 +829,7 @@ def test_gemini_loop_gen_omits_unsupported_temperature(monkeypatch):
             cached_content_token_count=0,
             prompt_token_count=0,
             candidates_token_count=0,
+            thoughts_token_count=0,
         ),
     )
 
