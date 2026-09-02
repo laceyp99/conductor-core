@@ -8,8 +8,18 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+### Added
+
+- Complete package-index metadata, including project links, supported Python
+  versions, licensing, maintainership, and discovery keywords.
+- A packaged `py.typed` marker advertising inline type information to consumer
+  type checkers.
+
 ### Changed
 
+- `GenerationResult.loop` and `GenerationResult.metadata` now expose their
+  concrete `Loop` and `GenerationMetadata` types, with `GenerationMetadata`
+  available from the top-level public API.
 - `GenerationRequest` now validates every public field at construction: wrong
   Python types raise `TypeError`, accepted types with invalid values raise
   `ValueError`, and boolean fields no longer coerce truthy strings or integers.
