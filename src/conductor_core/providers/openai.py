@@ -76,31 +76,30 @@ def calc_price(model, response):
     """Calculate the cost for a given response based on token usage."""
     model_info = utils.get_model_info()
     usage = response.usage
-    input_cost = model_info["models"]["OpenAI"][model]["cost"].get("input", 0) / 1000000
-    output_cost = (
-        model_info["models"]["OpenAI"][model]["cost"].get("output", 0) / 1000000
-    )
-    cached_input_cost = (
-        model_info["models"]["OpenAI"][model]["cost"].get("cached input", 0) / 1000000
-    )
+    model_cost = model_info["models"]["OpenAI"][model]["cost"]
+    input_cost = model_cost.get("input", 0) / 1000000
+    output_cost = model_cost.get("output", 0) / 1000000
+    cached_input_cost = model_cost.get("cached input", 0) / 1000000
+    cache_write_cost = model_cost.get("cache write", model_cost.get("input", 0))
+    cache_write_cost /= 1000000
 
-    if (
-        hasattr(usage, "input_tokens_details")
-        and usage.input_tokens_details
-        and hasattr(usage.input_tokens_details, "cached_tokens")
-    ):
-        new_input_tokens, cached_tokens = utils.split_reported_cache_tokens(
-            usage.input_tokens,
-            usage.input_tokens_details.cached_tokens,
-        )
-    else:
-        new_input_tokens = usage.input_tokens
-        cached_tokens = 0
+    input_tokens = max(0, usage.input_tokens or 0)
+    output_tokens = max(0, usage.output_tokens or 0)
+    input_details = getattr(usage, "input_tokens_details", None)
+    reported_cache_writes = max(0, getattr(input_details, "cache_write_tokens", 0) or 0)
+    reported_cached_tokens = max(0, getattr(input_details, "cached_tokens", 0) or 0)
+    cache_write_tokens = min(input_tokens, reported_cache_writes)
+    cached_tokens = min(
+        input_tokens - cache_write_tokens,
+        reported_cached_tokens,
+    )
+    new_input_tokens = input_tokens - cache_write_tokens - cached_tokens
 
     return (
         input_cost * new_input_tokens
-        + output_cost * usage.output_tokens
+        + output_cost * output_tokens
         + cached_input_cost * cached_tokens
+        + cache_write_cost * cache_write_tokens
     )
 
 

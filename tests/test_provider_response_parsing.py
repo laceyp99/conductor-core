@@ -88,6 +88,130 @@ def test_openai_calc_price_clamps_malformed_cached_tokens():
     assert cost == pytest.approx(100 * 0.075 / 1_000_000)
 
 
+def test_openai_calc_price_partitions_cache_writes_before_reads():
+    response = SimpleNamespace(
+        usage=SimpleNamespace(
+            input_tokens=1000,
+            output_tokens=100,
+            input_tokens_details=SimpleNamespace(
+                cached_tokens=300,
+                cache_write_tokens=200,
+            ),
+        )
+    )
+
+    cost = openai_api.calc_price("gpt-5.6-sol", response)
+
+    expected = (
+        (500 * 4.00 / 1_000_000)
+        + (300 * 0.40 / 1_000_000)
+        + (200 * 5.00 / 1_000_000)
+        + (100 * 20.00 / 1_000_000)
+    )
+    assert cost == pytest.approx(expected)
+
+
+def test_openai_calc_price_uses_input_rate_when_cache_write_rate_is_missing():
+    response = SimpleNamespace(
+        usage=SimpleNamespace(
+            input_tokens=100,
+            output_tokens=0,
+            input_tokens_details=SimpleNamespace(
+                cached_tokens=20,
+                cache_write_tokens=30,
+            ),
+        )
+    )
+
+    cost = openai_api.calc_price("gpt-4o-mini", response)
+
+    expected = (80 * 0.15 / 1_000_000) + (20 * 0.075 / 1_000_000)
+    assert cost == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(
+    "usage",
+    [
+        SimpleNamespace(input_tokens=100, output_tokens=20),
+        SimpleNamespace(
+            input_tokens=100,
+            output_tokens=20,
+            input_tokens_details=None,
+        ),
+        SimpleNamespace(
+            input_tokens=100,
+            output_tokens=20,
+            input_tokens_details=SimpleNamespace(cached_tokens=25),
+        ),
+        SimpleNamespace(
+            input_tokens=100,
+            output_tokens=20,
+            input_tokens_details=SimpleNamespace(
+                cached_tokens=None,
+                cache_write_tokens=None,
+            ),
+        ),
+    ],
+)
+def test_openai_calc_price_tolerates_missing_or_null_input_details(usage):
+    response = SimpleNamespace(usage=usage)
+
+    cost = openai_api.calc_price("gpt-4o-mini", response)
+
+    cached_tokens = (
+        getattr(getattr(usage, "input_tokens_details", None), "cached_tokens", 0) or 0
+    )
+    expected = (
+        ((100 - cached_tokens) * 0.15 / 1_000_000)
+        + (cached_tokens * 0.075 / 1_000_000)
+        + (20 * 0.60 / 1_000_000)
+    )
+    assert cost == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(
+    ("input_tokens", "cached_tokens", "cache_write_tokens", "expected"),
+    [
+        (100, 80, 150, 100 * 5.00 / 1_000_000),
+        (100, 150, -20, 100 * 0.40 / 1_000_000),
+        (-100, 50, 50, 0),
+        (100, -50, -50, 100 * 4.00 / 1_000_000),
+    ],
+)
+def test_openai_calc_price_clamps_negative_and_overreported_cache_buckets(
+    input_tokens, cached_tokens, cache_write_tokens, expected
+):
+    response = SimpleNamespace(
+        usage=SimpleNamespace(
+            input_tokens=input_tokens,
+            output_tokens=0,
+            input_tokens_details=SimpleNamespace(
+                cached_tokens=cached_tokens,
+                cache_write_tokens=cache_write_tokens,
+            ),
+        )
+    )
+
+    cost = openai_api.calc_price("gpt-5.6-sol", response)
+
+    assert cost == pytest.approx(expected)
+
+
+@pytest.mark.parametrize("output_tokens", [None, -50])
+def test_openai_calc_price_clamps_null_or_negative_output_tokens(output_tokens):
+    response = SimpleNamespace(
+        usage=SimpleNamespace(
+            input_tokens=100,
+            output_tokens=output_tokens,
+            input_tokens_details=None,
+        )
+    )
+
+    cost = openai_api.calc_price("gpt-4o-mini", response)
+
+    assert cost == pytest.approx(100 * 0.15 / 1_000_000)
+
+
 def test_claude_calc_price_uses_reported_cache_creation_and_reads():
     output = {
         "input_tokens": 1000,
@@ -105,6 +229,167 @@ def test_claude_calc_price_uses_reported_cache_creation_and_reads():
         + (400 * 0.30 / 1_000_000)
     )
     assert cost == pytest.approx(expected)
+
+
+def test_claude_streaming_usage_preserves_cache_creation_ttl_breakdown():
+    message_usage = SimpleNamespace(
+        input_tokens=100,
+        output_tokens=0,
+        cache_creation_input_tokens=70,
+        cache_read_input_tokens=30,
+        cache_creation=SimpleNamespace(
+            ephemeral_5m_input_tokens=40,
+            ephemeral_1h_input_tokens=30,
+        ),
+    )
+    delta_usage = SimpleNamespace(
+        output_tokens=20,
+        cache_creation_input_tokens=None,
+        cache_read_input_tokens=None,
+        cache_creation=None,
+    )
+    completion = [
+        SimpleNamespace(
+            type="message_start",
+            message=SimpleNamespace(usage=message_usage),
+        ),
+        SimpleNamespace(type="message_delta", usage=delta_usage),
+        SimpleNamespace(type="message_stop"),
+    ]
+
+    output = claude_api.process_streaming_response(completion)
+
+    assert output["input_tokens"] == 100
+    assert output["output_tokens"] == 20
+    assert output["cache_creation"] == 70
+    assert output["cache_creation_5m"] == 40
+    assert output["cache_creation_1h"] == 30
+    assert output["cache_read"] == 30
+
+
+def test_claude_streaming_usage_replaces_cumulative_message_delta_totals():
+    anthropic_types = pytest.importorskip("anthropic.types")
+    start_usage = anthropic_types.Usage(
+        input_tokens=25,
+        output_tokens=1,
+        cache_creation_input_tokens=1000,
+        cache_read_input_tokens=2000,
+        cache_creation=anthropic_types.CacheCreation(
+            ephemeral_5m_input_tokens=600,
+            ephemeral_1h_input_tokens=400,
+        ),
+    )
+    delta_usage = anthropic_types.MessageDeltaUsage(
+        input_tokens=25,
+        output_tokens=150,
+        cache_creation_input_tokens=1000,
+        cache_read_input_tokens=2000,
+    )
+    completion = [
+        SimpleNamespace(
+            type="message_start",
+            message=SimpleNamespace(usage=start_usage),
+        ),
+        SimpleNamespace(type="message_delta", usage=delta_usage),
+        SimpleNamespace(type="message_stop"),
+    ]
+
+    output = claude_api.process_streaming_response(completion)
+
+    assert output["input_tokens"] == 25
+    assert output["output_tokens"] == 150
+    assert output["cache_creation"] == 1000
+    assert output["cache_creation_5m"] == 600
+    assert output["cache_creation_1h"] == 400
+    assert output["cache_read"] == 2000
+
+
+def test_claude_streaming_usage_keeps_baseline_when_delta_omits_fields():
+    start_usage = SimpleNamespace(
+        input_tokens=100,
+        output_tokens=1,
+        cache_creation_input_tokens=70,
+        cache_read_input_tokens=30,
+        cache_creation=None,
+    )
+    delta_usage = SimpleNamespace(output_tokens=20)
+    completion = [
+        SimpleNamespace(
+            type="message_start",
+            message=SimpleNamespace(usage=start_usage),
+        ),
+        SimpleNamespace(type="message_delta", usage=delta_usage),
+        SimpleNamespace(type="message_stop"),
+    ]
+
+    output = claude_api.process_streaming_response(completion)
+
+    assert output["input_tokens"] == 100
+    assert output["output_tokens"] == 20
+    assert output["cache_creation"] == 70
+    assert output["cache_read"] == 30
+
+
+def test_claude_calc_price_uses_ttl_specific_cache_creation_rates():
+    output = {
+        "input_tokens": 1000,
+        "output_tokens": 200,
+        "cache_creation": 500,
+        "cache_creation_5m": 300,
+        "cache_creation_1h": 200,
+        "cache_read": 400,
+    }
+
+    cost = claude_api.calc_price("claude-sonnet-4-5", output)
+
+    expected = (
+        (1000 * 3.00 / 1_000_000)
+        + (200 * 15.00 / 1_000_000)
+        + (300 * 3.75 / 1_000_000)
+        + (200 * 6.00 / 1_000_000)
+        + (400 * 0.30 / 1_000_000)
+    )
+    assert cost == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(
+    ("ttl_usage", "expected_5min", "expected_1hour"),
+    [
+        ({}, 500, 0),
+        ({"cache_creation_5m": 100, "cache_creation_1h": 200}, 300, 200),
+        ({"cache_creation_5m": 400, "cache_creation_1h": 300}, 200, 300),
+        ({"cache_creation_5m": -100, "cache_creation_1h": -200}, 500, 0),
+        ({"cache_creation_5m": None, "cache_creation_1h": None}, 500, 0),
+    ],
+)
+def test_claude_calc_price_reconciles_ttl_breakdown_to_aggregate(
+    ttl_usage, expected_5min, expected_1hour
+):
+    output = {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_creation": 500,
+        "cache_read": 0,
+        **ttl_usage,
+    }
+
+    cost = claude_api.calc_price("claude-sonnet-4-5", output)
+
+    expected = (expected_5min * 3.75 / 1_000_000) + (expected_1hour * 6.00 / 1_000_000)
+    assert cost == pytest.approx(expected)
+
+
+def test_claude_calc_price_clamps_negative_usage():
+    output = {
+        "input_tokens": -100,
+        "output_tokens": -100,
+        "cache_creation": -100,
+        "cache_creation_5m": 50,
+        "cache_creation_1h": 50,
+        "cache_read": -100,
+    }
+
+    assert claude_api.calc_price("claude-sonnet-4-5", output) == 0
 
 
 def test_claude_calc_price_returns_none_for_unknown_model():
@@ -235,7 +520,8 @@ def test_claude_opus_5_uses_adaptive_thinking_and_effort(monkeypatch):
     assert captured["tool_choice"] == {"type": "auto"}
 
 
-def test_claude_fable_5_uses_metadata_driven_always_on_thinking(monkeypatch):
+@pytest.mark.parametrize("model", ["claude-fable-5", "claude-fable-5-1"])
+def test_claude_fable_uses_metadata_driven_always_on_thinking(monkeypatch, model):
     captured = {}
     payload = json.dumps(_loop_payload())
 
@@ -250,9 +536,7 @@ def test_claude_fable_5_uses_metadata_driven_always_on_thinking(monkeypatch):
     monkeypatch.setattr(claude_api.utils, "get_loop_prompt", lambda: "system prompt")
     monkeypatch.setattr(claude_api.utils, "save_messages_to_json", _fail_save_messages)
 
-    claude_api.loop_gen(
-        "write a loop", "claude-fable-5", use_thinking=True, effort="max"
-    )
+    claude_api.loop_gen("write a loop", model, use_thinking=True, effort="max")
 
     assert "thinking" not in captured
     assert "temperature" not in captured
@@ -262,7 +546,11 @@ def test_claude_fable_5_uses_metadata_driven_always_on_thinking(monkeypatch):
 
 @pytest.mark.parametrize(
     ("model", "expects_thinking"),
-    [("claude-opus-5", True), ("claude-fable-5", False)],
+    [
+        ("claude-opus-5", True),
+        ("claude-fable-5", False),
+        ("claude-fable-5-1", False),
+    ],
 )
 def test_claude_disabled_thinking_uses_lowest_effort(
     monkeypatch, model, expects_thinking
