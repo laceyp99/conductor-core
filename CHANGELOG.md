@@ -10,6 +10,11 @@ while its public API is still in initial development.
 
 ### Added
 
+- A public `AudioRenderingError` for actionable SoundFont discovery, synthesis,
+  timeout, invalid WAV output, and encoding failures from lower-level audio
+  rendering.
+- Gemini 3.7 Flash and Claude Fable 5.1 model metadata, including their
+  supported reasoning controls, output limits, pricing, and rate limits.
 - Complete package-index metadata, including project links, supported Python
   versions, licensing, maintainership, and discovery keywords.
 - A packaged `py.typed` marker advertising inline type information to consumer
@@ -29,9 +34,53 @@ while its public API is still in initial development.
 - Request SoundFont overrides accept `os.PathLike` objects and normalize them
   only when audio is requested. Byte-valued or invalid path protocol results
   preserve generated MIDI and return an audio warning.
+- `midi_to_mp3()` now returns the generated MP3 path and invokes FluidSynth
+  directly with a bounded timeout. Rendered WAV output is validated before
+  encoding, and temporary or partial artifacts are removed on failure.
+- Google generation now requests and parses the canonical numeric `Loop`
+  schema. `loop_to_midi()` and `midi_to_loop()` also default to canonical
+  numeric timing instead of the legacy Gemini string-enum representation.
 - `routing.generate_midi()` now always returns
   `(loop, messages, total_cost, provider)`. The private `_return_provider`
   switch and its conditional three- or four-element return shape were removed.
+- Model metadata lookups return isolated copies, and Ollama discovery observes
+  the currently resolved host on every request instead of using cached status.
+- Current provider pricing replaces outdated registry values, including
+  cache-write pricing and promotional pricing where applicable.
+- Development linting uses Ruff 0.16 with expanded rule coverage and
+  cross-platform line-ending detection.
+
+### Deprecated
+
+- The Gemini-specific `_G` models and string-timing conversion helpers are
+  deprecated in favor of `Loop`, `Bar`, `Note`, `TimeInformation`, and their
+  canonical numeric timing values.
+- Passing `times_as_string=True` to MIDI conversion helpers is retained for
+  compatibility but emits `DeprecationWarning`.
+- Ollama's `force_refresh` discovery argument is now a no-op and will be
+  removed in a future release.
+
+### Removed
+
+- The retired Claude Opus 4.1 model was removed from the packaged registry.
+
+### Fixed
+
+- Optional audio-rendering failures preserve successful MIDI generation,
+  return `audio_path=None`, and expose the rendering diagnostic through
+  `GenerationResult.warnings`.
+- MIDI import pairs note-on and note-off events by both channel and pitch, so
+  an event from another channel cannot truncate a note.
+- History loading rejects finalized records that are missing their required
+  MIDI artifact while preserving valid neighboring records. Such finalized
+  records still count toward retention, while active metadata-less workspaces
+  do not.
+- Gemini cost estimates include thinking tokens as billable output tokens.
+- Anthropic streaming usage snapshots no longer double-count cumulative input,
+  output, or cache-token totals, and cache writes are priced by their reported
+  or fallback TTL.
+- OpenAI cost calculation handles reported cache writes and guards missing or
+  invalid output-token counts after otherwise successful generation.
 
 Integrations should parse form, command-line, and environment-variable strings
 before constructing `GenerationRequest` objects.
@@ -39,6 +88,13 @@ before constructing `GenerationRequest` objects.
 Downstream callers that unpack `routing.generate_midi()` must now accept the
 fourth `provider` value. Callers that passed `_return_provider=True` should
 remove that keyword argument.
+
+Consumers of the legacy `_G` music models or `times_as_string=True` MIDI
+conversion should migrate to the canonical numeric models. Callers that invoke
+`midi_to_mp3()` directly should catch `AudioRenderingError`; engine callers can
+continue treating audio as optional and inspect result warnings. Existing
+generation histories require no migration, but records missing their canonical
+MIDI artifact are no longer returned by history APIs.
 
 ## [0.4.0] - 2026-08-02
 
