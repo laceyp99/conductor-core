@@ -8,6 +8,13 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-02
+
+Version 0.5.0 strengthens public request and result contracts, standardizes
+generated loop data, and makes audio, history, model discovery, and provider
+cost behavior more reliable. It also adds current models and typed packaging
+metadata while beginning the migration away from Gemini-specific music models.
+
 ### Added
 
 - A public `AudioRenderingError` for actionable SoundFont discovery, synthesis,
@@ -82,19 +89,24 @@ while its public API is still in initial development.
 - OpenAI cost calculation handles reported cache writes and guards missing or
   invalid output-token counts after otherwise successful generation.
 
-Integrations should parse form, command-line, and environment-variable strings
-before constructing `GenerationRequest` objects.
+### Upgrade notes
 
-Downstream callers that unpack `routing.generate_midi()` must now accept the
-fourth `provider` value. Callers that passed `_return_provider=True` should
-remove that keyword argument.
-
-Consumers of the legacy `_G` music models or `times_as_string=True` MIDI
-conversion should migrate to the canonical numeric models. Callers that invoke
-`midi_to_mp3()` directly should catch `AudioRenderingError`; engine callers can
-continue treating audio as optional and inspect result warnings. Existing
-generation histories require no migration, but records missing their canonical
-MIDI artifact are no longer returned by history APIs.
+- Parse form, command-line, and environment-variable strings before
+  constructing `GenerationRequest` objects. Wrong Python types now raise
+  `TypeError`, while accepted types with invalid values raise `ValueError`.
+- Callers enabling thinking for models with discrete effort choices must supply
+  a supported effort. When thinking is disabled, Core selects the model's
+  lowest supported effort.
+- Accept the fourth `provider` value when unpacking
+  `routing.generate_midi()`, and remove the private `_return_provider` keyword.
+- Migrate legacy `_G` music models and `times_as_string=True` MIDI conversion
+  to canonical `Loop`, `Bar`, `Note`, and numeric timing values.
+- Catch `AudioRenderingError` when invoking `midi_to_mp3()` directly. Engine
+  callers can continue treating audio as optional and inspect result warnings.
+- Existing generation histories require no data migration. Records missing
+  their canonical MIDI artifact are no longer returned by history APIs.
+- Update Git references in dependent repositories from `v0.4.0` to `v0.5.0`
+  after the release tag is available.
 
 ## [0.4.0] - 2026-08-02
 
@@ -317,6 +329,8 @@ other Conductor repositories could build on a shared engine.
 - Deterministic tests and package-boundary checks suitable for reuse outside the
   original LoopGPT application.
 
+[Unreleased]: https://github.com/laceyp99/conductor-core/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/laceyp99/conductor-core/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/laceyp99/conductor-core/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/laceyp99/conductor-core/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/laceyp99/conductor-core/compare/v0.1.0...v0.2.0
