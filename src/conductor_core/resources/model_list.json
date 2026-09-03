@@ -652,19 +652,12 @@
                 "effort_options": ["low", "medium", "high"],
                 "max_tokens": 65536,
                 "cost": {
-                    "input": {
-                        "<=200k": 2.00,
-                        ">200k": 4.00
-                    },
+                    "input": 2.00,
                     "cache": {
-                        "<=200k": 0.20,
-                        ">200k": 0.40,
+                        "text": 0.20,
                         "storage hour": 4.50
                     },
-                    "output": {
-                        "<=200k": 12.00,
-                        ">200k": 18.00
-                    }
+                    "output": 12.00
                 },
                 "rate_limits": {
                     "RPM": 25,
@@ -696,19 +689,12 @@
                 "max_thinking_budget": 32768,
                 "max_tokens": 65536,
                 "cost": {
-                    "input": {
-                        "<=200k": 1.25,
-                        ">200k": 2.50
-                    },
+                    "input": 1.25,
                     "cache": {
-                        "<=200k": 0.125,
-                        ">200k": 0.25,
+                        "text": 0.125,
                         "storage hour": 4.50
                     },
-                    "output": {
-                        "<=200k": 10.00,
-                        ">200k": 15.00
-                    }
+                    "output": 10.00
                 },
                 "rate_limits": {
                     "RPM": 150,

@@ -118,6 +118,33 @@ def test_gpt_6_astra_capabilities_match_openai_documentation():
     ("model", "expected_cost"),
     [
         (
+            "gemini-3.1-pro-preview",
+            {
+                "input": 2.00,
+                "cache": {"text": 0.20, "storage hour": 4.50},
+                "output": 12.00,
+            },
+        ),
+        (
+            "gemini-2.5-pro",
+            {
+                "input": 1.25,
+                "cache": {"text": 0.125, "storage hour": 4.50},
+                "output": 10.00,
+            },
+        ),
+    ],
+)
+def test_gemini_pro_models_use_standard_context_pricing(model, expected_cost):
+    model_config = music.get_model_info()["models"]["Google"][model]
+
+    assert model_config["cost"] == expected_cost
+
+
+@pytest.mark.parametrize(
+    ("model", "expected_cost"),
+    [
+        (
             "gpt-5.6-sol",
             {
                 "input": 4.00,

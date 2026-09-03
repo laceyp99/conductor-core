@@ -75,21 +75,9 @@ def calc_cost(model, usage):
     )
     cached = usage.cached_content_token_count or 0
 
-    if isinstance(model_cost["input"], dict):
-        if prompt_tokens <= 200000:
-            input_cost = model_cost["input"]["<=200k"] / 1000000
-            output_cost = model_cost["output"]["<=200k"] / 1000000
-            cache_cost = model_cost["cache"]["<=200k"] / 1000000
-        else:
-            input_cost = model_cost["input"][">200k"] / 1000000
-            output_cost = model_cost["output"][">200k"] / 1000000
-            cache_cost = model_cost["cache"][">200k"] / 1000000
-    else:
-        input_cost = model_cost["input"] / 1000000
-        output_cost = model_cost["output"] / 1000000
-        cache_cost = (
-            model_cost["cache"]["text"] / 1000000 if "cache" in model_cost else 0
-        )
+    input_cost = model_cost["input"] / 1000000
+    output_cost = model_cost["output"] / 1000000
+    cache_cost = model_cost["cache"]["text"] / 1000000 if "cache" in model_cost else 0
 
     new_input_tokens, cached = utils.split_reported_cache_tokens(
         prompt_tokens,
