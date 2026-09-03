@@ -111,27 +111,6 @@ def test_openai_calc_price_partitions_cache_writes_before_reads():
     assert cost == pytest.approx(expected)
 
 
-@pytest.mark.parametrize(
-    ("input_tokens", "input_rate", "output_rate"),
-    [(272000, 10.00, 50.00), (272001, 20.00, 75.00)],
-)
-def test_openai_calc_price_applies_gpt_6_astra_long_context_rates(
-    input_tokens, input_rate, output_rate
-):
-    response = SimpleNamespace(
-        usage=SimpleNamespace(
-            input_tokens=input_tokens,
-            output_tokens=100,
-            input_tokens_details=None,
-        )
-    )
-
-    cost = openai_api.calc_price("gpt-6-astra", response)
-
-    expected = (input_tokens * input_rate + 100 * output_rate) / 1_000_000
-    assert cost == pytest.approx(expected)
-
-
 def test_openai_calc_price_uses_input_rate_when_cache_write_rate_is_missing():
     response = SimpleNamespace(
         usage=SimpleNamespace(

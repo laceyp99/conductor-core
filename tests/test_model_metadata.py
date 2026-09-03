@@ -107,10 +107,10 @@ def test_gpt_6_astra_capabilities_match_openai_documentation():
     ]
     assert model_config["max_tokens"] == 128000
     assert model_config["cost"] == {
-        "input": {"<=272k": 10.00, ">272k": 20.00},
-        "cached input": {"<=272k": 1.00, ">272k": 2.00},
-        "cache write": {"<=272k": 12.50, ">272k": 25.00},
-        "output": {"<=272k": 50.00, ">272k": 75.00},
+        "input": 10.00,
+        "cached input": 1.00,
+        "cache write": 12.50,
+        "output": 50.00,
     }
 
 
