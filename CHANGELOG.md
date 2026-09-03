@@ -13,7 +13,7 @@ while its public API is still in initial development.
 Version 0.5.0 strengthens public request and result contracts, standardizes
 generated loop data, and makes audio, history, model discovery, and provider
 cost behavior more reliable. It also adds current models and typed packaging
-metadata while beginning the migration away from Gemini-specific music models.
+metadata while removing the legacy Gemini-specific music-model representation.
 
 ### Added
 
@@ -45,8 +45,8 @@ metadata while beginning the migration away from Gemini-specific music models.
   directly with a bounded timeout. Rendered WAV output is validated before
   encoding, and temporary or partial artifacts are removed on failure.
 - Google generation now requests and parses the canonical numeric `Loop`
-  schema. `loop_to_midi()` and `midi_to_loop()` also default to canonical
-  numeric timing instead of the legacy Gemini string-enum representation.
+  schema. `loop_to_midi()` and `midi_to_loop()` now accept and return only
+  canonical numeric timing.
 - `routing.generate_midi()` now always returns
   `(loop, messages, total_cost, provider)`. The private `_return_provider`
   switch and its conditional three- or four-element return shape were removed.
@@ -57,18 +57,12 @@ metadata while beginning the migration away from Gemini-specific music models.
 - Development linting uses Ruff 0.16 with expanded rule coverage and
   cross-platform line-ending detection.
 
-### Deprecated
-
-- The Gemini-specific `_G` models and string-timing conversion helpers are
-  deprecated in favor of `Loop`, `Bar`, `Note`, `TimeInformation`, and their
-  canonical numeric timing values.
-- Passing `times_as_string=True` to MIDI conversion helpers is retained for
-  compatibility but emits `DeprecationWarning`.
-- Ollama's `force_refresh` discovery argument is now a no-op and will be
-  removed in a future release.
-
 ### Removed
 
+- The Gemini-specific `_G` models, string-timing conversion helpers, and
+  `times_as_string` MIDI conversion arguments were removed. Use `Loop`, `Bar`,
+  `Note`, `TimeInformation`, and canonical numeric timing values.
+- The no-op `force_refresh` arguments were removed from Ollama model discovery.
 - The retired Claude Opus 4.1 model was removed from the packaged registry.
 
 ### Fixed
@@ -99,8 +93,10 @@ metadata while beginning the migration away from Gemini-specific music models.
   lowest supported effort.
 - Accept the fourth `provider` value when unpacking
   `routing.generate_midi()`, and remove the private `_return_provider` keyword.
-- Migrate legacy `_G` music models and `times_as_string=True` MIDI conversion
-  to canonical `Loop`, `Bar`, `Note`, and numeric timing values.
+- Replace legacy `_G` music models with canonical `Loop`, `Bar`, `Note`, and
+  numeric timing values, and remove `times_as_string` from MIDI helper calls.
+- Remove `force_refresh` from calls to `get_ollama_status()` and
+  `get_model_list()`.
 - Catch `AudioRenderingError` when invoking `midi_to_mp3()` directly. Engine
   callers can continue treating audio as optional and inspect result warnings.
 - Existing generation histories require no data migration. Records missing

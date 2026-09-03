@@ -1,5 +1,3 @@
-from contextlib import nullcontext
-
 import pytest
 from mido import Message, MetaMessage, MidiFile, MidiTrack
 from pydantic import ValidationError
@@ -30,24 +28,6 @@ def test_midi_helpers_default_to_canonical_numeric_timing(tmp_path, sample_loop)
     assert imported.Bar_1.notes[0].time.start_beat == 1
 
 
-def test_loop_to_midi_detects_deprecated_loop_g_without_flag(sample_loop_g):
-    midi = MidiFile(ticks_per_beat=480)
-
-    with pytest.deprecated_call(match="Loop_G and string timing"):
-        loop_to_midi(midi, sample_loop_g)
-
-    assert _note_events_with_absolute_times(midi) == [
-        ("note_on", 60, 0),
-        ("note_off", 60, 1920),
-        ("note_on", 64, 1920),
-        ("note_off", 64, 3840),
-        ("note_on", 67, 3840),
-        ("note_off", 67, 5760),
-        ("note_on", 71, 5760),
-        ("note_off", 71, 7680),
-    ]
-
-
 def test_loop_to_midi_orders_note_off_before_note_on_at_same_tick(
     loop_factory, note_factory
 ):
@@ -64,7 +44,7 @@ def test_loop_to_midi_orders_note_off_before_note_on_at_same_tick(
     )
     midi = MidiFile(ticks_per_beat=480)
 
-    loop_to_midi(midi, loop, times_as_string=False)
+    loop_to_midi(midi, loop)
 
     messages = [msg for msg in midi.tracks[0] if msg.type != "end_of_track"]
 
@@ -90,7 +70,7 @@ def test_loop_to_midi_clamps_out_of_range_velocity(loop_factory, note_factory):
     )
     midi = MidiFile(ticks_per_beat=480)
 
-    warnings = loop_to_midi(midi, loop, times_as_string=False)
+    warnings = loop_to_midi(midi, loop)
 
     note_messages = [msg for msg in midi.tracks[0] if msg.type != "end_of_track"]
 
@@ -122,7 +102,7 @@ def test_loop_to_midi_drops_out_of_range_pitch_pairs(
     loop = loop.model_copy(update={"Bar_1": unvalidated_bar})
     midi = MidiFile(ticks_per_beat=480)
 
-    warnings = loop_to_midi(midi, loop, times_as_string=False)
+    warnings = loop_to_midi(midi, loop)
 
     assert _note_events_with_absolute_times(midi) == [
         ("note_on", 127, 0),
@@ -140,7 +120,7 @@ def test_loop_to_midi_drops_non_positive_velocity_pair(loop_factory, note_factor
     loop = loop_factory(bars=[[silent_note], [], [], []])
     midi = MidiFile(ticks_per_beat=480)
 
-    warnings = loop_to_midi(midi, loop, times_as_string=False)
+    warnings = loop_to_midi(midi, loop)
 
     assert _note_events_with_absolute_times(midi) == []
     assert warnings == ["Dropped MIDI note C4 with non-positive velocity 0."]
@@ -151,7 +131,7 @@ def test_loop_to_midi_drops_non_integer_note_number(loop_factory, note_factory):
     loop = loop_factory(bars=[[invalid_note], [], [], []])
     midi = MidiFile(ticks_per_beat=480)
 
-    warnings = loop_to_midi(midi, loop, times_as_string=False)
+    warnings = loop_to_midi(midi, loop)
 
     assert _note_events_with_absolute_times(midi) == []
     assert warnings == ["Dropped MIDI note C4.5 with invalid note number 66.0."]
@@ -170,7 +150,7 @@ def test_loop_to_midi_allows_notes_to_cross_early_bar_boundaries(
     )
     midi = MidiFile(ticks_per_beat=480)
 
-    loop_to_midi(midi, loop, times_as_string=False)
+    loop_to_midi(midi, loop)
 
     assert _note_events_with_absolute_times(midi) == [
         ("note_on", 60, 1800),
@@ -193,7 +173,7 @@ def test_loop_to_midi_preserves_note_at_exact_four_bar_boundary(
     )
     midi = MidiFile(ticks_per_beat=480)
 
-    loop_to_midi(midi, loop, times_as_string=False)
+    loop_to_midi(midi, loop)
 
     assert _note_events_with_absolute_times(midi) == [
         ("note_on", 60, 7560),
@@ -208,15 +188,15 @@ def test_loop_to_midi_rejects_ppq_without_an_exact_sixteenth_grid(
     midi = MidiFile(ticks_per_beat=ticks_per_beat)
 
     with pytest.raises(ValueError, match="positive ticks_per_beat divisible by 4"):
-        loop_to_midi(midi, sample_loop, times_as_string=False)
+        loop_to_midi(midi, sample_loop)
 
     assert midi.tracks == []
 
 
 def test_midi_to_loop_round_trips_integer_timing(sample_loop, midi_builder):
-    midi_path = midi_builder(sample_loop, times_as_string=False)
+    midi_path = midi_builder(sample_loop)
 
-    loop = midi_to_loop(str(midi_path), times_as_string=False)
+    loop = midi_to_loop(str(midi_path))
 
     assert [
         bar.notes[0].pitch for bar in [loop.Bar_1, loop.Bar_2, loop.Bar_3, loop.Bar_4]
@@ -250,7 +230,7 @@ def test_midi_to_loop_ignores_other_channel_note_off(tmp_path, note_off_type):
     path = tmp_path / f"cross-channel-{note_off_type}.mid"
     midi.save(path)
 
-    loop = midi_to_loop(str(path), times_as_string=False)
+    loop = midi_to_loop(str(path))
 
     assert len(loop.Bar_1.notes) == 1
     assert loop.Bar_1.notes[0].time.duration == 4
@@ -273,7 +253,7 @@ def test_midi_to_loop_pairs_same_pitch_note_offs_by_channel(tmp_path, first_chan
     path = tmp_path / f"channel-order-{first_channel}.mid"
     midi.save(path)
 
-    loop = midi_to_loop(str(path), times_as_string=False)
+    loop = midi_to_loop(str(path))
 
     durations_by_velocity = {
         note.velocity: note.time.duration for note in loop.Bar_1.notes
@@ -298,7 +278,7 @@ def test_midi_to_loop_pairs_overlapping_same_channel_notes_in_order(tmp_path):
     path = tmp_path / "same-channel-overlap.mid"
     midi.save(path)
 
-    loop = midi_to_loop(str(path), times_as_string=False)
+    loop = midi_to_loop(str(path))
 
     assert [
         (note.velocity, note.time.start_beat, note.time.duration)
@@ -327,7 +307,7 @@ def test_midi_to_loop_pairs_same_pitch_across_tracks_by_channel(tmp_path):
     path = tmp_path / "cross-track-channels.mid"
     midi.save(path)
 
-    loop = midi_to_loop(str(path), times_as_string=False)
+    loop = midi_to_loop(str(path))
 
     durations_by_velocity = {
         note.velocity: note.time.duration for note in loop.Bar_1.notes
@@ -348,7 +328,7 @@ def test_midi_to_loop_quantizes_low_ppq_timing_to_sixteenths(tmp_path, ticks_per
     path = tmp_path / f"ppq-{ticks_per_beat}.mid"
     midi.save(path)
 
-    loop = midi_to_loop(str(path), times_as_string=False)
+    loop = midi_to_loop(str(path))
 
     assert loop.Bar_1.notes == []
     assert len(loop.Bar_2.notes) == 1
@@ -364,32 +344,7 @@ def test_midi_to_loop_rejects_non_ppq_time_divisions(tmp_path, ticks_per_beat):
     midi.save(path)
 
     with pytest.raises(ValueError, match="positive PPQ time division"):
-        midi_to_loop(str(path), times_as_string=False)
-
-
-def test_midi_to_loop_round_trips_string_timing(sample_loop_g, midi_builder):
-    with pytest.deprecated_call(match="Loop_G and string timing"):
-        midi_path = midi_builder(sample_loop_g, times_as_string=True)
-
-    with pytest.deprecated_call(match="times_as_string=True"):
-        loop = midi_to_loop(str(midi_path), times_as_string=True)
-
-    assert [
-        bar.notes[0].pitch for bar in [loop.Bar_1, loop.Bar_2, loop.Bar_3, loop.Bar_4]
-    ] == [
-        "C",
-        "E",
-        "G",
-        "B",
-    ]
-    assert all(
-        bar.notes[0].time.start_beat.value == "one"
-        for bar in [loop.Bar_1, loop.Bar_2, loop.Bar_3, loop.Bar_4]
-    )
-    assert all(
-        bar.notes[0].time.duration.value == "sixteen"
-        for bar in [loop.Bar_1, loop.Bar_2, loop.Bar_3, loop.Bar_4]
-    )
+        midi_to_loop(str(path))
 
 
 def test_midi_to_loop_skips_notes_beyond_the_first_four_bars(tmp_path):
@@ -403,7 +358,7 @@ def test_midi_to_loop_skips_notes_beyond_the_first_four_bars(tmp_path):
     midi_path = tmp_path / "fifth_bar.mid"
     midi.save(midi_path)
 
-    loop = midi_to_loop(str(midi_path), times_as_string=False)
+    loop = midi_to_loop(str(midi_path))
 
     assert loop.Bar_1.notes == []
     assert loop.Bar_2.notes == []
@@ -411,13 +366,7 @@ def test_midi_to_loop_skips_notes_beyond_the_first_four_bars(tmp_path):
     assert loop.Bar_4.notes == []
 
 
-@pytest.mark.parametrize(
-    ("times_as_string", "expected_duration"),
-    [(False, 17), (True, "seventeen")],
-)
-def test_midi_to_loop_imports_seventeen_sixteenth_sustains(
-    tmp_path, times_as_string, expected_duration
-):
+def test_midi_to_loop_imports_seventeen_sixteenth_sustains(tmp_path):
     midi = MidiFile(ticks_per_beat=480)
     track = MidiTrack(
         [
@@ -429,24 +378,13 @@ def test_midi_to_loop_imports_seventeen_sixteenth_sustains(
     path = tmp_path / "seventeen.mid"
     midi.save(path)
 
-    warning_context = (
-        pytest.deprecated_call(match="times_as_string=True")
-        if times_as_string
-        else nullcontext()
-    )
-    with warning_context:
-        loop = midi_to_loop(str(path), times_as_string=times_as_string)
+    loop = midi_to_loop(str(path))
 
     duration = loop.Bar_1.notes[0].time.duration
-    assert (
-        duration.value == expected_duration
-        if times_as_string
-        else duration == expected_duration
-    )
+    assert duration == 17
 
 
-@pytest.mark.parametrize("times_as_string", [False, True])
-def test_midi_long_note_round_trips_across_multiple_bars(tmp_path, times_as_string):
+def test_midi_long_note_round_trips_across_multiple_bars(tmp_path):
     midi = MidiFile(ticks_per_beat=480)
     track = MidiTrack(
         [
@@ -458,21 +396,9 @@ def test_midi_long_note_round_trips_across_multiple_bars(tmp_path, times_as_stri
     source = tmp_path / "three_bars.mid"
     midi.save(source)
 
-    warning_context = (
-        pytest.deprecated_call(match="times_as_string=True")
-        if times_as_string
-        else nullcontext()
-    )
-    with warning_context:
-        loop = midi_to_loop(str(source), times_as_string=times_as_string)
+    loop = midi_to_loop(str(source))
     exported = MidiFile(ticks_per_beat=480)
-    warning_context = (
-        pytest.deprecated_call(match="Loop_G and string timing")
-        if times_as_string
-        else nullcontext()
-    )
-    with warning_context:
-        loop_to_midi(exported, loop, times_as_string=times_as_string)
+    loop_to_midi(exported, loop)
 
     assert _note_events_with_absolute_times(exported) == [
         ("note_on", 60, 0),
@@ -492,7 +418,7 @@ def test_midi_to_loop_clips_note_at_exact_four_bar_boundary(tmp_path):
     path = tmp_path / "boundary.mid"
     midi.save(path)
 
-    loop = midi_to_loop(str(path), times_as_string=False)
+    loop = midi_to_loop(str(path))
 
     assert loop.Bar_4.notes[0].time.start_beat == 16
     assert loop.Bar_4.notes[0].time.duration == 1

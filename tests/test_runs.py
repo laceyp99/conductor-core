@@ -159,7 +159,7 @@ def test_generate_midi_routes_to_ollama_and_forwards_temperature(monkeypatch):
     monkeypatch.setattr(
         runs.ollama_api,
         "get_ollama_status",
-        lambda force_refresh=True, host_address=None: {
+        lambda host_address=None: {
             "available": True,
             "models": ["llama3"],
         },
@@ -398,7 +398,7 @@ def test_generate_midi_rejects_unknown_models_when_ollama_is_unavailable(monkeyp
     monkeypatch.setattr(
         runs.ollama_api,
         "get_ollama_status",
-        lambda force_refresh=True, host_address=None: {
+        lambda host_address=None: {
             "available": False,
             "models": [],
         },
@@ -420,7 +420,7 @@ def test_generate_midi_rejects_unknown_models_when_ollama_is_available(monkeypat
     monkeypatch.setattr(
         runs.ollama_api,
         "get_ollama_status",
-        lambda force_refresh=True, host_address=None: {"available": True, "models": []},
+        lambda host_address=None: {"available": True, "models": []},
     )
 
     with pytest.raises(ValueError, match="Invalid Model Selected"):

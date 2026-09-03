@@ -4,7 +4,6 @@ It supports converting a loop into MIDI (with proper absolute and delta timing) 
 """
 
 import logging
-import warnings as warnings_module
 
 from mido import Message, MetaMessage, MidiFile, MidiTrack, merge_tracks
 
@@ -33,15 +32,7 @@ def _validate_import_ppq(ticks_per_beat):
         )
 
 
-def _legacy_timing_to_int(value):
-    """Convert a deprecated string timing enum without emitting nested warnings."""
-    raw_value = value.value.lower()
-    return objects.SIXTEENTH_NOTE_G_TO_INT.get(
-        raw_value, objects.DURATION_SIXTEENTH_G_TO_INT.get(raw_value)
-    )
-
-
-def loop_to_midi(midi, loop, times_as_string=False) -> list[str]:
+def loop_to_midi(midi, loop) -> list[str]:
     """
     Converts a loop object into MIDI format.
 
@@ -51,24 +42,12 @@ def loop_to_midi(midi, loop, times_as_string=False) -> list[str]:
     Args:
         midi (MidiFile): The MidiFile instance to which the track will be added.
         loop: The loop object containing 4 bars (Bar_1, Bar_2, Bar_3, Bar_4).
-        times_as_string (bool): Deprecated compatibility option for string timing.
-                                ``Loop_G`` inputs are detected automatically, while
-                                canonical numeric timing is used by default.
-
     Returns:
         A list of warnings describing notes changed or dropped during export. The
         function also modifies the midi.tracks in place.
     """
     if loop is None:
         raise ValueError("The loop object is None. Ensure it is properly initialized.")
-    uses_legacy_timing = times_as_string or isinstance(loop, objects.Loop_G)
-    if uses_legacy_timing:
-        warnings_module.warn(
-            "Loop_G and string timing are deprecated; pass a canonical Loop with "
-            "numeric timing values instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
     bars = [getattr(loop, f"Bar_{i}", None) for i in range(1, 5)]
     if any(bar is None for bar in bars):
         raise ValueError(
@@ -142,13 +121,8 @@ def loop_to_midi(midi, loop, times_as_string=False) -> list[str]:
                 warnings.append(warning)
                 velocity = 127
 
-            # Get the note's time information from either style loop object.
-            if uses_legacy_timing:
-                start_beat = _legacy_timing_to_int(note.time.start_beat)
-                duration = _legacy_timing_to_int(note.time.duration)
-            else:
-                start_beat = note.time.start_beat
-                duration = note.time.duration
+            start_beat = note.time.start_beat
+            duration = note.time.duration
 
             # Convert the note's time information to absolute ticks.
             note_start_tick = bar_offset + (start_beat - 1) * ticks_per_sixteenth
@@ -191,7 +165,7 @@ def loop_to_midi(midi, loop, times_as_string=False) -> list[str]:
     return warnings
 
 
-def midi_to_loop(midi_filename, times_as_string=False):
+def midi_to_loop(midi_filename):
     """
     Converts a MIDI file into a loop object.
 
@@ -201,20 +175,9 @@ def midi_to_loop(midi_filename, times_as_string=False):
 
     Args:
         midi_filename (str): The path to the MIDI file.
-        times_as_string (bool): Deprecated compatibility option that returns a
-                                ``Loop_G``. Canonical ``Loop`` output is the default.
-
     Returns:
-        A canonical ``Loop`` by default, or deprecated ``Loop_G`` compatibility
-        output when ``times_as_string`` is True.
+        A canonical ``Loop`` with numeric timing values.
     """
-    if times_as_string:
-        warnings_module.warn(
-            "times_as_string=True is deprecated; use the canonical numeric Loop "
-            "output instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
     # Load the MIDI file and set some basic time parameters.
     midi = MidiFile(midi_filename)
     ticks_per_beat = midi.ticks_per_beat
@@ -281,41 +244,18 @@ def midi_to_loop(midi_filename, times_as_string=False):
         # Convert the MIDI note number to pitch name and octave.
         pitch_name, octave = utils.midi_number_to_name_and_octave(note_number)
 
-        # Create the note objects with time information.
-        if times_as_string:
-            time_info = objects.TimeInformation_G(
-                start_beat=objects.SixteenthNote_G.from_int(relative_start),
-                duration=objects.DurationSixteenth_G(
-                    objects.DURATION_SIXTEENTH_INT_TO_G[duration_sixteenth]
-                ),
-            )
-            note_obj = objects.Note_G(
-                pitch=pitch_name, octave=octave, velocity=velocity, time=time_info
-            )
-        else:
-            time_info = objects.TimeInformation(
-                start_beat=relative_start, duration=duration_sixteenth
-            )
-            note_obj = objects.Note(
-                pitch=pitch_name, octave=octave, velocity=velocity, time=time_info
-            )
+        time_info = objects.TimeInformation(
+            start_beat=relative_start, duration=duration_sixteenth
+        )
+        note_obj = objects.Note(
+            pitch=pitch_name, octave=octave, velocity=velocity, time=time_info
+        )
         bars[bar_index].append(note_obj)
 
     # Build the loop object using the processed bars.
-    if times_as_string:
-        loop = objects.Loop_G(
-            Bar_1=objects.Bar_G(num=1, notes=[n.model_dump() for n in bars[0]]),
-            Bar_2=objects.Bar_G(num=2, notes=[n.model_dump() for n in bars[1]]),
-            Bar_3=objects.Bar_G(num=3, notes=[n.model_dump() for n in bars[2]]),
-            Bar_4=objects.Bar_G(num=4, notes=[n.model_dump() for n in bars[3]]),
-        )
-    else:
-        loop = objects.Loop(
-            Bar_1=objects.Bar(num=1, notes=bars[0]),
-            Bar_2=objects.Bar(num=2, notes=bars[1]),
-            Bar_3=objects.Bar(num=3, notes=bars[2]),
-            Bar_4=objects.Bar(num=4, notes=bars[3]),
-        )
-
-    # Return the constructed loop object.
-    return loop
+    return objects.Loop(
+        Bar_1=objects.Bar(num=1, notes=bars[0]),
+        Bar_2=objects.Bar(num=2, notes=bars[1]),
+        Bar_3=objects.Bar(num=3, notes=bars[2]),
+        Bar_4=objects.Bar(num=4, notes=bars[3]),
+    )

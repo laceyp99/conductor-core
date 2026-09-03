@@ -1,4 +1,3 @@
-import warnings
 from types import SimpleNamespace
 
 import pytest
@@ -385,29 +384,6 @@ def test_ollama_status_queries_each_host_on_every_call(monkeypatch):
     assert other["models"] == ["two-1"]
     assert third["models"] == ["one-3"]
     assert first is not second
-
-
-@pytest.mark.parametrize("entry_point", ["get_ollama_status", "get_model_list"])
-def test_ollama_force_refresh_true_warns(monkeypatch, entry_point):
-    client = SimpleNamespace(list=lambda: SimpleNamespace(models=[]))
-    monkeypatch.setattr(ollama_api, "initialize_ollama_client", lambda **kwargs: client)
-
-    with pytest.warns(
-        DeprecationWarning,
-        match="force_refresh is now a no-op and will be removed in a future release",
-    ):
-        getattr(ollama_api, entry_point)(force_refresh=True)
-
-
-@pytest.mark.parametrize("entry_point", ["get_ollama_status", "get_model_list"])
-def test_ollama_force_refresh_omitted_or_false_does_not_warn(monkeypatch, entry_point):
-    client = SimpleNamespace(list=lambda: SimpleNamespace(models=[]))
-    monkeypatch.setattr(ollama_api, "initialize_ollama_client", lambda **kwargs: client)
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", DeprecationWarning)
-        getattr(ollama_api, entry_point)()
-        getattr(ollama_api, entry_point)(force_refresh=False)
 
 
 @pytest.mark.parametrize(

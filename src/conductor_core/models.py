@@ -1,10 +1,6 @@
-"""Models used to generate MIDI information.
+"""Models used to generate MIDI information."""
 
-The ``_G`` compatibility models predate Gemini's numeric-enum support. New code
-must use the canonical numeric models; the compatibility models are deprecated.
-"""
-
-from enum import Enum, IntEnum
+from enum import IntEnum
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -12,104 +8,20 @@ SIXTEENTHS_PER_BAR = 16
 BARS_PER_LOOP = 4
 SIXTEENTHS_PER_LOOP = SIXTEENTHS_PER_BAR * BARS_PER_LOOP
 
-_G_MODEL_DEPRECATION = (
-    "Gemini-specific _G models are deprecated; use the canonical numeric model "
-    "without the _G suffix instead."
-)
-
-SIXTEENTH_NOTE_G_TO_INT = {
-    "one": 1,
-    "two": 2,
-    "three": 3,
-    "four": 4,
-    "five": 5,
-    "six": 6,
-    "seven": 7,
-    "eight": 8,
-    "nine": 9,
-    "ten": 10,
-    "eleven": 11,
-    "twelve": 12,
-    "thirteen": 13,
-    "fourteen": 14,
-    "fifteen": 15,
-    "sixteen": 16,
-}
-SIXTEENTH_NOTE_INT_TO_G = {value: key for key, value in SIXTEENTH_NOTE_G_TO_INT.items()}
-
 # Durations are deliberately a different vocabulary from positions.  A note may
 # start only within its bar (1-16), but it may sustain for any part of the
-# four-bar loop (1-64). The deprecated Gemini compatibility vocabulary mirrors
-# the integer duration values as words.
-DURATION_SIXTEENTH_G_TO_INT = {
-    "one": 1,
-    "two": 2,
-    "three": 3,
-    "four": 4,
-    "five": 5,
-    "six": 6,
-    "seven": 7,
-    "eight": 8,
-    "nine": 9,
-    "ten": 10,
-    "eleven": 11,
-    "twelve": 12,
-    "thirteen": 13,
-    "fourteen": 14,
-    "fifteen": 15,
-    "sixteen": 16,
-    "seventeen": 17,
-    "eighteen": 18,
-    "nineteen": 19,
-    "twenty": 20,
-    "twenty_one": 21,
-    "twenty_two": 22,
-    "twenty_three": 23,
-    "twenty_four": 24,
-    "twenty_five": 25,
-    "twenty_six": 26,
-    "twenty_seven": 27,
-    "twenty_eight": 28,
-    "twenty_nine": 29,
-    "thirty": 30,
-    "thirty_one": 31,
-    "thirty_two": 32,
-    "thirty_three": 33,
-    "thirty_four": 34,
-    "thirty_five": 35,
-    "thirty_six": 36,
-    "thirty_seven": 37,
-    "thirty_eight": 38,
-    "thirty_nine": 39,
-    "forty": 40,
-    "forty_one": 41,
-    "forty_two": 42,
-    "forty_three": 43,
-    "forty_four": 44,
-    "forty_five": 45,
-    "forty_six": 46,
-    "forty_seven": 47,
-    "forty_eight": 48,
-    "forty_nine": 49,
-    "fifty": 50,
-    "fifty_one": 51,
-    "fifty_two": 52,
-    "fifty_three": 53,
-    "fifty_four": 54,
-    "fifty_five": 55,
-    "fifty_six": 56,
-    "fifty_seven": 57,
-    "fifty_eight": 58,
-    "fifty_nine": 59,
-    "sixty": 60,
-    "sixty_one": 61,
-    "sixty_two": 62,
-    "sixty_three": 63,
-    "sixty_four": 64,
-}
-DURATION_SIXTEENTH_INT_TO_G = {
-    value: key for key, value in DURATION_SIXTEENTH_G_TO_INT.items()
-}
+# four-bar loop (1-64).
+_DURATION_SIXTEENTH_NAMES = (
+    "ONE TWO THREE FOUR FIVE SIX SEVEN EIGHT NINE TEN ELEVEN TWELVE THIRTEEN "
+    "FOURTEEN FIFTEEN SIXTEEN SEVENTEEN EIGHTEEN NINETEEN TWENTY TWENTY_ONE "
+    "TWENTY_TWO TWENTY_THREE TWENTY_FOUR TWENTY_FIVE TWENTY_SIX TWENTY_SEVEN "
+    "TWENTY_EIGHT TWENTY_NINE THIRTY THIRTY_ONE THIRTY_TWO THIRTY_THREE "
+    "THIRTY_FOUR THIRTY_FIVE THIRTY_SIX THIRTY_SEVEN THIRTY_EIGHT THIRTY_NINE "
+    "FORTY FORTY_ONE FORTY_TWO FORTY_THREE FORTY_FOUR FORTY_FIVE FORTY_SIX "
+    "FORTY_SEVEN FORTY_EIGHT FORTY_NINE FIFTY FIFTY_ONE FIFTY_TWO FIFTY_THREE "
+    "FIFTY_FOUR FIFTY_FIVE FIFTY_SIX FIFTY_SEVEN FIFTY_EIGHT FIFTY_NINE SIXTY "
+    "SIXTY_ONE SIXTY_TWO SIXTY_THREE SIXTY_FOUR"
+)
 
 
 # Sixteenth Note Objects
@@ -132,50 +44,11 @@ class SixteenthNote(IntEnum):
     SIXTEEN = 16
 
 
-class SixteenthNote_G(Enum):
-    """Deprecated string-valued compatibility enum; use :class:`SixteenthNote`."""
-
-    __deprecated__ = _G_MODEL_DEPRECATION
-
-    ONE = "one"
-    TWO = "two"
-    THREE = "three"
-    FOUR = "four"
-    FIVE = "five"
-    SIX = "six"
-    SEVEN = "seven"
-    EIGHT = "eight"
-    NINE = "nine"
-    TEN = "ten"
-    ELEVEN = "eleven"
-    TWELVE = "twelve"
-    THIRTEEN = "thirteen"
-    FOURTEEN = "fourteen"
-    FIFTEEN = "fifteen"
-    SIXTEEN = "sixteen"
-
-    @classmethod
-    def from_int(cls, value: int) -> "SixteenthNote_G":
-        """Create a Gemini-compatible sixteenth-note enum from an integer."""
-        try:
-            return cls(SIXTEENTH_NOTE_INT_TO_G[value])
-        except KeyError as exc:
-            raise ValueError(f"Invalid sixteenth-note value: {value}") from exc
-
-
 DurationSixteenth = IntEnum(
     "DurationSixteenth",
-    {name.upper(): value for name, value in DURATION_SIXTEENTH_G_TO_INT.items()},
+    _DURATION_SIXTEENTH_NAMES,
+    start=1,
 )
-DurationSixteenth_G = Enum(
-    "DurationSixteenth_G",
-    {name.upper(): name for name in DURATION_SIXTEENTH_G_TO_INT},
-    type=str,
-)
-DurationSixteenth_G.__doc__ = (
-    "Deprecated string-valued compatibility enum; use DurationSixteenth."
-)
-DurationSixteenth_G.__deprecated__ = _G_MODEL_DEPRECATION
 
 
 # Time Information Objects
@@ -187,21 +60,6 @@ class TimeInformation(BaseModel):
     duration: DurationSixteenth = Field(
         ...,
         description="Duration in sixteenth notes (1-64 for the four-bar loop).",
-    )
-
-
-class TimeInformation_G(BaseModel):
-    """Deprecated Gemini compatibility model; use :class:`TimeInformation`."""
-
-    __deprecated__ = _G_MODEL_DEPRECATION
-
-    start_beat: SixteenthNote_G = Field(
-        ...,
-        description="Starting beat of the note in sixteenth notes (e.g. 1-16). REMEMBER THIS IS BASE 1 NOT 0.",
-    )
-    duration: DurationSixteenth_G = Field(
-        ...,
-        description="Duration in sixteenth notes (one-sixty_four for the four-bar loop).",
     )
 
 
@@ -248,64 +106,20 @@ class Note(BaseModel):
         return _validate_midi_pitch(self)
 
 
-class Note_G(BaseModel):
-    """Deprecated Gemini compatibility model; use :class:`Note`."""
-
-    __deprecated__ = _G_MODEL_DEPRECATION
-
-    pitch: str = Field(
-        ...,
-        description='Pitch of the note (e.g. "C", "D", "E", "F", "G", "A", "B") Please do not include the octave number',
-    )
-    octave: int = Field(
-        ...,
-        strict=True,
-        ge=-2,
-        le=9,
-        description=(
-            "Scientific pitch octave from -2 through 9; the exact MIDI range "
-            "depends on the pitch spelling"
-        ),
-    )
-    velocity: int = Field(
-        ...,
-        strict=True,
-        ge=1,
-        le=127,
-        description="Note-on velocity (1-127)",
-    )
-    time: TimeInformation_G = Field(..., description="Time information of the note")
-
-    @model_validator(mode="after")
-    def validate_midi_pitch(self):
-        return _validate_midi_pitch(self)
-
-
 # Bar Objects
 class Bar(BaseModel):
     num: int = Field(..., description="Number of the bar (e.g. 1-4)")
     notes: list[Note] = Field(..., description="List of notes in the bar")
 
 
-class Bar_G(BaseModel):
-    """Deprecated Gemini compatibility model; use :class:`Bar`."""
-
-    __deprecated__ = _G_MODEL_DEPRECATION
-
-    num: int = Field(..., description="Number of the bar (e.g. 1-4)")
-    notes: list[Note_G] = Field(..., description="List of notes in the bar")
-
-
 # Loop Objects
-def _validate_loop_note_boundaries(loop: "Loop | Loop_G"):
+def _validate_loop_note_boundaries(loop: "Loop"):
     """Reject notes whose sustain would extend beyond the four-bar loop."""
     for bar_index in range(BARS_PER_LOOP):
         bar = getattr(loop, f"Bar_{bar_index + 1}")
         for note in bar.notes:
-            start_value = getattr(note.time.start_beat, "value", note.time.start_beat)
-            duration_value = getattr(note.time.duration, "value", note.time.duration)
-            start = SIXTEENTH_NOTE_G_TO_INT.get(start_value, start_value)
-            duration = DURATION_SIXTEENTH_G_TO_INT.get(duration_value, duration_value)
+            start = note.time.start_beat
+            duration = note.time.duration
             if (
                 bar_index * SIXTEENTHS_PER_BAR + (start - 1) + duration
                 > SIXTEENTHS_PER_LOOP
@@ -322,21 +136,6 @@ class Loop(BaseModel):
     Bar_2: Bar = Field(..., description="The second bar of the four bar loop")
     Bar_3: Bar = Field(..., description="The third bar of the four bar loop")
     Bar_4: Bar = Field(..., description="The fourth bar of the four bar loop")
-
-    @model_validator(mode="after")
-    def validate_note_boundaries(self):
-        return _validate_loop_note_boundaries(self)
-
-
-class Loop_G(BaseModel):
-    """Deprecated Gemini compatibility model; use :class:`Loop`."""
-
-    __deprecated__ = _G_MODEL_DEPRECATION
-
-    Bar_1: Bar_G = Field(..., description="The first bar of the four bar loop")
-    Bar_2: Bar_G = Field(..., description="The second bar of the four bar loop")
-    Bar_3: Bar_G = Field(..., description="The third bar of the four bar loop")
-    Bar_4: Bar_G = Field(..., description="The fourth bar of the four bar loop")
 
     @model_validator(mode="after")
     def validate_note_boundaries(self):
