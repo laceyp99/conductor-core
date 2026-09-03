@@ -30,10 +30,10 @@ def roundtrip_midi(input_path, output_path):
     if not input_path.is_file():
         raise FileNotFoundError(f"Input MIDI file not found: {input_path}")
 
-    loop = midi_to_loop(str(input_path), times_as_string=False)
+    loop = midi_to_loop(str(input_path))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     midi = MidiFile()
-    loop_to_midi(midi, loop, times_as_string=False)
+    loop_to_midi(midi, loop)
     midi.save(output_path)
     return loop
 

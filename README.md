@@ -53,10 +53,10 @@ for just one, and `playback` for audio helpers.
 
 ```powershell
 # Add Core to a uv-managed project
-uv add "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.4.0"
+uv add "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.5.0"
 
 # Install Core in a pip-managed environment
-python -m pip install "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.4.0"
+python -m pip install "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.5.0"
 ```
 
 Available provider extras are `openai`, `anthropic`, `google`, and `ollama`.

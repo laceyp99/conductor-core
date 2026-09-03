@@ -82,7 +82,6 @@ class LoopGenerationEngine:
                 loop_to_midi(
                     midi,
                     loop,
-                    times_as_string=False,
                 )
             )
             midi.save(workspace.midi_path)

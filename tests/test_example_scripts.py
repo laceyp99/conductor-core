@@ -74,7 +74,7 @@ def test_midi_roundtrip_uses_sixteenth_note_integer_timing(
     midi_builder,
 ):
     script = load_script("midi_loop_roundtrip")
-    input_path = midi_builder(sample_loop, times_as_string=False, filename="source.mid")
+    input_path = midi_builder(sample_loop, filename="source.mid")
     output_path = tmp_path / "nested" / "roundtrip.mid"
 
     restored = script.roundtrip_midi(input_path, output_path)

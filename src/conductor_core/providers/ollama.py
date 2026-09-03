@@ -2,7 +2,6 @@
 
 import logging
 import os
-import warnings
 
 from conductor_core import models as objects
 from conductor_core import music as utils
@@ -69,18 +68,10 @@ def initialize_ollama_client(
 
 
 def get_ollama_status(
-    force_refresh=False,
     host_address: str | None = None,
     request_timeout: float | None = None,
 ):
     """Get the current Ollama availability and discovered models."""
-    if force_refresh:
-        warnings.warn(
-            "force_refresh is now a no-op and will be removed in a future release.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-
     host = _resolve_host(host_address)
     status = {
         "available": False,
@@ -107,12 +98,9 @@ def get_ollama_status(
     return status
 
 
-def get_model_list(force_refresh=False, host_address: str | None = None):
+def get_model_list(host_address: str | None = None):
     """Get the available Ollama model names."""
-    return get_ollama_status(
-        force_refresh=force_refresh,
-        host_address=host_address,
-    )["models"]
+    return get_ollama_status(host_address=host_address)["models"]
 
 
 def loop_gen(

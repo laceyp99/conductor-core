@@ -2,42 +2,12 @@ import pytest
 from pydantic import ValidationError
 
 from conductor_core.models import (
-    Bar_G,
     DurationSixteenth,
-    DurationSixteenth_G,
     Loop,
-    Loop_G,
     Note,
-    Note_G,
     SixteenthNote,
-    SixteenthNote_G,
     TimeInformation,
-    TimeInformation_G,
 )
-
-
-def test_g_models_are_marked_deprecated():
-    deprecated_types = (
-        SixteenthNote_G,
-        DurationSixteenth_G,
-        TimeInformation_G,
-        Note_G,
-        Bar_G,
-        Loop_G,
-    )
-
-    assert all(
-        "deprecated" in model.__deprecated__.lower() for model in deprecated_types
-    )
-
-
-def test_sixteenth_note_g_from_int_returns_expected_enum_member():
-    assert SixteenthNote_G.from_int(16) is SixteenthNote_G.SIXTEEN
-
-
-def test_sixteenth_note_g_from_int_rejects_out_of_range_values():
-    with pytest.raises(ValueError, match="Invalid sixteenth-note value"):
-        SixteenthNote_G.from_int(17)
 
 
 def test_time_information_coerces_integer_inputs_to_enum_members():
@@ -52,28 +22,14 @@ def test_duration_has_a_dedicated_four_bar_vocabulary():
 
     assert time_info.start_beat is SixteenthNote.SIXTEEN
     assert time_info.duration is DurationSixteenth.SEVENTEEN
-    assert TimeInformation_G(start_beat="one", duration="sixty_four").duration is (
-        DurationSixteenth_G.SIXTY_FOUR
-    )
 
 
-def test_time_information_g_rejects_unknown_string_values():
-    with pytest.raises(ValidationError):
-        TimeInformation_G(start_beat="zero", duration="sixteen")
-
-
-@pytest.mark.parametrize(
-    ("note_type", "time"),
-    [
-        (Note, {"start_beat": 1, "duration": 1}),
-        (Note_G, {"start_beat": "one", "duration": "one"}),
-    ],
-)
-def test_note_accepts_midi_pitch_boundaries(note_type, time):
-    low_note = note_type(pitch="C", octave=-1, velocity=1, time=time)
-    low_enharmonic = note_type(pitch="B#", octave=-2, velocity=1, time=time)
-    low_double_sharp = note_type(pitch="B##", octave=-2, velocity=1, time=time)
-    high_note = note_type(pitch="G", octave=9, velocity=127, time=time)
+def test_note_accepts_midi_pitch_boundaries():
+    time = {"start_beat": 1, "duration": 1}
+    low_note = Note(pitch="C", octave=-1, velocity=1, time=time)
+    low_enharmonic = Note(pitch="B#", octave=-2, velocity=1, time=time)
+    low_double_sharp = Note(pitch="B##", octave=-2, velocity=1, time=time)
+    high_note = Note(pitch="G", octave=9, velocity=127, time=time)
 
     assert (low_note.octave, low_note.velocity) == (-1, 1)
     assert (low_enharmonic.octave, low_enharmonic.velocity) == (-2, 1)
@@ -81,13 +37,6 @@ def test_note_accepts_midi_pitch_boundaries(note_type, time):
     assert (high_note.octave, high_note.velocity) == (9, 127)
 
 
-@pytest.mark.parametrize(
-    ("note_type", "time"),
-    [
-        (Note, {"start_beat": 1, "duration": 1}),
-        (Note_G, {"start_beat": "one", "duration": "one"}),
-    ],
-)
 @pytest.mark.parametrize(
     ("pitch", "octave", "velocity", "message"),
     [
@@ -101,14 +50,14 @@ def test_note_accepts_midi_pitch_boundaries(note_type, time):
     ],
 )
 def test_note_rejects_values_that_cannot_create_note_on_events(
-    note_type, time, pitch, octave, velocity, message
+    pitch, octave, velocity, message
 ):
     with pytest.raises(ValidationError, match=message):
-        note_type(
+        Note(
             pitch=pitch,
             octave=octave,
             velocity=velocity,
-            time=time,
+            time={"start_beat": 1, "duration": 1},
         )
 
 
@@ -123,19 +72,17 @@ def test_note_rejects_values_that_cannot_create_note_on_events(
         ("velocity", "96"),
     ],
 )
-@pytest.mark.parametrize(
-    ("note_type", "time"),
-    [
-        (Note, {"start_beat": 1, "duration": 1}),
-        (Note_G, {"start_beat": "one", "duration": "one"}),
-    ],
-)
-def test_note_requires_integer_octave_and_velocity(note_type, time, field, value):
-    values = {"pitch": "C", "octave": 4, "velocity": 96, "time": time}
+def test_note_requires_integer_octave_and_velocity(field, value):
+    values = {
+        "pitch": "C",
+        "octave": 4,
+        "velocity": 96,
+        "time": {"start_beat": 1, "duration": 1},
+    }
     values[field] = value
 
     with pytest.raises(ValidationError, match="Input should be a valid integer"):
-        note_type(**values)
+        Note(**values)
 
 
 def test_loop_validates_nested_bar_and_note_data_from_dicts():
@@ -160,28 +107,22 @@ def test_loop_validates_nested_bar_and_note_data_from_dicts():
     assert loop.Bar_1.notes[0].time.duration is DurationSixteenth.SIXTEEN
 
 
-@pytest.mark.parametrize(
-    ("payload", "loop_type"),
-    [
-        (
-            {"start_beat": 16, "duration": 2},
-            Loop,
-        ),
-        (
-            {"start_beat": "sixteen", "duration": "two"},
-            Loop_G,
-        ),
-    ],
-)
-def test_loop_rejects_notes_extending_beyond_its_four_bar_boundary(payload, loop_type):
+def test_loop_rejects_notes_extending_beyond_its_four_bar_boundary():
     bar = {"num": 1, "notes": []}
     final_bar = {
         "num": 4,
-        "notes": [{"pitch": "C", "octave": 4, "velocity": 96, "time": payload}],
+        "notes": [
+            {
+                "pitch": "C",
+                "octave": 4,
+                "velocity": 96,
+                "time": {"start_beat": 16, "duration": 2},
+            }
+        ],
     }
 
     with pytest.raises(ValidationError, match="four-bar loop boundary"):
-        loop_type(
+        Loop(
             Bar_1=bar, Bar_2={**bar, "num": 2}, Bar_3={**bar, "num": 3}, Bar_4=final_bar
         )
 
@@ -196,28 +137,3 @@ def test_loop_schema_distinguishes_duration_from_start_position():
     assert definitions["Note"]["properties"]["octave"]["maximum"] == 9
     assert definitions["Note"]["properties"]["velocity"]["minimum"] == 1
     assert definitions["Note"]["properties"]["velocity"]["maximum"] == 127
-
-    gemini_definitions = Loop_G.model_json_schema()["$defs"]
-    assert gemini_definitions["Note_G"]["properties"]["octave"]["minimum"] == -2
-    assert gemini_definitions["Note_G"]["properties"]["octave"]["maximum"] == 9
-    assert gemini_definitions["Note_G"]["properties"]["velocity"]["minimum"] == 1
-    assert gemini_definitions["Note_G"]["properties"]["velocity"]["maximum"] == 127
-    assert "sixty_four" in gemini_definitions["DurationSixteenth_G"]["enum"]
-    assert gemini_definitions["SixteenthNote_G"]["enum"] == [
-        "one",
-        "two",
-        "three",
-        "four",
-        "five",
-        "six",
-        "seven",
-        "eight",
-        "nine",
-        "ten",
-        "eleven",
-        "twelve",
-        "thirteen",
-        "fourteen",
-        "fifteen",
-        "sixteen",
-    ]

@@ -1,9 +1,6 @@
 import json
-import warnings
 from copy import deepcopy
 from importlib import resources
-
-from conductor_core import models as objects
 
 # Flat list of chromatic note names (pitch class 0-11, sharps only)
 NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
@@ -368,50 +365,3 @@ def save_messages_to_json(messages, filename):
     base_filename = filename if str(filename).endswith(".json") else f"{filename}.json"
     with open(base_filename, "w", encoding="utf-8") as json_file:
         json.dump(messages, json_file, indent=4)
-
-
-def convert_sixteenth(sixteenth_g):
-    """
-    Converts a SixteenthNote_G instance to its corresponding integer value.
-
-    Args:
-        sixteenth_g (SixteenthNote_G): A SixteenthNote_G enum value.
-
-    Returns:
-        int: The integer corresponding to the sixteenth position or duration.
-    """
-    warnings.warn(
-        "convert_sixteenth() is deprecated with the _G compatibility models; "
-        "use canonical numeric timing values instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return (
-        objects.SIXTEENTH_NOTE_G_TO_INT.get(sixteenth_g.value.lower())
-        or objects.DURATION_SIXTEENTH_G_TO_INT[sixteenth_g.value.lower()]
-    )
-
-
-def int_to_sixteenth_g(sixteenth):
-    """Convert an integer sixteenth-note position into a SixteenthNote_G enum."""
-    warnings.warn(
-        "int_to_sixteenth_g() is deprecated; use SixteenthNote instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return objects.SixteenthNote_G.from_int(sixteenth)
-
-
-def int_to_duration_sixteenth_g(duration):
-    """Convert an integer duration into the deprecated compatibility enum."""
-    warnings.warn(
-        "int_to_duration_sixteenth_g() is deprecated; use DurationSixteenth instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    try:
-        return objects.DurationSixteenth_G(
-            objects.DURATION_SIXTEENTH_INT_TO_G[duration]
-        )
-    except KeyError as exc:
-        raise ValueError(f"Invalid duration sixteenth value: {duration}") from exc
