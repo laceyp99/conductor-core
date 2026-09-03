@@ -1,6 +1,22 @@
 {
     "models": {
         "OpenAI": {
+            "gpt-6-astra": {
+                "extended_thinking": true,
+                "effort_options": ["low", "medium", "high", "xhigh", "max"],
+                "max_tokens": 128000,
+                "cost": {
+                    "input": {"<=272k": 10.00, ">272k": 20.00},
+                    "cached input": {"<=272k": 1.00, ">272k": 2.00},
+                    "cache write": {"<=272k": 12.50, ">272k": 25.00},
+                    "output": {"<=272k": 50.00, ">272k": 75.00}
+                },
+                "rate_limits": {
+                    "RPM": 500,
+                    "TPM": 500000,
+                    "RPD": null
+                }
+            },
             "gpt-5.6-sol": {
                 "extended_thinking": true,
                 "effort_options": ["none", "low", "medium", "high", "xhigh", "max"],
@@ -521,6 +537,25 @@
             }
         },
         "Google": {
+            "gemini-3.8-flash": {
+                "extended_thinking": true,
+                "effort_options": ["low", "medium", "high"],
+                "temperature_supported": false,
+                "max_tokens": 65536,
+                "cost": {
+                    "input": 0.75,
+                    "cache": {
+                        "text": 0.075,
+                        "storage hour": 0.50
+                    },
+                    "output": 3.75
+                },
+                "rate_limits": {
+                    "RPM": null,
+                    "TPM": null,
+                    "RPD": null
+                }
+            },
             "gemini-3.7-flash": {
                 "extended_thinking": true,
                 "effort_options": ["low", "medium", "high"],

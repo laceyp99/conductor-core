@@ -77,14 +77,21 @@ def calc_price(model, response):
     model_info = utils.get_model_info()
     usage = response.usage
     model_cost = model_info["models"]["OpenAI"][model]["cost"]
-    input_cost = model_cost.get("input", 0) / 1000000
-    output_cost = model_cost.get("output", 0) / 1000000
-    cached_input_cost = model_cost.get("cached input", 0) / 1000000
-    cache_write_cost = model_cost.get("cache write", model_cost.get("input", 0))
-    cache_write_cost /= 1000000
-
     input_tokens = max(0, usage.input_tokens or 0)
     output_tokens = max(0, usage.output_tokens or 0)
+    price_band = ">272k" if input_tokens > 272000 else "<=272k"
+
+    def per_token(price):
+        if isinstance(price, dict):
+            price = price[price_band]
+        return price / 1000000
+
+    input_cost = per_token(model_cost.get("input", 0))
+    output_cost = per_token(model_cost.get("output", 0))
+    cached_input_cost = per_token(model_cost.get("cached input", 0))
+    cache_write_cost = per_token(
+        model_cost.get("cache write", model_cost.get("input", 0))
+    )
     input_details = getattr(usage, "input_tokens_details", None)
     reported_cache_writes = max(0, getattr(input_details, "cache_write_tokens", 0) or 0)
     reported_cached_tokens = max(0, getattr(input_details, "cached_tokens", 0) or 0)

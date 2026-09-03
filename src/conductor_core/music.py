@@ -161,8 +161,12 @@ def _validate_model_info(model_info):
                 )
 
             rpm = rate_limits["RPM"]
-            if isinstance(rpm, bool) or not isinstance(rpm, int) or rpm <= 0:
-                raise ValueError(f"{model_label} RPM must be a positive integer")
+            if rpm is not None and (
+                isinstance(rpm, bool) or not isinstance(rpm, int) or rpm <= 0
+            ):
+                raise ValueError(
+                    f"{model_label} RPM must be a positive integer or null"
+                )
 
             for field in ("TPM", "RPD"):
                 value = rate_limits[field]

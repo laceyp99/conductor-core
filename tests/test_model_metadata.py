@@ -50,9 +50,9 @@ def test_selectable_cloud_models_have_normalized_rate_limits():
             assert set(rate_limits) == {"RPM", "TPM", "RPD"}, f"{provider}/{model}"
 
             rpm = rate_limits["RPM"]
-            assert isinstance(rpm, int), f"{provider}/{model}"
-            assert not isinstance(rpm, bool), f"{provider}/{model}"
-            assert rpm > 0, f"{provider}/{model}"
+            assert rpm is None or (
+                isinstance(rpm, int) and not isinstance(rpm, bool) and rpm > 0
+            ), f"{provider}/{model} RPM"
 
             for field in ("TPM", "RPD"):
                 value = rate_limits[field]
@@ -72,6 +72,45 @@ def test_gemini_3_7_flash_capabilities_match_google_documentation():
         "input": 0.75,
         "cache": {"text": 0.075, "storage hour": 0.50},
         "output": 3.75,
+    }
+
+
+def test_gemini_3_8_flash_capabilities_match_google_documentation():
+    model_config = music.get_model_info()["models"]["Google"]["gemini-3.8-flash"]
+
+    assert model_config["extended_thinking"] is True
+    assert model_config["effort_options"] == ["low", "medium", "high"]
+    assert model_config["temperature_supported"] is False
+    assert model_config["max_tokens"] == 65536
+    assert model_config["cost"] == {
+        "input": 0.75,
+        "cache": {"text": 0.075, "storage hour": 0.50},
+        "output": 3.75,
+    }
+    assert model_config["rate_limits"] == {
+        "RPM": None,
+        "TPM": None,
+        "RPD": None,
+    }
+
+
+def test_gpt_6_astra_capabilities_match_openai_documentation():
+    model_config = music.get_model_info()["models"]["OpenAI"]["gpt-6-astra"]
+
+    assert model_config["extended_thinking"] is True
+    assert model_config["effort_options"] == [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+    ]
+    assert model_config["max_tokens"] == 128000
+    assert model_config["cost"] == {
+        "input": {"<=272k": 10.00, ">272k": 20.00},
+        "cached input": {"<=272k": 1.00, ">272k": 2.00},
+        "cache write": {"<=272k": 12.50, ">272k": 25.00},
+        "output": {"<=272k": 50.00, ">272k": 75.00},
     }
 
 
@@ -169,7 +208,6 @@ def test_model_metadata_rejects_non_boolean_always_on_adaptive_thinking():
     ("rate_limits", "message"),
     [
         ({"TPM": None, "RPD": None}, "must contain exactly"),
-        ({"RPM": None, "TPM": None, "RPD": None}, "RPM must be"),
         ({"RPM": 0, "TPM": None, "RPD": None}, "RPM must be"),
         ({"RPM": True, "TPM": None, "RPD": None}, "RPM must be"),
         ({"RPM": 1, "TPM": 0, "RPD": None}, "TPM must be"),

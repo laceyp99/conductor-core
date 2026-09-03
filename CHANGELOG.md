@@ -8,6 +8,11 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+### Added
+
+- GPT-6 Astra and Gemini 3.8 Flash model metadata, including current pricing,
+  reasoning controls, output limits, and documented request constraints.
+
 ## [0.5.0] - 2026-09-02
 
 Version 0.5.0 strengthens public request and result contracts, standardizes
