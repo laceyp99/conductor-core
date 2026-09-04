@@ -7,13 +7,17 @@ optional features your application needs. Use `providers` for every provider,
 a provider name such as `google` for one provider, and `playback` for audio
 helpers.
 
-```powershell
-# uv-managed project
-uv add "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.5.1"
+=== "uv"
 
-# pip-managed environment
-python -m pip install "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.5.1"
-```
+    ```powershell
+    uv add "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.5.1"
+    ```
+
+=== "pip"
+
+    ```powershell
+    python -m pip install "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.5.1"
+    ```
 
 Provider extras are `openai`, `anthropic`, `google`, and `ollama`. Extras can be
 combined; for example, `[google,playback]` enables Gemini generation and audio

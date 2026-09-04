@@ -63,7 +63,7 @@ providers = [
 
 [dependency-groups]
 dev = [
-	"mkdocs>=1.6,<2",
+	"mkdocs-material>=9.6,<10",
 	"mkdocs-mermaid2-plugin>=1.2,<2",
 	"pytest>=9.0.3,<10",
 	"ruff>=0.16,<0.17",
