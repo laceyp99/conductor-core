@@ -21,6 +21,20 @@ def test_calc_cost_uses_reported_cached_tokens_without_storage_estimate():
     assert cost == pytest.approx(expected)
 
 
+def test_calc_cost_uses_standard_rate_above_legacy_threshold():
+    usage = SimpleNamespace(
+        prompt_token_count=250000,
+        candidates_token_count=100,
+        thoughts_token_count=None,
+        cached_content_token_count=0,
+    )
+
+    cost = gemini_api.calc_cost("gemini-3.1-pro-preview", usage)
+
+    expected = (250000 * 2.00 + 100 * 12.00) / 1_000_000
+    assert cost == pytest.approx(expected)
+
+
 def test_calc_cost_includes_thought_tokens_at_output_rate():
     usage = SimpleNamespace(
         prompt_token_count=1000,

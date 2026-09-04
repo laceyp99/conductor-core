@@ -1,6 +1,22 @@
 {
     "models": {
         "OpenAI": {
+            "gpt-6-astra": {
+                "extended_thinking": true,
+                "effort_options": ["low", "medium", "high", "xhigh", "max"],
+                "max_tokens": 128000,
+                "cost": {
+                    "input": 10.00,
+                    "cached input": 1.00,
+                    "cache write": 12.50,
+                    "output": 50.00
+                },
+                "rate_limits": {
+                    "RPM": 500,
+                    "TPM": 500000,
+                    "RPD": null
+                }
+            },
             "gpt-5.6-sol": {
                 "extended_thinking": true,
                 "effort_options": ["none", "low", "medium", "high", "xhigh", "max"],
@@ -521,6 +537,25 @@
             }
         },
         "Google": {
+            "gemini-3.8-flash": {
+                "extended_thinking": true,
+                "effort_options": ["low", "medium", "high"],
+                "temperature_supported": false,
+                "max_tokens": 65536,
+                "cost": {
+                    "input": 0.75,
+                    "cache": {
+                        "text": 0.075,
+                        "storage hour": 0.50
+                    },
+                    "output": 3.75
+                },
+                "rate_limits": {
+                    "RPM": 1000,
+                    "TPM": 2000000,
+                    "RPD": 10000
+                }
+            },
             "gemini-3.7-flash": {
                 "extended_thinking": true,
                 "effort_options": ["low", "medium", "high"],
@@ -617,19 +652,12 @@
                 "effort_options": ["low", "medium", "high"],
                 "max_tokens": 65536,
                 "cost": {
-                    "input": {
-                        "<=200k": 2.00,
-                        ">200k": 4.00
-                    },
+                    "input": 2.00,
                     "cache": {
-                        "<=200k": 0.20,
-                        ">200k": 0.40,
+                        "text": 0.20,
                         "storage hour": 4.50
                     },
-                    "output": {
-                        "<=200k": 12.00,
-                        ">200k": 18.00
-                    }
+                    "output": 12.00
                 },
                 "rate_limits": {
                     "RPM": 25,
@@ -661,19 +689,12 @@
                 "max_thinking_budget": 32768,
                 "max_tokens": 65536,
                 "cost": {
-                    "input": {
-                        "<=200k": 1.25,
-                        ">200k": 2.50
-                    },
+                    "input": 1.25,
                     "cache": {
-                        "<=200k": 0.125,
-                        ">200k": 0.25,
+                        "text": 0.125,
                         "storage hour": 4.50
                     },
-                    "output": {
-                        "<=200k": 10.00,
-                        ">200k": 15.00
-                    }
+                    "output": 10.00
                 },
                 "rate_limits": {
                     "RPM": 150,

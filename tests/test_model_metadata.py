@@ -75,6 +75,72 @@ def test_gemini_3_7_flash_capabilities_match_google_documentation():
     }
 
 
+def test_gemini_3_8_flash_capabilities_match_google_documentation():
+    model_config = music.get_model_info()["models"]["Google"]["gemini-3.8-flash"]
+
+    assert model_config["extended_thinking"] is True
+    assert model_config["effort_options"] == ["low", "medium", "high"]
+    assert model_config["temperature_supported"] is False
+    assert model_config["max_tokens"] == 65536
+    assert model_config["cost"] == {
+        "input": 0.75,
+        "cache": {"text": 0.075, "storage hour": 0.50},
+        "output": 3.75,
+    }
+    assert model_config["rate_limits"] == {
+        "RPM": 1000,
+        "TPM": 2000000,
+        "RPD": 10000,
+    }
+
+
+def test_gpt_6_astra_capabilities_match_openai_documentation():
+    model_config = music.get_model_info()["models"]["OpenAI"]["gpt-6-astra"]
+
+    assert model_config["extended_thinking"] is True
+    assert model_config["effort_options"] == [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+    ]
+    assert model_config["max_tokens"] == 128000
+    assert model_config["cost"] == {
+        "input": 10.00,
+        "cached input": 1.00,
+        "cache write": 12.50,
+        "output": 50.00,
+    }
+
+
+@pytest.mark.parametrize(
+    ("model", "expected_cost"),
+    [
+        (
+            "gemini-3.1-pro-preview",
+            {
+                "input": 2.00,
+                "cache": {"text": 0.20, "storage hour": 4.50},
+                "output": 12.00,
+            },
+        ),
+        (
+            "gemini-2.5-pro",
+            {
+                "input": 1.25,
+                "cache": {"text": 0.125, "storage hour": 4.50},
+                "output": 10.00,
+            },
+        ),
+    ],
+)
+def test_gemini_pro_models_use_standard_context_pricing(model, expected_cost):
+    model_config = music.get_model_info()["models"]["Google"][model]
+
+    assert model_config["cost"] == expected_cost
+
+
 @pytest.mark.parametrize(
     ("model", "expected_cost"),
     [
