@@ -1,0 +1,20 @@
+site_name: Conductor Core
+site_description: Provider-independent prompt-to-MIDI generation engine
+repo_url: https://github.com/laceyp99/conductor-core
+repo_name: laceyp99/conductor-core
+
+theme:
+  name: mkdocs
+
+plugins:
+  - search
+  - mermaid2
+
+nav:
+  - Overview: index.md
+  - Getting started: getting-started.md
+  - Generation: generation.md
+  - Artifacts and audio: artifacts-and-audio.md
+  - Development: development.md
+
+strict: true
