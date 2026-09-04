@@ -2,69 +2,37 @@
   <img src="app/readme-logo.png" alt="Conductor Core Logo" width="50%">
 </div>
 
+# Conductor Core
+
 `conductor-core` is the reusable prompt-to-MIDI engine behind the Conductor
-applications. It can be embedded in a CLI, notebook, backend service, test
-harness, or another UI without importing Gradio, Dash, Plotly, or the evaluation
-package.
+applications. It gives CLIs, notebooks, backend services, test harnesses, and
+user interfaces one provider-independent generation API without pulling UI or
+evaluation dependencies into the process.
 
-Core owns:
+Core provides:
 
-- provider routing for OpenAI, Anthropic, Google, and Ollama
-- validated four-bar loop models and provider response parsing
-- prompt assembly and model capability metadata
-- loop-to-MIDI and MIDI-to-loop conversion
-- generation workspaces, messages, metadata, and history persistence
-- optional SoundFont discovery and MIDI-to-audio rendering
-- structured generation results and progress events
+- routing and response parsing for OpenAI, Anthropic, Google, and Ollama;
+- validated four-bar music models and prompt assembly;
+- model capability metadata;
+- loop-to-MIDI and MIDI-to-loop conversion;
+- generation history and artifact storage;
+- optional MIDI-to-audio rendering; and
+- structured results, errors, logging, and progress events.
 
-## Installation
+Core is currently pre-release. Its API is typed and tested, but consumers
+should pin a release tag and review the [changelog](CHANGELOG.md) when upgrading.
 
-### Contribute to Core
+## Install
 
-Core uses [uv](https://docs.astral.sh/uv/) 0.11.16 or newer for local
-development. After cloning the repository, run this from the repository root:
-
-```powershell
-uv sync --all-extras
-```
-
-That creates the virtual environment and installs Core, the development tools,
-and every optional provider and playback dependency. You do not need to
-activate the environment. If you only need the base package and development
-tools, use `uv sync` instead.
-
-Run the project checks with:
+Choose only the optional features your application needs. Use `providers` for
+all hosted and local model providers, a provider name such as `google` for one
+provider, and `playback` for audio helpers.
 
 ```powershell
-uv run --locked --all-extras ruff format --check .
-uv run --locked --all-extras ruff check .
-uv run --locked --all-extras pytest -q
-uv build
-```
-
-When intentionally updating dependencies, run `uv lock --upgrade`, review the
-lockfile diff, and rerun the checks. Do not edit `uv.lock` by hand.
-
-### Use as a dependency
-
-Pin Core to a release tag and choose only the optional features your application
-needs. Use `providers` for all model providers, a provider name such as `google`
-for just one, and `playback` for audio helpers.
-
-```powershell
-# Add Core to a uv-managed project
 uv add "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.5.1"
-
-# Install Core in a pip-managed environment
-python -m pip install "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.5.1"
 ```
 
-Available provider extras are `openai`, `anthropic`, `google`, and `ollama`.
-Extras can be combined—for example, use `[google,playback]` for Gemini generation
-with audio previews. To upgrade, change the pinned tag and review
-[`CHANGELOG.md`](CHANGELOG.md).
-
-## Basic generation
+## Generate a loop
 
 ```python
 from conductor_core import EngineConfig, GenerationRequest, LoopGenerationEngine
@@ -80,284 +48,28 @@ result = engine.generate(
     )
 )
 
-print(result.generation_id)
 print(result.midi_path)
-print(result.cost)
 ```
 
-`generate()` is synchronous. It calls the selected provider, converts the
-validated loop to MIDI, and persists the resulting artifacts before returning.
+`generate()` synchronously calls the selected provider, validates its loop,
+converts the loop to MIDI, and persists the result. Provider credentials can be
+injected through `EngineConfig` or supplied through the supported environment
+variables.
 
-For a complete editable workflow—including prompt customization, progress
-events, persisted result fields, and optional audio rendering—see
-[`scripts/generate_midi.py`](scripts/generate_midi.py). Running that example
-makes a real provider call and may incur usage charges.
+## Documentation
 
-## Credentials and provider selection
+- [Getting started](docs/getting-started.md): installation, credentials, and a
+  complete first generation.
+- [Generation guide](docs/generation.md): request options, model capabilities,
+  prompts, progress, errors, and logging.
+- [Artifacts and audio](docs/artifacts-and-audio.md): storage, retention, MIDI
+  utilities, and optional MP3 previews.
+- [Development](docs/development.md): environment setup, validation, and
+  documentation commands.
+- [Changelog](CHANGELOG.md): release history and migration notes.
 
-Credentials can be injected by the calling application:
+The documentation is also configured for local browsing with MkDocs.
 
-```python
-from conductor_core import EngineConfig, ProviderCredentials
+## License
 
-config = EngineConfig.from_defaults(
-    artifact_root="my-output",
-    provider_credentials=ProviderCredentials(
-        openai_api_key="...",
-        google_api_key="...",
-        anthropic_api_key="...",
-        ollama_host="http://localhost:11434",
-    ),
-)
-```
-
-If a credential is not injected, provider modules fall back to these environment
-variables:
-
-```ini
-OPENAI_API_KEY="..."
-GEMINI_API_KEY="..."
-ANTHROPIC_API_KEY="..."
-OLLAMA_API_HOST_ADDRESS="http://localhost:11434"
-```
-
-The provider is derived from the route actually used for `model`;
-`GenerationRequest` does not accept a caller-supplied provider. To inspect
-available providers, models, and capabilities without contacting a provider, run
-[`scripts/inspect_models.py`](scripts/inspect_models.py).
-
-## Generation request options
-
-| Field | Purpose |
-|---|---|
-| `key`, `scale`, `description` | String musical inputs; `key` and `scale` must be supported and `description` must be nonblank |
-| `model` | Nonblank string used later for provider routing and response handling |
-| `temperature` | Finite integer or float from `0.0` through `2.0`; booleans are rejected |
-| `use_thinking` | Strict boolean reasoning control; `False` selects the model's lowest supported setting |
-| `effort` | String reasoning effort or `None` (the default), used unchanged when `use_thinking=True` |
-| `prompt_override` | `None` or a nonblank string override for only this request |
-| `render_audio` | Strict boolean requesting an MP3 preview after MIDI generation |
-| `soundfont_path` | `None`, a nonblank string, or an `os.PathLike` SoundFont name/path |
-
-`GenerationRequest` validates this provider-independent structure when it is
-constructed. Wrong Python types raise `TypeError`; values of accepted types that
-violate a field rule raise `ValueError`. Integrations that receive strings from
-forms, command lines, or environment variables must parse booleans and numbers
-before constructing a request. Validation preserves accepted strings unchanged.
-Model registration, model-specific effort choices, and SoundFont filesystem
-checks remain downstream routing and audio responsibilities.
-
-Model capabilities differ. Consumers can inspect
-`conductor_core.music.get_model_info()` or run
-[`scripts/inspect_models.py`](scripts/inspect_models.py) instead of assuming
-every model accepts temperature or the same reasoning settings.
-
-For models with discrete `effort_options`, those options are ordered from
-lowest to highest. When `use_thinking=False`, Core sends the first supported
-option even if the request contains a valid higher `effort`. Depending on the
-model, that lowest option may be `none`, `minimal`, or `low`; therefore `False`
-means the lowest available reasoning setting rather than a guarantee that the
-provider performs no reasoning. When `use_thinking=True`, Core validates and
-sends the requested effort. Models that use thinking budgets retain their
-provider-specific minimum/maximum behavior.
-
-Because `effort` defaults to `None`, callers enabling thinking for a model with
-discrete effort options must select one of that model's supported values.
-
-Every packaged cloud model has a `rate_limits` object with the same fields:
-`RPM`, `TPM`, and `RPD`. `RPM` is a positive integer conservative baseline for
-the lowest generally supported account tier that Core intentionally supports;
-it is not a complete representation of provider usage, loyalty, priority, or
-entitlement tiers. `TPM` and `RPD` are positive integers when a matching
-baseline is intentionally recorded and `null` when it is unknown or cannot be
-represented consistently. Core exposes this metadata but does not schedule or
-retry requests from it.
-
-## Prompt customization
-
-Core ships with a default loop-generation prompt. Set `prompt_override` on
-`EngineConfig` for every request made by an engine or on `GenerationRequest`
-for one request. The request override takes precedence over the engine override,
-which takes precedence over the packaged prompt. The generation script contains
-a commented prompt override ready to edit.
-
-## Progress reporting
-
-Pass a callback to `generate(..., progress_callback=...)` to adapt synchronous
-Core work to logs, a progress bar, a queue, or an asynchronous UI wrapper.
-Current stages include provider generation, MIDI processing, and audio
-rendering. The callback reports progress but does not cancel an in-flight
-provider request. The generation script prints each event as it arrives.
-
-## Audio rendering
-
-Set `render_audio=True` on a request to render an MP3 after MIDI generation.
-Install the `playback` extra and provide FluidSynth and FFmpeg on the system
-`PATH`. Leaving `soundfont_path` unset uses Core's default packaged SoundFont;
-set it on the request or `default_soundfont_path` on `EngineConfig` to choose
-another. Request-level `os.PathLike` values are converted only when audio is
-requested. Paths that resolve to bytes or otherwise violate the path protocol
-produce a non-fatal audio warning. Audio failure does not discard a successful
-MIDI generation: Core returns the MIDI with a warning and `audio_path=None`.
-
-Lower-level discovery and rendering helpers live in `conductor_core.playback`.
-The generation script enables audio with the default SoundFont and reports both
-the MIDI and audio result paths.
-
-## Results and persisted artifacts
-
-### Data directory
-
-Core stores durable generation history under one predictable Conductor suite
-root. The default layout is:
-
-```text
-~/.conductor/
-  core/
-    generations/
-      gen_<id>/
-        loop.mid
-        loop.mp3          # only when audio rendering succeeds
-        messages.json     # when provider messages are available
-        metadata.json
-```
-
-On Windows, `~/.conductor/core` is
-`%USERPROFILE%\.conductor\core`. Path selection has this precedence:
-
-1. `CONDUCTOR_CORE_DATA_DIR` selects Core's complete project data directory.
-2. `CONDUCTOR_HOME` selects the shared suite root; Core appends `core`.
-3. Otherwise Core uses `Path.home() / ".conductor" / "core"`.
-
-Both environment variables support `~` expansion. PowerShell examples:
-
-```powershell
-# Relocate every participating Conductor project under one suite root.
-$env:CONDUCTOR_HOME = "D:\ConductorData"
-
-# Relocate only Core; this takes precedence over CONDUCTOR_HOME.
-$env:CONDUCTOR_CORE_DATA_DIR = "D:\ConductorData\custom-core"
-```
-
-An explicit `EngineConfig.artifact_root` or `FilesystemArtifactStore` root still
-overrides the default generation location. Request- and engine-specific prompt
-or SoundFont choices keep their existing precedence, and caller-added SoundFont
-search directories remain separate from Core's packaged read-only resources.
-Packaged prompts, model metadata, and the bundled SoundFont are not copied or
-moved into the data directory. Core currently owns no persistent configuration
-or disposable disk cache.
-
-Resolving or importing these paths does not create directories. Core creates the
-selected generation-history directory only when a generation workspace is
-written.
-
-Generation history can grow through MIDI, JSON, and especially optional MP3
-files. Core retains the newest 20 generations by default, but custom artifact
-stores and manually retained files still consume space at their selected
-location.
-
-Configure retention on the engine or store. Use `None` only when the calling
-application owns its disk-usage policy:
-
-```python
-from conductor_core import EngineConfig
-from conductor_core.storage import FilesystemArtifactStore
-
-config = EngineConfig.from_defaults(max_generations=100)
-unlimited_store = FilesystemArtifactStore("my-output", max_generations=None)
-```
-
-`GenerationResult` contains:
-
-| Attribute | Contents |
-|---|---|
-| `generation_id` | Unique filesystem generation identifier |
-| `loop` | Validated provider-independent loop object |
-| `midi_path` | Persisted MIDI path |
-| `audio_path` | Persisted MP3 path, when rendering succeeds |
-| `messages` | Provider conversation/response messages |
-| `cost` | Provider-reported estimated cost, when available |
-| `metadata` | Persisted generation metadata |
-| `warnings` | Non-fatal issues such as skipped audio |
-
-Each generation workspace contains `loop.mid`, `messages.json`,
-`metadata.json`, and optionally `loop.mp3`. Use `FilesystemArtifactStore` for
-custom history roots, loading saved generations, deleting generations, and
-updating saved audio metadata. By default, history retains the newest 20
-generations. The generation script shows the most commonly consumed result
-fields after a run.
-
-For new engine generations, `GenerationMetadata.use_thinking` and
-`GenerationMetadata.effort` record the caller-requested settings from the
-`GenerationRequest`. They do not replace a higher requested effort with the
-lowest effective provider effort when `use_thinking=False`. Both fields are
-optional for compatibility with history
-written by Core 0.2.0 and earlier: `None` means the value was not recorded, not
-that a historical default should be inferred. In particular, consumers should
-distinguish an explicit `False` value from `None`.
-
-## Direct MIDI and music utilities
-
-Consumers can convert existing MIDI into Core's four-bar loop model and write it
-back without a provider call. See
-[`scripts/midi_loop_roundtrip.py`](scripts/midi_loop_roundtrip.py) for an
-offline example that normalizes note starts and durations to sixteenth-note
-integer positions.
-
-Additional packaged utilities and models are available from:
-
-- `conductor_core.models` for loop, bar, note, and timing models;
-- `conductor_core.music` for model metadata, prompts, scales, and durations;
-- `conductor_core.routing` for lower-level provider routing;
-- `conductor_core.storage` for artifact and history management;
-- `conductor_core.playback` for optional audio operations.
-
-Prefer `LoopGenerationEngine` for complete generation workflows so persistence,
-cleanup, prompt handling, and provider behavior stay consistent.
-
-## Error behavior
-
-Provider, parsing, and MIDI conversion errors are raised to the caller. If an
-error occurs after a workspace is allocated, Core removes the unfinished
-workspace. Callers should catch exceptions at their application boundary and
-decide how to display, retry, or log them.
-
-Lower-level audio rendering failures raise `AudioRenderingError`. The generation
-engine treats optional audio failure as non-fatal, returning the generated MIDI
-with `audio_path=None` and the rendering diagnostic in `warnings`.
-
-Hosted providers fail before constructing an SDK client when their required API
-key is missing or blank. These failures, along with credentials rejected by a
-provider, raise `ProviderAuthenticationError`. Other provider SDK failures use
-the public `ProviderError` hierarchy and identify the provider and operation.
-
-## Logging
-
-Core emits log records under the `conductor_core` logger namespace and never
-configures handlers or global logging itself (a `NullHandler` is attached so
-unconfigured consumers see no warnings). To surface Core logs, configure
-logging in the application:
-
-```python
-import logging
-
-logging.basicConfig(level=logging.INFO)  # everything to the console
-# or route only Core records somewhere specific:
-logging.getLogger("conductor_core").addHandler(my_handler)
-```
-
-## Validate Core independently
-
-```powershell
-uv run --locked --all-extras pytest -q
-```
-
-The tests are deterministic and do not make live provider calls or require the
-audio toolchain.
-
-## Releases
-
-Release history, compatibility notes, and migration guidance live in
-[`CHANGELOG.md`](CHANGELOG.md). GitHub releases provide the automatic source
-archives for each tag; this project does not attach release-specific wheels or
-binary downloads.
+Conductor Core is available under the [MIT License](LICENSE).

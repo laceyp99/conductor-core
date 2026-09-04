@@ -55,25 +55,6 @@ Keep field names and nesting consistent with nearby entries. If a provider does 
 Anthropic models that always apply adaptive thinking should set
 `always_on_adaptive_thinking` to `true`; omit the field otherwise.
 
-## Conductor Main Control Points
-
-These functions control the model-selection experience and should be checked whenever a new model is added:
-
-- `get_providers()`
-- `get_models_for_provider(provider)`
-- `get_selected_model(provider, model_choice)`
-- `get_model_settings(provider, model_choice, use_thinking=False)`
-- `sync_model_capabilities(provider, model_choice, use_thinking=False)`
-
-Important current behavior:
-
-- Provider choices come from `model_info["models"]`, with Ollama appended dynamically.
-- Temperature is hidden for supported reasoning configurations.
-- Toggle-style thinking is driven by `extended_thinking` when no effort options exist.
-- Effort visibility is driven by the presence of `effort_options` in provider metadata.
-
-When adding a model, first prefer metadata-driven behavior. Only add a hard-coded exception if the model really breaks the existing assumptions.
-
 ## Provider Module Checks
 
 For the matching provider file in `src/conductor_core/providers/`, verify all of the following before deciding no code change is needed:
@@ -85,14 +66,6 @@ For the matching provider file in `src/conductor_core/providers/`, verify all of
 - Structured output parsing still works for loop generation.
 
 Keep changes minimal. This workflow is not for creating a new provider module.
-
-## Validation Guidance
-
-- Run the narrowest error or syntax check available for touched files.
-- Run focused Core registry, provider, routing, and response-parsing tests.
-- If UI logic changes and Conductor Main is available, confirm the model appears in the provider dropdown and control visibility matches the researched capabilities.
-- If reasoning or rate-limit metadata changes and Eval is available, run its focused model-selection tests.
-- Do not run the large evaluation scripts for this task.
 
 ## Reporting Expectations
 
