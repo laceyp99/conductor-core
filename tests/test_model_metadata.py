@@ -50,9 +50,9 @@ def test_selectable_cloud_models_have_normalized_rate_limits():
             assert set(rate_limits) == {"RPM", "TPM", "RPD"}, f"{provider}/{model}"
 
             rpm = rate_limits["RPM"]
-            assert rpm is None or (
-                isinstance(rpm, int) and not isinstance(rpm, bool) and rpm > 0
-            ), f"{provider}/{model} RPM"
+            assert isinstance(rpm, int), f"{provider}/{model}"
+            assert not isinstance(rpm, bool), f"{provider}/{model}"
+            assert rpm > 0, f"{provider}/{model}"
 
             for field in ("TPM", "RPD"):
                 value = rate_limits[field]
@@ -88,9 +88,9 @@ def test_gemini_3_8_flash_capabilities_match_google_documentation():
         "output": 3.75,
     }
     assert model_config["rate_limits"] == {
-        "RPM": None,
-        "TPM": None,
-        "RPD": None,
+        "RPM": 1000,
+        "TPM": 2000000,
+        "RPD": 10000,
     }
 
 
@@ -235,6 +235,7 @@ def test_model_metadata_rejects_non_boolean_always_on_adaptive_thinking():
     ("rate_limits", "message"),
     [
         ({"TPM": None, "RPD": None}, "must contain exactly"),
+        ({"RPM": None, "TPM": None, "RPD": None}, "RPM must be"),
         ({"RPM": 0, "TPM": None, "RPD": None}, "RPM must be"),
         ({"RPM": True, "TPM": None, "RPD": None}, "RPM must be"),
         ({"RPM": 1, "TPM": 0, "RPD": None}, "TPM must be"),

@@ -551,9 +551,9 @@
                     "output": 3.75
                 },
                 "rate_limits": {
-                    "RPM": null,
-                    "TPM": null,
-                    "RPD": null
+                    "RPM": 1000,
+                    "TPM": 2000000,
+                    "RPD": 10000
                 }
             },
             "gemini-3.7-flash": {
