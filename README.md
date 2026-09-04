@@ -60,7 +60,7 @@ python -m pip install "conductor-core[providers] @ git+https://github.com/laceyp
 ```
 
 Available provider extras are `openai`, `anthropic`, `google`, and `ollama`.
-Extras can be combined—for example, use `[google,playback]` for Gemini generation
+Extras can be combined, for example, use `[google,playback]` for Gemini generation
 with audio previews. To upgrade, change the pinned tag and review
 [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -88,9 +88,9 @@ print(result.cost)
 `generate()` is synchronous. It calls the selected provider, converts the
 validated loop to MIDI, and persists the resulting artifacts before returning.
 
-For a complete editable workflow—including prompt customization, progress
-events, persisted result fields, and optional audio rendering—see
-[`scripts/generate_midi.py`](scripts/generate_midi.py). Running that example
+For a complete editable workflow, including prompt customization, progress
+events, persisted result fields, and optional audio rendering (see
+[`scripts/generate_midi.py`](scripts/generate_midi.py)). Running that example
 makes a real provider call and may incur usage charges.
 
 ## Credentials and provider selection
