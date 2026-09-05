@@ -2,7 +2,9 @@
 
 ## Set up the environment
 
-Core uses [uv](https://docs.astral.sh/uv/) 0.11.16 or newer. From the repository
+Core uses [uv](https://docs.astral.sh/uv/) 0.11.16 or newer. 
+
+From the repository
 root, install Core, development tools, and all optional provider and playback
 dependencies:
 
@@ -36,7 +38,7 @@ lockfile diff, and rerun the checks. Never edit `uv.lock` by hand.
 Install development dependencies, then serve the site locally:
 
 ```powershell
-uv sync
+uv sync --all-extras
 uv run mkdocs serve
 ```
 

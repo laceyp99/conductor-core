@@ -24,7 +24,9 @@ flowchart LR
 
 | Field | Purpose |
 | --- | --- |
-| `key`, `scale`, `description` | Musical inputs; the key and scale must be supported and the description must be nonblank. |
+| `key` | Supported note name used as the loop's root key, including accepted enharmonic spellings such as `C#` or `Eb`. | 
+| `scale` | Supported scale name, matched case-insensitively against `Major` and `minor` scales. |
+| `description`	| Nonblank natural-language description of the requested loop. |
 | `model` | Nonblank model name used for provider routing and response handling. |
 | `temperature` | Finite integer or float from `0.0` through `2.0`; booleans are rejected. |
 | `use_thinking` | Strict boolean reasoning control; `False` selects the model's lowest supported setting. |
@@ -33,6 +35,7 @@ flowchart LR
 | `render_audio` | Strict boolean requesting an MP3 preview after MIDI generation. |
 | `soundfont_path` | SoundFont name or path, or `None`. |
 
+### Input Validation
 `GenerationRequest` validates provider-independent structure when constructed.
 Wrong Python types raise `TypeError`; accepted types with invalid values raise
 `ValueError`. Integrations receiving strings from forms, command lines, or
@@ -48,7 +51,9 @@ all models accept temperature or the same reasoning settings.
 ## Reasoning settings
 
 For models with discrete `effort_options`, options are ordered from lowest to
-highest. With `use_thinking=False`, Core sends the first supported option even
+highest. 
+
+With `use_thinking=False`, Core sends the first supported option even
 if the request contains a higher valid `effort`. The lowest option may be
 `none`, `minimal`, or `low`; `False` therefore means the lowest available
 setting, not necessarily no provider reasoning.
@@ -57,11 +62,6 @@ With `use_thinking=True`, Core validates and sends the requested effort. Models
 using thinking budgets retain their provider-specific limits. Because `effort`
 defaults to `None`, callers enabling thinking for a model with discrete options
 must select a supported value.
-
-Persisted `GenerationMetadata.use_thinking` and `.effort` record the requested
-settings, not a lower effective effort selected when thinking is disabled.
-Both are optional for history written by Core 0.2.0 and earlier: `None` means
-the value was not recorded and differs from an explicit `False`.
 
 ## Rate-limit metadata
 
@@ -86,15 +86,15 @@ not cancel an in-flight provider request.
 
 ## Errors
 
-Provider, parsing, and MIDI conversion errors are raised to the caller. Core
-removes an unfinished generation workspace when an error occurs after allocation.
-Callers should catch exceptions at their application boundary and decide how to
-display, retry, or log them.
-
 Hosted providers fail before constructing an SDK client when their required API
 key is missing or blank. Authentication failures raise
 `ProviderAuthenticationError`; other SDK failures use the public
 `ProviderError` hierarchy and identify the provider and operation.
+
+Provider, parsing, and MIDI conversion errors are raised to the caller. Core
+removes an unfinished generation workspace when an error occurs after allocation.
+Callers should catch exceptions at their application boundary and decide how to
+display, retry, or log them.
 
 Lower-level audio failures raise `AudioRenderingError`. The generation engine
 treats optional audio failure as non-fatal and returns the MIDI with a warning
