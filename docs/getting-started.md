@@ -2,7 +2,7 @@
 
 ## Install as a dependency
 
-Conductor Core is pre-release. Pin it to a release tag and choose only the
+**Conductor Core** is pre-release. Pin it to a release tag and choose only the
 optional features your application needs. Use `providers` for every provider,
 a provider name such as `google` for one provider, and `playback` for audio
 helpers.
@@ -19,7 +19,9 @@ helpers.
     python -m pip install "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.5.1"
     ```
 
-Provider extras are `openai`, `anthropic`, `google`, and `ollama`. Extras can be
+Provider extras are `openai`, `anthropic`, `google`, and `ollama`. 
+
+Extras can be
 combined; for example, `[google,playback]` enables Gemini generation and audio
 previews.
 
@@ -81,7 +83,9 @@ OLLAMA_API_HOST_ADDRESS="http://localhost:11434"
 ```
 
 The provider is derived from the route used for `model`;
-`GenerationRequest` does not accept a caller-supplied provider. Inspect models
+`GenerationRequest` does not accept a caller-supplied provider. 
+
+Inspect models
 and capabilities without contacting a provider with:
 
 ```powershell

@@ -2,8 +2,6 @@
   <img src="app/readme-logo.png" alt="Conductor Core Logo" width="50%">
 </div>
 
-# Conductor Core
-
 `conductor-core` is the reusable prompt-to-MIDI engine behind the Conductor
 applications. It gives CLIs, notebooks, backend services, test harnesses, and
 user interfaces one provider-independent generation API without pulling UI or
@@ -58,6 +56,19 @@ variables.
 
 ## Documentation
 
+The detailed documentation is built with **MkDocs**:
+
+To preview the documentation locally, install the docs dependency group and start **MkDocs**:
+
+```powershell
+uv sync --locked --all-extras
+uv run --locked --all-extras mkdocs serve
+```
+
+Open http://127.0.0.1:8000/ in your browser.
+
+Alternatively, Read the documentation source as plain markdown.
+
 - [Getting started](docs/getting-started.md): installation, credentials, and a
   complete first generation.
 - [Generation guide](docs/generation.md): request options, model capabilities,
@@ -67,8 +78,6 @@ variables.
 - [Development](docs/development.md): environment setup, validation, and
   documentation commands.
 - [Changelog](CHANGELOG.md): release history and migration notes.
-
-The documentation is also configured for local browsing with MkDocs.
 
 ## License
 
