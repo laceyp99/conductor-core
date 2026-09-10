@@ -87,7 +87,9 @@ Set `render_audio=True` to render an MP3 after MIDI generation. Install the
 
 Audio failure does not discard successful MIDI generation. Core returns a
 warning and `audio_path=None`. Lower-level discovery and rendering helpers live
-in `conductor_core.playback`.
+in `conductor_core.playback`. Rendered audio is trimmed to the MIDI endpoint;
+SoundFont release tails are intentionally excluded so the preview duration
+matches the loop boundary.
 
 ## Direct MIDI utilities
 
