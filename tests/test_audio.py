@@ -325,6 +325,46 @@ def test_midi_duration_includes_default_and_tempo_changes(
     assert audio._midi_duration_ms(str(midi_path)) == expected_duration_ms
 
 
+def test_midi_to_mp3_wraps_corrupt_midi_duration_error(monkeypatch, tmp_path):
+    midi_path = _write_file(tmp_path / "loop.mid", b"not a MIDI file")
+    _write_file(tmp_path / "custom.sf2")
+    output_path = tmp_path / "loop.mp3"
+
+    monkeypatch.setattr(audio, "SOUNDFONT_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        audio, "is_playback_available", lambda soundfont_name=None: (True, None)
+    )
+    monkeypatch.setattr(
+        audio,
+        "_render_midi_to_wav",
+        lambda midi_path, wav_path, soundfont_path: _write_wav(wav_path),
+    )
+
+    class FakeAudioSegment:
+        @staticmethod
+        def from_wav(temp_wav_path):
+            class FakeAudio:
+                def __getitem__(self, selection):
+                    return self
+
+                def export(self, target_output_path, format, bitrate):
+                    Path(target_output_path).write_bytes(b"mp3")
+
+            return FakeAudio()
+
+    monkeypatch.setattr(audio, "AudioSegment", FakeAudioSegment)
+
+    with pytest.raises(AudioRenderingError) as raised:
+        audio.midi_to_mp3(
+            str(midi_path),
+            output_path=str(output_path),
+            soundfont_name="custom.sf2",
+        )
+
+    assert raised.value.__cause__ is not None
+    assert not output_path.exists()
+
+
 def test_midi_to_mp3_reports_fluidsynth_process_failure(monkeypatch, tmp_path):
     midi_path = _write_file(tmp_path / "loop.mid")
     _write_file(tmp_path / "custom.sf2")
