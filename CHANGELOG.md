@@ -8,6 +8,11 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+### Fixed
+
+- Trim rendered audio to the MIDI endpoint before MP3 encoding, excluding
+  SoundFont release tails from loop previews.
+
 ## [0.5.1] - 2026-09-03
 
 ### Added

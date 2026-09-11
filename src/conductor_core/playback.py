@@ -20,6 +20,8 @@ from contextlib import ExitStack, suppress
 from importlib import resources
 from threading import Lock
 
+from mido import MidiFile, merge_tracks, tick2second
+
 from conductor_core.errors import AudioRenderingError
 
 logger = logging.getLogger(__name__)
@@ -35,6 +37,7 @@ _PACKAGED_SOUNDFONT_PATHS: dict[str, str] = {}
 _PACKAGED_SOUNDFONT_STACK = ExitStack()
 _PACKAGED_SOUNDFONT_LOCK = Lock()
 _FLUIDSYNTH_TIMEOUT_SECONDS = 30
+_DEFAULT_MIDI_TEMPO = 500_000
 atexit.register(_PACKAGED_SOUNDFONT_STACK.close)
 # Preferred SoundFont filenames searched in order.
 DEFAULT_SOUNDFONT_CANDIDATES = [
@@ -45,6 +48,25 @@ DEFAULT_SOUNDFONT_CANDIDATES = [
     "GeneralUser.sf2",
     "FluidR3_GM.sf2",
 ]
+
+
+def _midi_duration_ms(midi_path: str) -> int:
+    """Return the MIDI endpoint in milliseconds, including tempo changes."""
+    midi = MidiFile(midi_path)
+    if midi.ticks_per_beat <= 0:
+        raise ValueError(
+            "MIDI duration requires a positive PPQ time division; "
+            f"got {midi.ticks_per_beat}."
+        )
+
+    duration_seconds = 0.0
+    tempo = _DEFAULT_MIDI_TEMPO
+    for message in merge_tracks(midi.tracks):
+        duration_seconds += tick2second(message.time, midi.ticks_per_beat, tempo)
+        if message.type == "set_tempo":
+            tempo = message.tempo
+
+    return round(duration_seconds * 1000)
 
 
 def _render_midi_to_wav(midi_path: str, wav_path: str, soundfont_path: str) -> None:
@@ -378,7 +400,8 @@ def midi_to_mp3(
         # Convert WAV to MP3 using pydub
         logger.info(f"Converting WAV to MP3: {output_path}")
         audio = AudioSegment.from_wav(temp_wav_path)
-        audio.export(temp_mp3_path, format="mp3", bitrate="192k")
+        target_duration_ms = _midi_duration_ms(midi_path)
+        audio[:target_duration_ms].export(temp_mp3_path, format="mp3", bitrate="192k")
         os.replace(temp_mp3_path, output_path)
 
         logger.info(f"Successfully created MP3: {output_path}")

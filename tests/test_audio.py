@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
+from mido import MetaMessage, MidiFile, MidiTrack
 
 from conductor_core import AudioRenderingError
 from conductor_core import playback as audio
@@ -25,6 +26,18 @@ def _write_wav(path: str | Path, frames: bytes = b"\x00\x00") -> None:
         wav_file.setsampwidth(2)
         wav_file.setframerate(44100)
         wav_file.writeframes(frames)
+
+
+def _write_midi(path: Path, *, tempo_changes=()) -> Path:
+    midi = MidiFile(ticks_per_beat=480)
+    track = MidiTrack()
+    for delta, tempo in tempo_changes:
+        track.append(MetaMessage("set_tempo", tempo=tempo, time=delta))
+    elapsed_ticks = sum(delta for delta, _ in tempo_changes)
+    track.append(MetaMessage("end_of_track", time=7680 - elapsed_ticks))
+    midi.tracks.append(track)
+    midi.save(path)
+    return path
 
 
 def _fluidsynth_output_path(command: list[str]) -> str:
@@ -175,7 +188,7 @@ def test_midi_to_mp3_raises_when_playback_is_unavailable(monkeypatch, tmp_path):
 
 
 def test_midi_to_mp3_uses_requested_soundfont(monkeypatch, tmp_path):
-    midi_path = _write_file(tmp_path / "loop.mid")
+    midi_path = _write_midi(tmp_path / "loop.mid")
     soundfont_path = _write_file(tmp_path / "custom.sf2")
     output_path = tmp_path / "loop.mp3"
     captured = {}
@@ -197,6 +210,10 @@ def test_midi_to_mp3_uses_requested_soundfont(monkeypatch, tmp_path):
             captured["temp_wav_path"] = temp_wav_path
 
             class FakeExport:
+                def __getitem__(self, selection):
+                    captured["slice"] = selection
+                    return self
+
                 def export(self, target_output_path, format, bitrate):
                     captured["output_path"] = target_output_path
                     captured["format"] = format
@@ -239,11 +256,12 @@ def test_midi_to_mp3_uses_requested_soundfont(monkeypatch, tmp_path):
     assert rendered_temp_path.parent == output_path.parent
     assert rendered_temp_path != output_path
     assert not rendered_temp_path.exists()
+    assert captured["slice"] == slice(None, 8000, None)
     assert output_path.read_bytes() == b"mp3"
 
 
 def test_midi_to_mp3_removes_partial_output_when_export_fails(monkeypatch, tmp_path):
-    midi_path = _write_file(tmp_path / "loop.mid")
+    midi_path = _write_midi(tmp_path / "loop.mid")
     _write_file(tmp_path / "custom.sf2")
     output_path = tmp_path / "loop.mp3"
     partial_path = None
@@ -261,6 +279,9 @@ def test_midi_to_mp3_removes_partial_output_when_export_fails(monkeypatch, tmp_p
         @staticmethod
         def from_wav(temp_wav_path):
             class FailedExport:
+                def __getitem__(self, selection):
+                    return self
+
                 def export(self, target_output_path, format, bitrate):
                     nonlocal partial_path
                     partial_path = Path(target_output_path)
@@ -285,6 +306,62 @@ def test_midi_to_mp3_removes_partial_output_when_export_fails(monkeypatch, tmp_p
     assert partial_path is not None
     assert partial_path.parent == output_path.parent
     assert not partial_path.exists()
+    assert not output_path.exists()
+
+
+@pytest.mark.parametrize(
+    ("tempo_changes", "expected_duration_ms"),
+    [
+        ((), 8000),
+        (((0, 1_000_000),), 16000),
+        (((3840, 1_000_000),), 12000),
+    ],
+)
+def test_midi_duration_includes_default_and_tempo_changes(
+    tmp_path, tempo_changes, expected_duration_ms
+):
+    midi_path = _write_midi(tmp_path / "loop.mid", tempo_changes=tempo_changes)
+
+    assert audio._midi_duration_ms(str(midi_path)) == expected_duration_ms
+
+
+def test_midi_to_mp3_wraps_corrupt_midi_duration_error(monkeypatch, tmp_path):
+    midi_path = _write_file(tmp_path / "loop.mid", b"not a MIDI file")
+    _write_file(tmp_path / "custom.sf2")
+    output_path = tmp_path / "loop.mp3"
+
+    monkeypatch.setattr(audio, "SOUNDFONT_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        audio, "is_playback_available", lambda soundfont_name=None: (True, None)
+    )
+    monkeypatch.setattr(
+        audio,
+        "_render_midi_to_wav",
+        lambda midi_path, wav_path, soundfont_path: _write_wav(wav_path),
+    )
+
+    class FakeAudioSegment:
+        @staticmethod
+        def from_wav(temp_wav_path):
+            class FakeAudio:
+                def __getitem__(self, selection):
+                    return self
+
+                def export(self, target_output_path, format, bitrate):
+                    Path(target_output_path).write_bytes(b"mp3")
+
+            return FakeAudio()
+
+    monkeypatch.setattr(audio, "AudioSegment", FakeAudioSegment)
+
+    with pytest.raises(AudioRenderingError) as raised:
+        audio.midi_to_mp3(
+            str(midi_path),
+            output_path=str(output_path),
+            soundfont_name="custom.sf2",
+        )
+
+    assert raised.value.__cause__ is not None
     assert not output_path.exists()
 
 
