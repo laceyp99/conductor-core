@@ -70,5 +70,10 @@ checks unless the task or environment prevents it; report anything skipped.
   `fix(validation): reject invalid loop timing`.
 - State the problem in one or two sentences, then explain the fix.
 - Rebase onto the latest `main` before opening a pull request.
+- Carry release metadata in the pull request: bump `pyproject.toml` above the
+  version on `main` and add a user-facing `[Unreleased]` entry to `CHANGELOG.md`.
+- Skip release metadata only for `test`, `ci`, `docs`, `style`, or `chore`
+  changes, or with the `skip-release` label. The `release-check` job validates
+  these choices. See [`docs/development.md`](docs/development.md).
 - List validation performed and anything skipped.
 - Do not include generated artifacts, credentials, or unrelated cleanup.
