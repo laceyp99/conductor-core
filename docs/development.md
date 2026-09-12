@@ -33,6 +33,27 @@ require FluidSynth or FFmpeg.
 When intentionally updating dependencies, run `uv lock --upgrade`, review the
 lockfile diff, and rerun the checks. Never edit `uv.lock` by hand.
 
+## Release metadata
+
+Every pull request must carry its own release metadata. The required
+`release-check` CI job fails a pull request unless it:
+
+- declares a valid Semantic Versioning version in `pyproject.toml`,
+- sets that version higher than the version on the base branch, and
+- updates `CHANGELOG.md`, either by adding at least one new non-whitespace
+  entry under `[Unreleased]` or by adding an `[x.y.z]` section matching the new
+  version.
+
+The version bump is your choice: use `patch` for backward-compatible fixes,
+`minor` for new backward-compatible features, and `major` for breaking changes.
+Keep changelog entries user-facing; omit them for test-only, CI, formatting, or
+internal refactor changes.
+
+Skip `release-check` when a pull request does not affect releases by adding the
+`skip-release` label or by using a Conventional Commit title whose type is
+`test`, `ci`, `docs`, `style`, or `chore`. The check only validates; it never
+edits your branch.
+
 ## Preview the documentation
 
 Install development dependencies, then serve the site locally:
