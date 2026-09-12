@@ -4,7 +4,7 @@ import os
 from dataclasses import dataclass, field
 from math import isfinite
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args
 
 from conductor_core.models import Loop
 from conductor_core.music import ENHARMONIC_NOTE_NAMES, SCALE_INTERVALS
@@ -14,6 +14,16 @@ from conductor_core.storage import (
     GenerationMetadata,
     _validate_max_generations,
 )
+from conductor_core.variations import VariationProgressStatus
+
+
+def validate_variation_count(count: int = 4) -> int:
+    """Validate a variation count without coercing booleans or numeric strings."""
+    if type(count) is not int:
+        raise TypeError("count must be an integer")
+    if not 1 <= count <= 8:
+        raise ValueError("count must be between 1 and 8 (inclusive)")
+    return count
 
 
 @dataclass(frozen=True)
@@ -178,6 +188,23 @@ class ProgressEvent:
     stage: str
     message: str
     detail: str | None = None
+    batch_id: str | None = None
+    variation_index: int | None = None
+    status: VariationProgressStatus | None = None
+
+    def __post_init__(self) -> None:
+        if self.batch_id is not None and (
+            not isinstance(self.batch_id, str) or not self.batch_id.strip()
+        ):
+            raise ValueError("batch_id must be a nonblank string or None")
+        if self.variation_index is not None and (
+            type(self.variation_index) is not int or not 0 <= self.variation_index <= 7
+        ):
+            raise ValueError("variation_index must be an integer between 0 and 7")
+        if self.status is not None and self.status not in get_args(
+            VariationProgressStatus
+        ):
+            raise ValueError("unknown variation progress status")
 
 
 @dataclass(frozen=True)

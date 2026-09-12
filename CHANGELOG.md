@@ -8,6 +8,13 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+### Added
+
+- Public variation results, batch metadata, structured diagnostics, strict
+  1–8 count validation, and optional progress correlation fields. These contracts
+  prepare for batch generation without changing existing single-loop generation.
+- Packaged, versioned initial variation prompt owned by Core.
+
 ### Fixed
 
 - Trim rendered audio to the MIDI endpoint before MP3 encoding, excluding

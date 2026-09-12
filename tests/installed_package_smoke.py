@@ -11,11 +11,22 @@ from conductor_core import (
     LoopGenerationEngine,
     ProgressEvent,
     ProviderCredentials,
+    VariationBatchMetadata,
+    VariationBatchResult,
+    VariationDiagnostic,
+    VariationResult,
+    VariationUsage,
     resolve_conductor_home,
     resolve_data_dir,
     resolve_default_artifact_root,
+    validate_variation_count,
 )
-from conductor_core.music import get_loop_prompt, get_model_info
+from conductor_core.music import (
+    VARIATION_PROMPT_VERSION,
+    get_loop_prompt,
+    get_model_info,
+    get_variation_prompt,
+)
 
 expected_public_api = {
     "EngineConfig",
@@ -25,9 +36,15 @@ expected_public_api = {
     "LoopGenerationEngine",
     "ProgressEvent",
     "ProviderCredentials",
+    "VariationBatchMetadata",
+    "VariationBatchResult",
+    "VariationDiagnostic",
+    "VariationResult",
+    "VariationUsage",
     "resolve_conductor_home",
     "resolve_data_dir",
     "resolve_default_artifact_root",
+    "validate_variation_count",
 }
 assert expected_public_api <= set(conductor_core.__all__)
 
@@ -39,9 +56,15 @@ public_imports = (
     LoopGenerationEngine,
     ProgressEvent,
     ProviderCredentials,
+    VariationBatchMetadata,
+    VariationBatchResult,
+    VariationDiagnostic,
+    VariationResult,
+    VariationUsage,
     resolve_conductor_home,
     resolve_data_dir,
     resolve_default_artifact_root,
+    validate_variation_count,
 )
 assert all(public_import is not None for public_import in public_imports)
 
@@ -55,6 +78,11 @@ assert model_info["models"]
 loop_prompt = get_loop_prompt()
 assert isinstance(loop_prompt, str)
 assert loop_prompt.strip()
+
+assert VARIATION_PROMPT_VERSION == "variation_gen_v1"
+variation_prompt = get_variation_prompt()
+assert isinstance(variation_prompt, str)
+assert variation_prompt.strip()
 
 soundfont = resources.files("conductor_core.resources").joinpath(
     "soundfonts",

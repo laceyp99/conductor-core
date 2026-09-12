@@ -131,6 +131,8 @@ INTERVAL_NAMES = [
 
 _model_info_cache = None
 
+VARIATION_PROMPT_VERSION = "variation_gen_v1"
+
 
 def _validate_model_info(model_info):
     """Validate invariants for packaged, selectable cloud-model metadata."""
@@ -195,6 +197,16 @@ def get_loop_prompt():
     prompt_resource = resources.files("conductor_core.resources").joinpath(
         "prompts",
         "loop_gen.txt",
+    )
+    with prompt_resource.open("r", encoding="utf-8") as prompt_file:
+        return prompt_file.read()
+
+
+def get_variation_prompt():
+    """Load the packaged default variation generation prompt."""
+    prompt_resource = resources.files("conductor_core.resources").joinpath(
+        "prompts",
+        f"{VARIATION_PROMPT_VERSION}.txt",
     )
     with prompt_resource.open("r", encoding="utf-8") as prompt_file:
         return prompt_file.read()
