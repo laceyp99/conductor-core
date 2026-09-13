@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "conductor-core"
-version = "0.5.1"
+version = "0.5.2"
 description = "Reusable prompt-to-MIDI loop generation engine for Conductor"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -84,6 +84,7 @@ conductor_core = [
 	"py.typed",
 	"resources/model_list.json",
 	"resources/prompts/loop_gen.txt",
+	"resources/prompts/variation_gen_v1.txt",
 	"resources/soundfonts/*.sf2",
 	"resources/soundfonts/README.md",
 ]
