@@ -11,9 +11,11 @@ while its public API is still in initial development.
 ### Added
 
 - Public variation results, batch metadata, structured diagnostics, strict
-  1–8 count validation, and optional progress correlation fields. These contracts
+  2–8 count validation, and optional progress correlation fields. These contracts
   prepare for batch generation without changing existing single-loop generation.
 - Packaged, versioned initial variation prompt owned by Core.
+- Per-item variation warnings preserve non-fatal MIDI and audio messages without
+  changing item validity or batch status.
 
 ### Fixed
 

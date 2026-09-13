@@ -44,7 +44,7 @@ def invalid_item(index):
     )
 
 
-@pytest.mark.parametrize("count", range(1, 9))
+@pytest.mark.parametrize("count", range(2, 9))
 def test_validate_variation_count_accepts_default_minimum_and_maximum(count):
     assert validate_variation_count(count) == count
 
@@ -53,9 +53,9 @@ def test_validate_variation_count_defaults_to_four():
     assert validate_variation_count() == 4
 
 
-@pytest.mark.parametrize("count", [0, -1, 9, 100])
+@pytest.mark.parametrize("count", [0, 1, -1, 9, 100])
 def test_validate_variation_count_rejects_out_of_range_integers(count):
-    with pytest.raises(ValueError, match="between 1 and 8"):
+    with pytest.raises(ValueError, match="between 2 and 8"):
         validate_variation_count(count)
 
 
@@ -190,6 +190,57 @@ def test_metadata_defaults_to_four_requested_variations():
     assert batch_metadata.received_count is None
 
 
+@pytest.mark.parametrize("count", [1, 9, True, "2", 2.0])
+def test_metadata_rejects_invalid_requested_count(count):
+    with pytest.raises(ValidationError):
+        metadata(requested_count=count)
+
+
+@pytest.mark.parametrize("count", [2, 8])
+def test_metadata_accepts_requested_count_boundaries(count):
+    assert metadata(requested_count=count).requested_count == count
+
+
+def test_item_warnings_default_to_empty_sequence(sample_loop):
+    for item in (valid_item(0, sample_loop), invalid_item(0)):
+        assert item.warnings == ()
+        assert json.loads(item.model_dump_json())["warnings"] == []
+
+
+def test_audio_warning_preserves_complete_batch_through_json(sample_loop):
+    warning = "Audio rendering was skipped or failed. FluidSynth is unavailable."
+    item = VariationResult(index=0, loop=sample_loop, warnings=[warning])
+    batch = VariationBatchResult(
+        metadata=metadata(requested_count=2, received_count=2),
+        items=(item, valid_item(1, sample_loop)),
+    )
+    assert item.status == "valid"
+    assert item.diagnostic is None
+    assert item.warnings == (warning,)
+    assert batch.status == "complete"
+
+    encoded = batch.model_dump_json()
+    assert json.loads(encoded)["items"][0]["warnings"] == [warning]
+    decoded = VariationBatchResult.model_validate_json(encoded)
+    assert decoded == batch
+    assert decoded.status == "complete"
+    assert decoded.items[0].status == "valid"
+    assert decoded.items[0].warnings == (warning,)
+
+
+def test_warning_does_not_make_invalid_item_valid():
+    item = VariationResult(
+        index=0, diagnostic=diagnostic(), warnings=("Provider output was truncated.",)
+    )
+    batch = VariationBatchResult(
+        metadata=metadata(requested_count=2, received_count=2),
+        items=(item, invalid_item(1)),
+    )
+    assert item.status == "invalid"
+    assert batch.status == "failed"
+    assert VariationBatchResult.model_validate_json(batch.model_dump_json()) == batch
+
+
 @pytest.mark.parametrize("received_count", [None, 0, 1, 3])
 def test_nonarray_and_wrong_count_are_top_level_failures(received_count):
     result = VariationBatchResult(
@@ -223,8 +274,8 @@ def test_batch_rejects_reordered_holey_and_duplicate_indexes(sample_loop, indexe
 def test_batch_rejects_inconsistent_status(sample_loop):
     with pytest.raises(ValidationError):
         VariationBatchResult(
-            metadata=metadata(requested_count=1, received_count=1),
-            items=(valid_item(0, sample_loop),),
+            metadata=metadata(requested_count=2, received_count=2),
+            items=(valid_item(0, sample_loop), valid_item(1, sample_loop)),
             status="partial",
         )
 
@@ -232,8 +283,8 @@ def test_batch_rejects_inconsistent_status(sample_loop):
 def test_batch_rejects_lazy_items_before_status_derivation(sample_loop):
     with pytest.raises(ValidationError, match="ordered list or tuple"):
         VariationBatchResult(
-            metadata=metadata(requested_count=1, received_count=1),
-            items=(valid_item(index, sample_loop) for index in range(1)),
+            metadata=metadata(requested_count=2, received_count=2),
+            items=(valid_item(index, sample_loop) for index in range(2)),
         )
 
 
@@ -253,8 +304,8 @@ def test_partial_batch_json_round_trip_keeps_invalid_position(sample_loop):
 def test_json_round_trip_preserves_nullable_metadata_and_unicode(sample_loop):
     batch = VariationBatchResult(
         metadata=metadata(
-            requested_count=1,
-            received_count=1,
+            requested_count=2,
+            received_count=2,
             messages=[
                 {"role": "user", "content": "変奏 🎵"},
                 {
@@ -265,7 +316,7 @@ def test_json_round_trip_preserves_nullable_metadata_and_unicode(sample_loop):
             usage=None,
             cost=None,
         ),
-        items=(valid_item(0, sample_loop),),
+        items=(valid_item(0, sample_loop), valid_item(1, sample_loop)),
     )
     encoded = batch.model_dump_json()
     decoded = VariationBatchResult.model_validate_json(encoded)

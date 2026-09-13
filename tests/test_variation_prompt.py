@@ -18,7 +18,7 @@ def test_get_variation_prompt_loads_standalone_batch_instructions():
     assert prompt.strip()
     assert "bare JSON array" in prompt
     assert "exactly the requested number" in prompt
-    assert "1 through 8" in prompt
+    assert "2 through 8" in prompt
     assert "coherent but distinct alternatives" in prompt
     assert "Bar_1" in prompt
     assert "Bar_4" in prompt

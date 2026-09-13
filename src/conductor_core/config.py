@@ -21,8 +21,8 @@ def validate_variation_count(count: int = 4) -> int:
     """Validate a variation count without coercing booleans or numeric strings."""
     if type(count) is not int:
         raise TypeError("count must be an integer")
-    if not 1 <= count <= 8:
-        raise ValueError("count must be between 1 and 8 (inclusive)")
+    if not 2 <= count <= 8:
+        raise ValueError("count must be between 2 and 8 (inclusive)")
     return count
 
 

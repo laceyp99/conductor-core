@@ -19,7 +19,7 @@ VariationProgressStatus = Literal[
     "partial",
     "failed",
 ]
-VariationCount = Annotated[int, Field(strict=True, ge=1, le=8)]
+VariationCount = Annotated[int, Field(strict=True, ge=2, le=8)]
 NonnegativeInt = Annotated[int, Field(strict=True, ge=0)]
 NonblankString = Annotated[str, Field(strict=True, min_length=1, pattern=r"\S")]
 
@@ -69,6 +69,7 @@ class VariationResult(_VariationContract):
     status: VariationStatus = "invalid"
     loop: Loop | None = None
     generation: GenerationMetadata | None = None
+    warnings: tuple[str, ...] = ()
     diagnostic: VariationDiagnostic | None = None
 
     @model_validator(mode="before")

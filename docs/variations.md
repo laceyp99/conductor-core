@@ -4,7 +4,7 @@ Core now exposes variation data contracts and a canonical initial prompt.
 The `generate_variations(request, count=4)` engine operation, provider array
 handling, and batch persistence are follow-up work; they are not available yet.
 The planned operation reuses `GenerationRequest` for one shared musical brief.
-`validate_variation_count()` defaults to 4 and accepts only integers from 1 to 8;
+`validate_variation_count()` defaults to 4 and accepts only integers from 2 to 8;
 booleans, floats, and strings are rejected without coercion.
 
 `VariationResult` contains a zero-based `index`, derived `status` (`valid` or
@@ -12,7 +12,9 @@ booleans, floats, and strings are rejected without coercion.
 information), and optional `diagnostic`. Invalid items require `loop=None`, a
 diagnostic, and no generation information. Valid items can exist before artifacts
 are persisted and must not carry a validation diagnostic. Optional audio failure
-does not make a valid MIDI loop invalid.
+does not make a valid MIDI loop invalid. Per-item `warnings` default to an empty
+sequence and preserve non-fatal MIDI or audio messages independently of item
+and batch status. Warnings serialize as a JSON array, including `[]` when empty.
 
 `VariationDiagnostic` uses a nonblank `code` and `message`, plus a nullable
 `location` sequence of JSON field names and array indexes. Initial producers
