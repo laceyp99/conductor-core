@@ -64,6 +64,7 @@ nav:
   - Overview: index.md
   - Getting started: getting-started.md
   - Generation: generation.md
+  - Variations: variations.md
   - Artifacts and audio: artifacts-and-audio.md
   - Development: development.md
 

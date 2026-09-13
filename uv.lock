@@ -366,7 +366,7 @@ wheels = [
 
 [[package]]
 name = "conductor-core"
-version = "0.6.0"
+version = "0.5.2"
 source = { editable = "." }
 dependencies = [
     { name = "mido" },
