@@ -64,7 +64,7 @@ class LoopGenerationEngine:
 
         try:
             self._emit(progress_callback, "provider_call", "Generating MIDI...")
-            loop, messages, total_cost, provider = routing.generate_midi(
+            provider_result = routing.generate_midi(
                 model_choice=request.model,
                 prompt=prompt,
                 temp=request.temperature,
@@ -74,6 +74,10 @@ class LoopGenerationEngine:
                 request_timeout=self.config.request_timeout,
                 system_prompt=system_prompt,
             )
+            loop = provider_result.loop
+            messages = provider_result.messages
+            total_cost = provider_result.cost
+            provider = provider_result.provider
 
             self._emit(progress_callback, "midi", "Processing MIDI...")
             workspace = self.store.create_generation_workspace()

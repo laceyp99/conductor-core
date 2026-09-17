@@ -3,6 +3,7 @@ from unittest.mock import Mock
 import pytest
 
 from conductor_core import ProviderCredentials
+from conductor_core._internal_types import ProviderLoopResult
 from conductor_core import routing as runs
 
 
@@ -187,7 +188,7 @@ def test_generate_midi_routes_to_ollama_and_forwards_temperature(monkeypatch):
         system_prompt="system",
     )
 
-    assert result == ("loop", ["message"], 0, "Ollama")
+    assert result == ProviderLoopResult("loop", ["message"], 0, "Ollama")
     assert captured == {
         "prompt": "write a loop",
         "model": "llama3",
@@ -248,7 +249,7 @@ def test_generate_midi_routes_to_openai_and_forwards_effort(monkeypatch):
         system_prompt="system",
     )
 
-    assert result == ("loop", ["message"], 1.25, "OpenAI")
+    assert result == ProviderLoopResult("loop", ["message"], 1.25, "OpenAI")
     assert captured == {
         "prompt": "write a loop",
         "model": "gpt-4o-mini",
@@ -312,7 +313,7 @@ def test_generate_midi_routes_to_gemini_and_forwards_reasoning_options(monkeypat
         system_prompt="system",
     )
 
-    assert result == ("loop", ["message"], 2.5, "Google")
+    assert result == ProviderLoopResult("loop", ["message"], 2.5, "Google")
     assert captured == {
         "prompt": "write a loop",
         "model": "gemini-2.5-pro",
@@ -376,7 +377,7 @@ def test_generate_midi_routes_to_claude_and_forwards_reasoning_options(monkeypat
         system_prompt="system",
     )
 
-    assert result == ("loop", ["message"], 3.75, "Anthropic")
+    assert result == ProviderLoopResult("loop", ["message"], 3.75, "Anthropic")
     assert captured == {
         "prompt": "write a loop",
         "model": "claude-sonnet-4-5",

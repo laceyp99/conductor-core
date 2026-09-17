@@ -12,6 +12,11 @@ from conductor_core import (
     ProviderCredentials,
 )
 from conductor_core import engine as engine_module
+from conductor_core._internal_types import ProviderLoopResult
+
+
+def provider_loop_result(loop, messages=None, cost=0.25, provider="OpenAI"):
+    return ProviderLoopResult(loop, messages or [], cost, provider)
 
 
 def test_engine_generates_persisted_artifacts_with_mocked_provider(
@@ -24,7 +29,9 @@ def test_engine_generates_persisted_artifacts_with_mocked_provider(
 
     def fake_generate_midi(**kwargs):
         captured.update(kwargs)
-        return sample_loop, [{"role": "user", "content": "prompt"}], 0.25, "OpenAI"
+        return provider_loop_result(
+            sample_loop, [{"role": "user", "content": "prompt"}]
+        )
 
     def fake_midi_to_mp3(midi_path, output_path=None, soundfont_name=None):
         Path(output_path).write_bytes(b"audio")
@@ -127,7 +134,7 @@ def test_engine_records_resolved_default_soundfont(
     monkeypatch.setattr(
         engine_module.routing,
         "generate_midi",
-        lambda **kwargs: (sample_loop, [], 0.25, "OpenAI"),
+        lambda **kwargs: provider_loop_result(sample_loop),
     )
     monkeypatch.setattr(engine_module.playback, "midi_to_mp3", fake_midi_to_mp3)
     monkeypatch.setattr(
@@ -173,7 +180,7 @@ def test_engine_normalizes_text_pathlike_at_audio_boundary(
     monkeypatch.setattr(
         engine_module.routing,
         "generate_midi",
-        lambda **kwargs: (sample_loop, [], 0.25, "OpenAI"),
+        lambda **kwargs: provider_loop_result(sample_loop),
     )
     monkeypatch.setattr(
         engine_module.playback,
@@ -229,7 +236,7 @@ def test_engine_preserves_midi_when_pathlike_cannot_produce_text(
     monkeypatch.setattr(
         engine_module.routing,
         "generate_midi",
-        lambda **kwargs: (sample_loop, [], 0.25, "OpenAI"),
+        lambda **kwargs: provider_loop_result(sample_loop),
     )
     monkeypatch.setattr(
         engine_module.playback,
@@ -269,7 +276,7 @@ def test_engine_discards_partial_audio_when_renderer_reports_failure(
     monkeypatch.setattr(
         engine_module.routing,
         "generate_midi",
-        lambda **kwargs: (sample_loop, [], 0.25, "OpenAI"),
+        lambda **kwargs: provider_loop_result(sample_loop),
     )
     monkeypatch.setattr(engine_module.playback, "midi_to_mp3", failed_render)
     monkeypatch.setattr(
@@ -312,7 +319,7 @@ def test_engine_preserves_midi_when_soundfont_resolution_raises(
     monkeypatch.setattr(
         engine_module.routing,
         "generate_midi",
-        lambda **kwargs: (sample_loop, [], 0.25, "OpenAI"),
+        lambda **kwargs: provider_loop_result(sample_loop),
     )
     monkeypatch.setattr(
         engine_module.playback,
@@ -359,7 +366,7 @@ def test_engine_surfaces_warning_for_defensively_dropped_pitch(
     monkeypatch.setattr(
         engine_module.routing,
         "generate_midi",
-        lambda **kwargs: (unvalidated_loop, [], 0.25, "OpenAI"),
+        lambda **kwargs: provider_loop_result(unvalidated_loop),
     )
 
     engine = LoopGenerationEngine(
@@ -406,7 +413,7 @@ def test_engine_cleans_unfinalized_workspace_when_processing_fails(
     monkeypatch.setattr(
         engine_module.routing,
         "generate_midi",
-        lambda **kwargs: (None, [], 0, "OpenAI"),
+        lambda **kwargs: provider_loop_result(None, cost=0),
     )
 
     engine = LoopGenerationEngine(

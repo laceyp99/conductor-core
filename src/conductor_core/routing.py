@@ -2,6 +2,7 @@
 
 import logging
 
+from conductor_core._internal_types import ProviderLoopResult
 from conductor_core.config import ProviderCredentials
 from conductor_core.music import get_model_info
 from conductor_core.providers import anthropic as claude_api
@@ -54,8 +55,7 @@ def generate_midi(
     """Generate loop data by routing a prompt to the selected provider.
 
     Returns:
-        A tuple of ``(loop, messages, total_cost, provider)``, where ``provider``
-        is the name of the provider that handled the request.
+        A named provider result containing the loop, messages, cost, and provider.
     """
     credentials = provider_credentials or ProviderCredentials()
     model_info = get_model_info()
@@ -158,4 +158,9 @@ def generate_midi(
         else:
             raise ValueError("Invalid Model Selected")
 
-    return loop, messages, loop_cost, provider
+    return ProviderLoopResult(
+        loop=loop,
+        messages=messages,
+        cost=loop_cost,
+        provider=provider,
+    )
