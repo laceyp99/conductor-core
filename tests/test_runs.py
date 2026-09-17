@@ -3,8 +3,8 @@ from unittest.mock import Mock
 import pytest
 
 from conductor_core import ProviderCredentials
-from conductor_core._internal_types import ProviderLoopResult
 from conductor_core import routing as runs
+from conductor_core._internal_types import ProviderLoopResult
 
 
 @pytest.mark.parametrize(
@@ -426,3 +426,119 @@ def test_generate_midi_rejects_unknown_models_when_ollama_is_available(monkeypat
 
     with pytest.raises(ValueError, match="Invalid Model Selected"):
         runs.generate_midi("unknown-model", "write a loop")
+
+
+@pytest.mark.parametrize(
+    ("provider", "adapter_name", "credential_name", "credential_value"),
+    [
+        ("OpenAI", "openai_api", "openai_api_key", "openai-key"),
+        ("Google", "gemini_api", "google_api_key", "google-key"),
+        ("Anthropic", "claude_api", "anthropic_api_key", "anthropic-key"),
+    ],
+)
+def test_generate_variations_routes_identical_composed_message_to_cloud_providers(
+    monkeypatch,
+    provider,
+    adapter_name,
+    credential_name,
+    credential_value,
+):
+    model = f"{provider.lower()}-model"
+    model_info = {"models": {"OpenAI": {}, "Google": {}, "Anthropic": {}}}
+    model_info["models"][provider][model] = {}
+    monkeypatch.setattr(runs, "get_model_info", lambda: model_info)
+    monkeypatch.setattr(runs, "get_variation_prompt", lambda: "canonical prompt")
+    captured = {}
+    expected = object()
+
+    def fake_variation_gen(**kwargs):
+        captured.update(kwargs)
+        return expected
+
+    monkeypatch.setattr(
+        getattr(runs, adapter_name), "variation_gen", fake_variation_gen, raising=False
+    )
+
+    credentials = ProviderCredentials(**{credential_name: credential_value})
+    result = runs.generate_variations(
+        model,
+        "C minor brief -- unchanged",
+        count=3,
+        temp=0.4,
+        use_thinking=True,
+        effort="high",
+        provider_credentials=credentials,
+        request_timeout=2.5,
+    )
+
+    assert result is expected
+    assert captured == {
+        "prompt": (
+            "Requested variation count: 3\n\nMusical brief: C minor brief -- unchanged"
+        ),
+        "count": 3,
+        "model": model,
+        "temp": 0.4,
+        "use_thinking": True,
+        "effort": "high",
+        "system_prompt": "canonical prompt",
+        "request_timeout": 2.5,
+        "api_key": credential_value,
+    }
+
+
+def test_generate_variations_routes_to_ollama_with_prompt_override(monkeypatch):
+    monkeypatch.setattr(
+        runs,
+        "get_model_info",
+        lambda: {"models": {"OpenAI": {}, "Google": {}, "Anthropic": {}}},
+    )
+    monkeypatch.setattr(
+        runs.ollama_api,
+        "get_ollama_status",
+        lambda **kwargs: {"available": True, "models": ["llama3"]},
+    )
+    captured = {}
+    expected = object()
+
+    def fake_variation_gen(**kwargs):
+        captured.update(kwargs)
+        return expected
+
+    monkeypatch.setattr(
+        runs.ollama_api, "variation_gen", fake_variation_gen, raising=False
+    )
+
+    result = runs.generate_variations(
+        "llama3",
+        "same brief",
+        count=2,
+        provider_credentials=ProviderCredentials(ollama_host="http://ollama.test"),
+        request_timeout=4.0,
+        system_prompt="complete override",
+    )
+
+    assert result is expected
+    assert captured == {
+        "prompt": "Requested variation count: 2\n\nMusical brief: same brief",
+        "count": 2,
+        "model": "llama3",
+        "temp": 0.0,
+        "system_prompt": "complete override",
+        "request_timeout": 4.0,
+        "host_address": "http://ollama.test",
+    }
+
+
+@pytest.mark.parametrize("count", [1, 9, True, 2.0, "2", None])
+def test_generate_variations_validates_count_before_any_lookup(monkeypatch, count):
+    model_lookup = Mock(side_effect=AssertionError("model lookup must not run"))
+    ollama_lookup = Mock(side_effect=AssertionError("Ollama lookup must not run"))
+    monkeypatch.setattr(runs, "get_model_info", model_lookup)
+    monkeypatch.setattr(runs.ollama_api, "get_ollama_status", ollama_lookup)
+
+    with pytest.raises((TypeError, ValueError)):
+        runs.generate_variations("any-model", "brief", count=count)
+
+    model_lookup.assert_not_called()
+    ollama_lookup.assert_not_called()

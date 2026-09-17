@@ -2,9 +2,9 @@
 
 import logging
 
-from conductor_core._internal_types import ProviderLoopResult
-from conductor_core.config import ProviderCredentials
-from conductor_core.music import get_model_info
+from conductor_core._internal_types import ProviderLoopResult, ProviderVariationResult
+from conductor_core.config import ProviderCredentials, validate_variation_count
+from conductor_core.music import get_model_info, get_variation_prompt
 from conductor_core.providers import anthropic as claude_api
 from conductor_core.providers import google as gemini_api
 from conductor_core.providers import ollama as ollama_api
@@ -164,3 +164,92 @@ def generate_midi(
         cost=loop_cost,
         provider=provider,
     )
+
+
+def generate_variations(
+    model_choice,
+    brief,
+    count=4,
+    temp=0.0,
+    use_thinking=False,
+    effort="low",
+    provider_credentials: ProviderCredentials | None = None,
+    request_timeout: float | None = None,
+    system_prompt: str | None = None,
+) -> ProviderVariationResult:
+    """Generate one structured batch of variations through the selected provider.
+
+    An explicit ``system_prompt`` completely replaces the canonical variation
+    prompt, so callers experimenting with overrides are responsible for retaining
+    the current structured-output instructions.
+    """
+    count = validate_variation_count(count)
+    credentials = provider_credentials or ProviderCredentials()
+    model_info = get_model_info()
+    variation_prompt = (
+        get_variation_prompt() if system_prompt is None else system_prompt
+    )
+    user_message = f"Requested variation count: {count}\n\nMusical brief: {brief}"
+    common_args = {
+        "prompt": user_message,
+        "count": count,
+        "model": model_choice,
+        "temp": temp,
+        "use_thinking": use_thinking,
+        "effort": effort,
+        "system_prompt": variation_prompt,
+    }
+    if request_timeout is not None:
+        common_args["request_timeout"] = request_timeout
+
+    if model_choice in model_info["models"]["OpenAI"]:
+        common_args["effort"] = _resolve_reasoning_effort(
+            model_choice,
+            model_info["models"]["OpenAI"][model_choice],
+            use_thinking,
+            effort,
+        )
+        return openai_api.variation_gen(
+            **common_args,
+            api_key=credentials.openai_api_key,
+        )
+    if model_choice in model_info["models"]["Google"]:
+        common_args["effort"] = _resolve_reasoning_effort(
+            model_choice,
+            model_info["models"]["Google"][model_choice],
+            use_thinking,
+            effort,
+        )
+        return gemini_api.variation_gen(
+            **common_args,
+            api_key=credentials.google_api_key,
+        )
+    if model_choice in model_info["models"]["Anthropic"]:
+        common_args["effort"] = _resolve_reasoning_effort(
+            model_choice,
+            model_info["models"]["Anthropic"][model_choice],
+            use_thinking,
+            effort,
+        )
+        return claude_api.variation_gen(
+            **common_args,
+            api_key=credentials.anthropic_api_key,
+        )
+
+    ollama_status = ollama_api.get_ollama_status(
+        host_address=credentials.ollama_host,
+        **({"request_timeout": request_timeout} if request_timeout is not None else {}),
+    )
+    if model_choice in ollama_status["models"]:
+        _resolve_reasoning_effort(model_choice, {}, use_thinking, effort)
+        common_args.pop("use_thinking")
+        common_args.pop("effort")
+        return ollama_api.variation_gen(
+            **common_args,
+            host_address=credentials.ollama_host,
+        )
+    if not ollama_status["available"]:
+        raise ValueError(
+            "Invalid Model Selected. If you intended to use Ollama, it is currently unavailable."
+        )
+    raise ValueError("Invalid Model Selected")
