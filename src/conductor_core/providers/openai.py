@@ -5,6 +5,7 @@ import os
 
 from conductor_core import models as objects
 from conductor_core import music as utils
+from conductor_core._internal_types import ProviderVariationResult
 from conductor_core.errors import (
     ProviderAuthenticationError,
     ProviderConnectionError,
@@ -12,6 +13,11 @@ from conductor_core.errors import (
     ProviderRequestError,
     ProviderTimeoutError,
 )
+from conductor_core.providers._variations import (
+    build_variation_schema,
+    normalize_variation_output,
+)
+from conductor_core.variations import VariationUsage
 
 try:
     from openai import (
@@ -173,3 +179,116 @@ def loop_gen(
     messages.append({"role": "assistant", "content": str(response.output_parsed)})
 
     return response.output_parsed, messages, calc_price(model, response)
+
+
+def _json_compatible(value):
+    if hasattr(value, "model_dump"):
+        return value.model_dump(mode="json")
+    if isinstance(value, list):
+        return [_json_compatible(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _json_compatible(item) for key, item in value.items()}
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    return str(value)
+
+
+def _variation_usage_and_cost(model, response):
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return None, None
+    input_tokens = getattr(usage, "input_tokens", None)
+    output_tokens = getattr(usage, "output_tokens", None)
+    total_tokens = getattr(usage, "total_tokens", None)
+    if total_tokens is None and input_tokens is not None and output_tokens is not None:
+        total_tokens = input_tokens + output_tokens
+    normalized = VariationUsage(
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=total_tokens,
+    )
+    cost = (
+        calc_price(model, response)
+        if input_tokens is not None and output_tokens is not None
+        else None
+    )
+    return normalized, cost
+
+
+def variation_gen(
+    prompt,
+    count,
+    model,
+    temp=0.0,
+    use_thinking=False,
+    effort=None,
+    api_key: str | None = None,
+    system_prompt: str | None = None,
+    request_timeout: float | None = None,
+):
+    """Generate and structurally normalize a batch of OpenAI variations."""
+    client = initialize_openai_client(
+        api_key=api_key,
+        **({"timeout": request_timeout} if request_timeout is not None else {}),
+    )
+    variation_prompt = (
+        utils.get_variation_prompt() if system_prompt is None else system_prompt
+    )
+    messages = [
+        {"role": "system", "content": variation_prompt},
+        {"role": "user", "content": prompt},
+    ]
+    request_params = {
+        "model": model,
+        "instructions": variation_prompt,
+        "input": prompt,
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "variation_batch",
+                "schema": build_variation_schema(count),
+                "strict": True,
+            }
+        },
+        "store": False,
+    }
+    model_config = utils.get_model_info()["models"]["OpenAI"][model]
+    if model_config.get("extended_thinking") and effort:
+        request_params["reasoning"] = {"effort": effort, "summary": "auto"}
+    else:
+        request_params["temperature"] = temp
+
+    try:
+        response = client.responses.create(**request_params)
+    except (
+        AuthenticationError,
+        RateLimitError,
+        APITimeoutError,
+        APIConnectionError,
+        APIError,
+    ) as exc:
+        logger.error("OpenAI variation request failed: %s", exc)
+        _raise_openai_error(exc, "variation request")
+
+    reasoning = extract_reasoning(response)
+    if reasoning:
+        messages.append({"role": "assistant", "content": reasoning})
+    raw_output = getattr(response, "output_text", None)
+    if raw_output:
+        messages.append({"role": "assistant", "content": raw_output})
+    else:
+        evidence = _json_compatible(getattr(response, "output", []))
+        if evidence:
+            messages.append({"role": "assistant", "content": evidence})
+    items, received_count, diagnostic = normalize_variation_output(raw_output, count)
+    usage, cost = _variation_usage_and_cost(model, response)
+    return ProviderVariationResult(
+        provider="OpenAI",
+        model=model,
+        messages=messages,
+        usage=usage,
+        cost=cost,
+        items=items,
+        received_count=received_count,
+        structural_diagnostic=diagnostic,
+    )

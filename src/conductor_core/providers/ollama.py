@@ -5,12 +5,18 @@ import os
 
 from conductor_core import models as objects
 from conductor_core import music as utils
+from conductor_core._internal_types import ProviderVariationResult
 from conductor_core.errors import (
     ProviderConnectionError,
     ProviderRequestError,
     ProviderTimeoutError,
     error_for_status,
 )
+from conductor_core.providers._variations import (
+    build_variation_schema,
+    normalize_variation_output,
+)
+from conductor_core.variations import VariationUsage
 
 try:
     import httpx
@@ -148,3 +154,78 @@ def loop_gen(
         messages.append({"role": "assistant", "content": thinking})
     messages.append({"role": "assistant", "content": str(midi_loop)})
     return midi_loop, messages, 0
+
+
+def _variation_usage(completion):
+    input_tokens = getattr(completion, "prompt_eval_count", None)
+    output_tokens = getattr(completion, "eval_count", None)
+    if input_tokens is None and output_tokens is None:
+        return None
+    total_tokens = (
+        input_tokens + output_tokens
+        if input_tokens is not None and output_tokens is not None
+        else None
+    )
+    return VariationUsage(
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=total_tokens,
+    )
+
+
+def variation_gen(
+    prompt,
+    count,
+    model,
+    temp=0.0,
+    host_address: str | None = None,
+    system_prompt: str | None = None,
+    request_timeout: float | None = None,
+):
+    """Generate and structurally normalize a batch of Ollama variations."""
+    client = initialize_ollama_client(
+        host_address=host_address,
+        **({"timeout": request_timeout} if request_timeout is not None else {}),
+    )
+    variation_prompt = (
+        utils.get_variation_prompt() if system_prompt is None else system_prompt
+    )
+    messages = [
+        {"role": "system", "content": variation_prompt},
+        {"role": "user", "content": prompt},
+    ]
+    try:
+        completion = client.chat(
+            model=model,
+            messages=messages,
+            format=build_variation_schema(count),
+            options={"temperature": temp},
+        )
+    except (
+        httpx.TimeoutException,
+        httpx.NetworkError,
+        ConnectionError,
+        ollama.RequestError,
+        ollama.ResponseError,
+    ) as exc:
+        logger.error("Ollama variation request failed: %s", exc)
+        _raise_ollama_error(exc, "variation request")
+
+    message = getattr(completion, "message", None)
+    raw_output = getattr(message, "content", None)
+    thinking = getattr(message, "thinking", None)
+    if thinking:
+        messages.append({"role": "assistant", "content": thinking})
+    if raw_output:
+        messages.append({"role": "assistant", "content": raw_output})
+    items, received_count, diagnostic = normalize_variation_output(raw_output, count)
+    return ProviderVariationResult(
+        provider="Ollama",
+        model=model,
+        messages=messages,
+        usage=_variation_usage(completion),
+        cost=0.0,
+        items=items,
+        received_count=received_count,
+        structural_diagnostic=diagnostic,
+    )
