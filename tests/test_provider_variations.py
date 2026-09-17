@@ -2,6 +2,7 @@ import json
 from types import SimpleNamespace
 
 import pytest
+from jsonschema import Draft202012Validator
 
 from conductor_core.providers import anthropic as anthropic_api
 from conductor_core.providers import google as google_api
@@ -15,6 +16,23 @@ from conductor_core.providers._variations import (
 
 def _loop_payload():
     return {f"Bar_{number}": {"num": number, "notes": []} for number in range(1, 5)}
+
+
+def _representative_loop_payload():
+    return {
+        f"Bar_{number}": {
+            "num": number,
+            "notes": [
+                {
+                    "pitch": "C",
+                    "octave": 4,
+                    "velocity": 96,
+                    "time": {"start_beat": 1, "duration": 4},
+                }
+            ],
+        }
+        for number in range(1, 5)
+    }
 
 
 def _anthropic_stream(raw_output, usage=None, text=""):
@@ -146,6 +164,25 @@ def test_all_providers_use_same_schema_and_preserve_raw_item_positions(
         {"role": "system", "content": "system text"},
         {"role": "user", "content": "user text"},
     ]
+
+
+def test_shared_schema_resolves_references_and_validates_representative_batch():
+    schema = build_variation_schema(2)
+    batch = {"items": [_representative_loop_payload()] * 2}
+
+    Draft202012Validator.check_schema(schema)
+    Draft202012Validator(schema).validate(batch)
+
+
+def test_openai_strict_schema_closes_nested_loop_objects(monkeypatch):
+    raw_output = json.dumps({"items": [_loop_payload()] * 4})
+
+    _, _, schema = _invoke_provider(monkeypatch, "OpenAI", raw_output)
+
+    loop_schema = schema["properties"]["items"]["items"]
+    assert loop_schema["additionalProperties"] is False
+    for definition in ("Bar", "Note", "TimeInformation"):
+        assert schema["$defs"][definition]["additionalProperties"] is False
 
 
 @pytest.mark.parametrize(

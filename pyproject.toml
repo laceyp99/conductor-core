@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "conductor-core"
-version = "0.6.0"
+version = "0.5.3"
 description = "Reusable prompt-to-MIDI loop generation engine for Conductor"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -63,6 +63,7 @@ providers = [
 
 [dependency-groups]
 dev = [
+	"jsonschema>=4.25,<5",
 	"mkdocs-material>=9.6,<10",
 	"mkdocs-mermaid2-plugin>=1.2,<2",
 	"pytest>=9.0.3,<10",

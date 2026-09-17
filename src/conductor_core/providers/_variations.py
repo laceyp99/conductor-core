@@ -9,14 +9,28 @@ from conductor_core.models import Loop
 from conductor_core.variations import VariationDiagnostic
 
 
+def _close_object_schemas(value: JsonValue) -> None:
+    """Require exact properties for every object in a JSON schema tree."""
+    if isinstance(value, dict):
+        if value.get("type") == "object":
+            value["additionalProperties"] = False
+        for child in value.values():
+            _close_object_schemas(child)
+    elif isinstance(value, list):
+        for child in value:
+            _close_object_schemas(child)
+
+
 def build_variation_schema(count: int) -> dict[str, JsonValue]:
     """Return the exact provider-neutral ``items`` wrapper schema."""
-    return {
+    loop_schema = Loop.model_json_schema()
+    definitions = loop_schema.pop("$defs", {})
+    schema = {
         "type": "object",
         "properties": {
             "items": {
                 "type": "array",
-                "items": Loop.model_json_schema(),
+                "items": loop_schema,
                 "minItems": count,
                 "maxItems": count,
             }
@@ -24,6 +38,10 @@ def build_variation_schema(count: int) -> dict[str, JsonValue]:
         "required": ["items"],
         "additionalProperties": False,
     }
+    if definitions:
+        schema["$defs"] = definitions
+    _close_object_schemas(schema)
+    return schema
 
 
 def normalize_variation_output(
