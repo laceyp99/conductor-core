@@ -1,8 +1,9 @@
 # Variation contracts (preparation for batch generation)
 
-Core now exposes variation data contracts and a canonical initial prompt.
-The `generate_variations(request, count=4)` engine operation, provider array
-handling, and batch persistence are follow-up work; they are not available yet.
+Core exposes variation data contracts, a canonical prompt, and lower-level
+provider routing for structured variation batches. The public
+`generate_variations(request, count=4)` engine operation, per-item validation,
+and batch persistence are follow-up work; they are not available yet.
 The planned operation reuses `GenerationRequest` for one shared musical brief.
 `validate_variation_count()` defaults to 4 and accepts only integers from 2 to 8;
 booleans, floats, and strings are rejected without coercion.
@@ -18,9 +19,11 @@ and batch status. Warnings serialize as a JSON array, including `[]` when empty.
 
 `VariationDiagnostic` uses a nonblank `code` and `message`, plus a nullable
 `location` sequence of JSON field names and array indexes. Initial producers
-should use `invalid_loop`, `invalid_response`, and `wrong_count` for those three
-failure cases. Codes are extensible strings; consumers should tolerate unknown
-codes. A location such as `["Bar_1", "notes", 0, "pitch"]` is relative to the item.
+use `invalid_json`, `invalid_top_level`, `wrong_count`, and `missing_output` for
+provider-level structural failures. Per-item validation remains engine-owned and
+can use codes such as `invalid_loop`. Codes are extensible strings; consumers
+should tolerate unknown codes. A location such as
+`["Bar_1", "notes", 0, "pitch"]` is relative to the item.
 
 `VariationBatchResult` contains ordered `items`, `metadata`, derived `status`,
 and a nullable batch-level `diagnostic`. It derives `complete` when all items
@@ -47,12 +50,24 @@ counts occur only inside `metadata`, locations/items become arrays, and optional
 fields remain explicit `null` values by default. Existing `Loop` parsing is unchanged.
 
 `conductor_core.music.get_variation_prompt()` loads the packaged
-`variation_gen_v1.txt`; `VARIATION_PROMPT_VERSION` identifies it. The planned
-engine operation uses the existing request override, then engine override, then
-this packaged default. An override replaces the entire system prompt and should
-be recorded with `prompt_version="override"`. The requested count and shared
-brief belong in the provider request, not string interpolation of the resource.
-Retry prompts are outside this contract.
+`variation_gen_v1.txt`; `VARIATION_PROMPT_VERSION` identifies it. Every provider
+is instructed and schema-constrained to return one object whose only top-level
+property is `items`, an array with exactly the requested length. Adapters unwrap
+that object while retaining each raw JSON item at its original index; `Loop`
+validation does not happen at this boundary. An override replaces the entire
+system prompt, so it is responsible for preserving the structured-output
+instructions. Routing composes the requested count and unmodified shared brief
+into one provider-neutral user message. Retry prompts are outside this contract.
+
+`conductor_core.routing.generate_variations()` is the internal routing entry
+point. It validates the count before model lookup or provider interaction,
+selects OpenAI, Google, Anthropic, or Ollama with the same model registry and
+availability behavior as single-loop generation, and returns a frozen internal
+result. Successful provider calls with malformed, missing, or wrong-length model
+output return structural diagnostics in-band. Authentication, timeout,
+rate-limit, connection, schema-rejection, and other provider-call failures remain
+exceptions. Usage and cost remain nullable when the provider does not report the
+primary token counts; Ollama cost is always `0.0`.
 
 `ProgressEvent` adds nullable `batch_id`, `variation_index`, and `status` while
 preserving the existing three positional fields and extensible `stage` string.
