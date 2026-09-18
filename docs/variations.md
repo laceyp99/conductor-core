@@ -53,7 +53,8 @@ fields remain explicit `null` values by default. Existing `Loop` parsing is unch
 `variation_gen_v1.txt`; `VARIATION_PROMPT_VERSION` identifies it. Every provider
 is instructed and schema-constrained to return one object whose only top-level
 property is `items`, an array with exactly the requested length. Adapters unwrap
-that object while retaining each raw JSON item at its original index; `Loop`
+that object while retaining each raw JSON item at its original index. Each item
+contains exactly a nonblank musical `description` and a complete `loop`; `Loop`
 validation does not happen at this boundary. An override replaces the entire
 system prompt, so it is responsible for preserving the structured-output
 instructions. Routing composes the requested count and unmodified shared brief

@@ -11,8 +11,9 @@ while its public API is still in initial development.
 ### Added
 
 - Structured variation-array requests for OpenAI, Google, Anthropic, and Ollama
-  now share one exact `{"items": [...]}` schema and preserve raw item positions,
-  provider messages, nullable usage, cost, and in-band structural diagnostics.
+  now share one exact `{"items": [...]}` schema of described loop items and
+  preserve raw item positions, provider messages, nullable usage, cost, and
+  in-band structural diagnostics.
 - Lower-level variation routing validates counts before provider discovery and
   sends every provider the same count-and-brief user message.
 - Public variation results, batch metadata, structured diagnostics, strict
