@@ -19,32 +19,77 @@ from conductor_core.providers._variations import (
 )
 from conductor_core.variations import VariationUsage
 
-try:
-    from openai import (
-        APIConnectionError,
-        APIError,
-        APITimeoutError,
-        AuthenticationError,
-        OpenAI,
-        RateLimitError,
-    )
-except ImportError:  # pragma: no cover - exercised only in minimal installs
-    APIConnectionError = APIError = APITimeoutError = AuthenticationError = (
-        RateLimitError
-    ) = ()
-    OpenAI = None
+
+class _UnavailableProviderError(Exception):
+    """Placeholder exception class until the optional SDK is loaded."""
+
+
+APIConnectionError = APIError = APITimeoutError = AuthenticationError = (
+    RateLimitError
+) = _UnavailableProviderError
+OpenAI = None
 
 logger = logging.getLogger(__name__)
 
 
+def _load_openai_sdk() -> None:
+    global APIConnectionError, APIError, APITimeoutError, AuthenticationError
+    global OpenAI, RateLimitError
+    if OpenAI is not None:
+        return
+    try:
+        from openai import (
+            APIConnectionError as sdk_api_connection_error,
+        )
+        from openai import (
+            APIError as sdk_api_error,
+        )
+        from openai import (
+            APITimeoutError as sdk_api_timeout_error,
+        )
+        from openai import (
+            AuthenticationError as sdk_authentication_error,
+        )
+        from openai import (
+            OpenAI as sdk_openai,
+        )
+        from openai import (
+            RateLimitError as sdk_rate_limit_error,
+        )
+    except ImportError as exc:  # pragma: no cover - exercised in minimal installs
+        raise ImportError(
+            "Install conductor-core[openai] to use OpenAI models."
+        ) from exc
+    APIConnectionError = sdk_api_connection_error
+    APIError = sdk_api_error
+    APITimeoutError = sdk_api_timeout_error
+    AuthenticationError = sdk_authentication_error
+    OpenAI = sdk_openai
+    RateLimitError = sdk_rate_limit_error
+
+
+def _openai_exception_types():
+    return (
+        APIConnectionError,
+        APIError,
+        APITimeoutError,
+        AuthenticationError,
+        RateLimitError,
+    )
+
+
+def _is_openai_error(exc, error_type) -> bool:
+    return isinstance(exc, error_type)
+
+
 def _raise_openai_error(exc: Exception, operation: str) -> None:
-    if isinstance(exc, AuthenticationError):
+    if _is_openai_error(exc, AuthenticationError):
         error = ProviderAuthenticationError("OpenAI", str(exc), operation=operation)
-    elif isinstance(exc, RateLimitError):
+    elif _is_openai_error(exc, RateLimitError):
         error = ProviderRateLimitError("OpenAI", str(exc), operation=operation)
-    elif isinstance(exc, APITimeoutError):
+    elif _is_openai_error(exc, APITimeoutError):
         error = ProviderTimeoutError("OpenAI", str(exc), operation=operation)
-    elif isinstance(exc, APIConnectionError):
+    elif _is_openai_error(exc, APIConnectionError):
         error = ProviderConnectionError("OpenAI", str(exc), operation=operation)
     else:
         error = ProviderRequestError("OpenAI", str(exc), operation=operation)
@@ -53,8 +98,7 @@ def _raise_openai_error(exc: Exception, operation: str) -> None:
 
 def initialize_openai_client(api_key: str | None = None, timeout: float | None = None):
     """Initialize and return an OpenAI client."""
-    if OpenAI is None:
-        raise ImportError("Install conductor-core[openai] to use OpenAI models.")
+    _load_openai_sdk()
 
     resolved_api_key = api_key or os.getenv("OPENAI_API_KEY")
     if not resolved_api_key or not resolved_api_key.strip():
@@ -68,13 +112,7 @@ def initialize_openai_client(api_key: str | None = None, timeout: float | None =
         client_args["timeout"] = timeout
     try:
         return OpenAI(**client_args)
-    except (
-        AuthenticationError,
-        RateLimitError,
-        APITimeoutError,
-        APIConnectionError,
-        APIError,
-    ) as exc:
+    except _openai_exception_types() as exc:
         _raise_openai_error(exc, "client initialization")
 
 
@@ -160,13 +198,7 @@ def loop_gen(
 
     try:
         response = client.responses.parse(**request_params)
-    except (
-        AuthenticationError,
-        RateLimitError,
-        APITimeoutError,
-        APIConnectionError,
-        APIError,
-    ) as exc:
+    except _openai_exception_types() as exc:
         logger.error("OpenAI request failed: %s", exc)
         _raise_openai_error(exc, "request")
 
@@ -260,13 +292,7 @@ def variation_gen(
 
     try:
         response = client.responses.create(**request_params)
-    except (
-        AuthenticationError,
-        RateLimitError,
-        APITimeoutError,
-        APIConnectionError,
-        APIError,
-    ) as exc:
+    except _openai_exception_types() as exc:
         logger.error("OpenAI variation request failed: %s", exc)
         _raise_openai_error(exc, "variation request")
 

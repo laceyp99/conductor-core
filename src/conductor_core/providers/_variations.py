@@ -1,8 +1,8 @@
 """Shared SDK-free mechanics for structured provider variation batches."""
 
 import json
-from copy import deepcopy
 from collections.abc import Mapping, Sequence
+from copy import deepcopy
 
 from pydantic import BaseModel, ConfigDict, JsonValue
 

@@ -47,6 +47,7 @@ sys.meta_path.insert(0, BlockOptionalProviders())
 import conductor_core.routing
 from conductor_core._internal_types import ProviderVariationResult
 print(ProviderVariationResult.__name__)
+print([name for name in blocked if name in sys.modules])
 """
 
     result = subprocess.run(
@@ -57,4 +58,4 @@ print(ProviderVariationResult.__name__)
         env=env,
     )
 
-    assert result.stdout.strip() == "ProviderVariationResult"
+    assert result.stdout.splitlines() == ["ProviderVariationResult", "[]"]

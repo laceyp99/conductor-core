@@ -20,24 +20,65 @@ from conductor_core.providers._variations import (
 )
 from conductor_core.variations import VariationUsage
 
-try:
-    from anthropic import (
-        Anthropic,
+
+class _UnavailableProviderError(Exception):
+    """Placeholder exception class until the optional SDK is loaded."""
+
+
+APIConnectionError = APIError = APITimeoutError = AuthenticationError = (
+    RateLimitError
+) = _UnavailableProviderError
+Anthropic = None
+
+logger = logging.getLogger(__name__)
+
+ANTHROPIC_CACHE_CONTROL_MIN_CHARS = 4096
+
+
+def _load_anthropic_sdk() -> None:
+    global APIConnectionError, APIError, APITimeoutError, AuthenticationError
+    global Anthropic, RateLimitError
+    if Anthropic is not None:
+        return
+    try:
+        from anthropic import (
+            Anthropic as sdk_anthropic,
+        )
+        from anthropic import (
+            APIConnectionError as sdk_api_connection_error,
+        )
+        from anthropic import (
+            APIError as sdk_api_error,
+        )
+        from anthropic import (
+            APITimeoutError as sdk_api_timeout_error,
+        )
+        from anthropic import (
+            AuthenticationError as sdk_authentication_error,
+        )
+        from anthropic import (
+            RateLimitError as sdk_rate_limit_error,
+        )
+    except ImportError as exc:  # pragma: no cover - exercised in minimal installs
+        raise ImportError(
+            "Install conductor-core[anthropic] to use Anthropic models."
+        ) from exc
+    Anthropic = sdk_anthropic
+    APIConnectionError = sdk_api_connection_error
+    APIError = sdk_api_error
+    APITimeoutError = sdk_api_timeout_error
+    AuthenticationError = sdk_authentication_error
+    RateLimitError = sdk_rate_limit_error
+
+
+def _anthropic_exception_types():
+    return (
         APIConnectionError,
         APIError,
         APITimeoutError,
         AuthenticationError,
         RateLimitError,
     )
-except ImportError:  # pragma: no cover - exercised only in minimal installs
-    APIConnectionError = APIError = APITimeoutError = AuthenticationError = (
-        RateLimitError
-    ) = ()
-    Anthropic = None
-
-logger = logging.getLogger(__name__)
-
-ANTHROPIC_CACHE_CONTROL_MIN_CHARS = 4096
 
 
 def _raise_anthropic_error(exc: Exception, operation: str) -> None:
@@ -58,8 +99,7 @@ def initialize_anthropic_client(
     api_key: str | None = None, timeout: float | None = None
 ):
     """Initialize and return an Anthropic client."""
-    if Anthropic is None:
-        raise ImportError("Install conductor-core[anthropic] to use Anthropic models.")
+    _load_anthropic_sdk()
 
     resolved_api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
     if not resolved_api_key or not resolved_api_key.strip():
@@ -73,13 +113,7 @@ def initialize_anthropic_client(
         client_args["timeout"] = timeout
     try:
         return Anthropic(**client_args)
-    except (
-        AuthenticationError,
-        RateLimitError,
-        APITimeoutError,
-        APIConnectionError,
-        APIError,
-    ) as exc:
+    except _anthropic_exception_types() as exc:
         _raise_anthropic_error(exc, "client initialization")
 
 
@@ -250,25 +284,13 @@ def loop_gen(
 
     try:
         completion = client.messages.create(**api_params)
-    except (
-        AuthenticationError,
-        RateLimitError,
-        APITimeoutError,
-        APIConnectionError,
-        APIError,
-    ) as exc:
+    except _anthropic_exception_types() as exc:
         logger.error("Anthropic request failed: %s", exc)
         _raise_anthropic_error(exc, "request")
 
     try:
         output = process_streaming_response(completion)
-    except (
-        AuthenticationError,
-        RateLimitError,
-        APITimeoutError,
-        APIConnectionError,
-        APIError,
-    ) as exc:
+    except _anthropic_exception_types() as exc:
         logger.error("Anthropic stream failed: %s", exc)
         _raise_anthropic_error(exc, "stream")
     if not output["loop"]:
@@ -438,24 +460,12 @@ def variation_gen(
 
     try:
         completion = client.messages.create(**api_params)
-    except (
-        AuthenticationError,
-        RateLimitError,
-        APITimeoutError,
-        APIConnectionError,
-        APIError,
-    ) as exc:
+    except _anthropic_exception_types() as exc:
         logger.error("Anthropic variation request failed: %s", exc)
         _raise_anthropic_error(exc, "variation request")
     try:
         output = _process_variation_stream(completion)
-    except (
-        AuthenticationError,
-        RateLimitError,
-        APITimeoutError,
-        APIConnectionError,
-        APIError,
-    ) as exc:
+    except _anthropic_exception_types() as exc:
         logger.error("Anthropic variation stream failed: %s", exc)
         _raise_anthropic_error(exc, "variation stream")
 

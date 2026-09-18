@@ -18,18 +18,76 @@ from conductor_core.providers._variations import (
 )
 from conductor_core.variations import VariationUsage
 
-try:
-    import httpx
-    from google import genai
-    from google.genai import errors as genai_errors
-    from google.genai import types
-except ImportError:  # pragma: no cover - exercised only in minimal installs
-    genai = None
-    genai_errors = None
-    httpx = None
-    types = None
+
+class _UnavailableProviderError(Exception):
+    """Placeholder exception class until the optional SDK is loaded."""
+
+
+class _PlaceholderHttpOptions:
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+
+
+class _PlaceholderThinkingConfig:
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+        if "thinking_level" in kwargs:
+            self.thinking_level = type(
+                "ThinkingLevel", (), {"value": str(kwargs["thinking_level"]).upper()}
+            )()
+
+
+class _PlaceholderTypes:
+    HttpOptions = _PlaceholderHttpOptions
+    ThinkingConfig = _PlaceholderThinkingConfig
+
+
+class _PlaceholderGenai:
+    Client = None
+
+
+class _PlaceholderGenaiErrors:
+    APIError = _UnavailableProviderError
+
+
+class _PlaceholderHttpx:
+    TimeoutException = _UnavailableProviderError
+    NetworkError = _UnavailableProviderError
+
+
+genai = _PlaceholderGenai()
+genai_errors = _PlaceholderGenaiErrors()
+httpx = _PlaceholderHttpx()
+types = _PlaceholderTypes()
 
 logger = logging.getLogger(__name__)
+
+
+def _load_google_sdk() -> None:
+    global genai, genai_errors, httpx, types
+    if getattr(genai, "Client", None) is not None:
+        return
+    try:
+        import httpx as sdk_httpx
+        from google import genai as sdk_genai
+        from google.genai import errors as sdk_genai_errors
+        from google.genai import types as sdk_types
+    except ImportError as exc:  # pragma: no cover - exercised in minimal installs
+        raise ImportError(
+            "Install conductor-core[google] to use Google models."
+        ) from exc
+    genai = sdk_genai
+    genai_errors = sdk_genai_errors
+    httpx = sdk_httpx
+    types = sdk_types
+
+
+def _google_exception_types():
+    return (
+        genai_errors.APIError,
+        httpx.TimeoutException,
+        httpx.NetworkError,
+    )
 
 
 def _raise_google_error(exc: Exception, operation: str) -> None:
@@ -49,8 +107,7 @@ def _raise_google_error(exc: Exception, operation: str) -> None:
 
 def initialize_gemini_client(api_key: str | None = None, timeout: float | None = None):
     """Initialize and return a Gemini client."""
-    if genai is None:
-        raise ImportError("Install conductor-core[google] to use Google models.")
+    _load_google_sdk()
 
     resolved_api_key = api_key or os.getenv("GEMINI_API_KEY")
     if not resolved_api_key or not resolved_api_key.strip():
@@ -67,7 +124,7 @@ def initialize_gemini_client(api_key: str | None = None, timeout: float | None =
         )
     try:
         return genai.Client(**client_args)
-    except (genai_errors.APIError, httpx.TimeoutException, httpx.NetworkError) as exc:
+    except _google_exception_types() as exc:
         _raise_google_error(exc, "client initialization")
 
 
@@ -193,7 +250,7 @@ def loop_gen(
             contents=prompt,
             config=config,
         )
-    except (genai_errors.APIError, httpx.TimeoutException, httpx.NetworkError) as exc:
+    except _google_exception_types() as exc:
         logger.error("Google request failed: %s", exc)
         _raise_google_error(exc, "request")
     content, thinking_content = process_output(response)
@@ -302,7 +359,7 @@ def variation_gen(
             contents=prompt,
             config=config,
         )
-    except (genai_errors.APIError, httpx.TimeoutException, httpx.NetworkError) as exc:
+    except _google_exception_types() as exc:
         logger.error("Google variation request failed: %s", exc)
         _raise_google_error(exc, "variation request")
 

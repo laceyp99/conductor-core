@@ -18,14 +18,51 @@ from conductor_core.providers._variations import (
 )
 from conductor_core.variations import VariationUsage
 
-try:
-    import httpx
-    import ollama
-except ImportError:  # pragma: no cover - exercised only in minimal installs
-    httpx = None
-    ollama = None
+
+class _UnavailableProviderError(Exception):
+    """Placeholder exception class until the optional SDK is loaded."""
+
+
+class _PlaceholderOllama:
+    Client = None
+    RequestError = _UnavailableProviderError
+    ResponseError = _UnavailableProviderError
+
+
+class _PlaceholderHttpx:
+    TimeoutException = _UnavailableProviderError
+    NetworkError = _UnavailableProviderError
+
+
+httpx = _PlaceholderHttpx()
+ollama = _PlaceholderOllama()
 
 logger = logging.getLogger(__name__)
+
+
+def _load_ollama_sdk() -> None:
+    global httpx, ollama
+    if getattr(ollama, "Client", None) is not None:
+        return
+    try:
+        import httpx as sdk_httpx
+        import ollama as sdk_ollama
+    except ImportError as exc:  # pragma: no cover - exercised in minimal installs
+        raise ImportError(
+            "Install conductor-core[ollama] to use Ollama models."
+        ) from exc
+    httpx = sdk_httpx
+    ollama = sdk_ollama
+
+
+def _ollama_exception_types():
+    return (
+        httpx.TimeoutException,
+        httpx.NetworkError,
+        ConnectionError,
+        ollama.RequestError,
+        ollama.ResponseError,
+    )
 
 
 def _resolve_host(host_address: str | None = None) -> str:
@@ -55,21 +92,14 @@ def initialize_ollama_client(
     host_address: str | None = None, timeout: float | None = None
 ):
     """Initialize and return an Ollama client."""
-    if ollama is None:
-        raise ImportError("Install conductor-core[ollama] to use Ollama models.")
+    _load_ollama_sdk()
 
     client_args = {"host": _resolve_host(host_address)}
     if timeout is not None:
         client_args["timeout"] = timeout
     try:
         return ollama.Client(**client_args)
-    except (
-        httpx.TimeoutException,
-        httpx.NetworkError,
-        ConnectionError,
-        ollama.RequestError,
-        ollama.ResponseError,
-    ) as exc:
+    except _ollama_exception_types() as exc:
         _raise_ollama_error(exc, "client initialization")
 
 
@@ -86,9 +116,12 @@ def get_ollama_status(
         "error": None,
     }
 
-    if ollama is None:
-        status["error"] = "Install conductor-core[ollama] to use Ollama models."
-        return status
+    if getattr(ollama, "Client", None) is None:
+        try:
+            _load_ollama_sdk()
+        except ImportError as exc:
+            status["error"] = str(exc)
+            return status
 
     try:
         client = initialize_ollama_client(
@@ -134,13 +167,7 @@ def loop_gen(
             format=objects.Loop.model_json_schema(),
             options={"temperature": temp},
         )
-    except (
-        httpx.TimeoutException,
-        httpx.NetworkError,
-        ConnectionError,
-        ollama.RequestError,
-        ollama.ResponseError,
-    ) as exc:
+    except _ollama_exception_types() as exc:
         logger.error("Ollama request failed: %s", exc)
         _raise_ollama_error(exc, "request")
     message = getattr(completion, "message", None)
@@ -201,13 +228,7 @@ def variation_gen(
             format=build_variation_schema(count),
             options={"temperature": temp},
         )
-    except (
-        httpx.TimeoutException,
-        httpx.NetworkError,
-        ConnectionError,
-        ollama.RequestError,
-        ollama.ResponseError,
-    ) as exc:
+    except _ollama_exception_types() as exc:
         logger.error("Ollama variation request failed: %s", exc)
         _raise_ollama_error(exc, "variation request")
 
