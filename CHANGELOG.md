@@ -10,12 +10,25 @@ while its public API is still in initial development.
 
 ### Added
 
+- Structured variation-array requests for OpenAI, Google, Anthropic, and Ollama
+  now share one exact `{"items": [...]}` schema of described loop items and
+  preserve raw item positions, provider messages, nullable usage, cost, and
+  in-band structural diagnostics.
+- Lower-level variation routing validates counts before provider discovery and
+  sends every provider the same count-and-brief user message.
 - Public variation results, batch metadata, structured diagnostics, strict
   2–8 count validation, and optional progress correlation fields. These contracts
   prepare for batch generation without changing existing single-loop generation.
 - Packaged, versioned initial variation prompt owned by Core.
 - Per-item variation warnings preserve non-fatal MIDI and audio messages without
   changing item validity or batch status.
+
+### Changed
+
+- Internal single-loop routing now returns a frozen named result instead of a
+  positional tuple.
+- The preparatory `variation_gen_v1` prompt now matches the shared provider
+  wrapper contract before public variation orchestration ships.
 
 ### Fixed
 
