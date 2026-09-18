@@ -22,6 +22,9 @@ def test_get_variation_prompt_loads_standalone_batch_instructions():
     assert "exactly the requested number" in prompt
     assert "2 through 8" in prompt
     assert "coherent but distinct alternatives" in prompt
+    assert 'exactly two properties: "description" and "loop"' in prompt
+    assert "human-readable explanation" in prompt
+    assert "concrete musical treatment" in prompt
     assert "Bar_1" in prompt
     assert "Bar_4" in prompt
     assert "start_beat" in prompt

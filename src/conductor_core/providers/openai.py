@@ -2,6 +2,7 @@
 
 import logging
 import os
+from collections.abc import Mapping
 
 from conductor_core import models as objects
 from conductor_core import music as utils
@@ -216,12 +217,22 @@ def loop_gen(
 def _json_compatible(value):
     if hasattr(value, "model_dump"):
         return value.model_dump(mode="json")
-    if isinstance(value, list):
+    if hasattr(value, "value") and isinstance(
+        value.value, (str, int, float, bool, type(None))
+    ):
+        return value.value
+    if isinstance(value, Mapping):
+        return {str(key): _json_compatible(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
         return [_json_compatible(item) for item in value]
-    if isinstance(value, dict):
-        return {key: _json_compatible(item) for key, item in value.items()}
     if isinstance(value, (str, int, float, bool)) or value is None:
         return value
+    if hasattr(value, "__dict__"):
+        return {
+            key: _json_compatible(item)
+            for key, item in vars(value).items()
+            if not key.startswith("_")
+        }
     return str(value)
 
 

@@ -2,6 +2,7 @@
 
 import logging
 import os
+from collections.abc import Mapping
 
 from conductor_core import models as objects
 from conductor_core import music as utils
@@ -310,6 +311,54 @@ def _variation_output(response):
     return final_result or None, thinking_content
 
 
+def _json_compatible(value):
+    if hasattr(value, "model_dump"):
+        return _json_compatible(value.model_dump(mode="json"))
+    if hasattr(value, "value") and isinstance(
+        value.value, (str, int, float, bool, type(None))
+    ):
+        return value.value
+    if isinstance(value, Mapping):
+        return {str(key): _json_compatible(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_compatible(item) for item in value]
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    if hasattr(value, "__dict__"):
+        return {
+            key: _json_compatible(item)
+            for key, item in vars(value).items()
+            if not key.startswith("_")
+        }
+    return str(value)
+
+
+def _variation_refusal_evidence(response):
+    evidence = {}
+    prompt_feedback = getattr(response, "prompt_feedback", None)
+    if prompt_feedback is not None:
+        evidence["prompt_feedback"] = _json_compatible(prompt_feedback)
+
+    candidates = getattr(response, "candidates", None) or []
+    candidate_evidence = []
+    for candidate in candidates:
+        details = {}
+        for field in (
+            "finish_reason",
+            "finish_message",
+            "safety_ratings",
+            "citation_metadata",
+        ):
+            value = getattr(candidate, field, None)
+            if value is not None:
+                details[field] = _json_compatible(value)
+        if details:
+            candidate_evidence.append(details)
+    if candidate_evidence:
+        evidence["candidates"] = candidate_evidence
+    return evidence or None
+
+
 def variation_gen(
     prompt,
     count,
@@ -372,6 +421,10 @@ def variation_gen(
         messages.append({"role": "assistant", "content": thinking_content})
     if raw_output:
         messages.append({"role": "assistant", "content": raw_output})
+    else:
+        refusal_evidence = _variation_refusal_evidence(response)
+        if refusal_evidence is not None:
+            messages.append({"role": "assistant", "content": refusal_evidence})
     items, received_count, diagnostic = normalize_variation_output(raw_output, count)
     usage, cost = _variation_usage_and_cost(model, response)
     return ProviderVariationResult(

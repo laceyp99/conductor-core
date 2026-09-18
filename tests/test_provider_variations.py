@@ -250,6 +250,74 @@ def test_provider_missing_output_is_in_band_and_preserves_refusal_evidence(
         assert result.messages[-1]["content"] == "I cannot complete that request."
 
 
+def test_google_missing_output_preserves_structured_refusal_evidence(monkeypatch):
+    captured = {}
+    response = SimpleNamespace(
+        candidates=[
+            SimpleNamespace(
+                finish_reason=SimpleNamespace(value="SAFETY"),
+                safety_ratings=[SimpleNamespace(category="HARM", probability="HIGH")],
+            )
+        ],
+        prompt_feedback=SimpleNamespace(block_reason="SAFETY"),
+        usage_metadata=None,
+    )
+
+    def generate_content(**kwargs):
+        captured.update(kwargs)
+        return response
+
+    client = SimpleNamespace(models=SimpleNamespace(generate_content=generate_content))
+    monkeypatch.setattr(google_api, "initialize_gemini_client", lambda **kwargs: client)
+
+    result = google_api.variation_gen(
+        "user text", 4, "gemini-3.1-flash-lite", system_prompt="system text"
+    )
+
+    assert result.structural_diagnostic.code == "missing_output"
+    assert result.messages[-1] == {
+        "role": "assistant",
+        "content": {
+            "prompt_feedback": {"block_reason": "SAFETY"},
+            "candidates": [
+                {
+                    "finish_reason": "SAFETY",
+                    "safety_ratings": [{"category": "HARM", "probability": "HIGH"}],
+                }
+            ],
+        },
+    }
+
+
+def test_openai_missing_output_preserves_structured_refusal_evidence(monkeypatch):
+    refusal = SimpleNamespace(
+        type="message",
+        content=[SimpleNamespace(type="refusal", refusal="not allowed")],
+    )
+    response = SimpleNamespace(output_text=None, output=[refusal], usage=None)
+
+    def create(**kwargs):
+        return response
+
+    client = SimpleNamespace(responses=SimpleNamespace(create=create))
+    monkeypatch.setattr(openai_api, "initialize_openai_client", lambda **kwargs: client)
+
+    result = openai_api.variation_gen(
+        "user text", 4, "gpt-4o-mini", system_prompt="system text"
+    )
+
+    assert result.structural_diagnostic.code == "missing_output"
+    assert result.messages[-1] == {
+        "role": "assistant",
+        "content": [
+            {
+                "type": "message",
+                "content": [{"type": "refusal", "refusal": "not allowed"}],
+            }
+        ],
+    }
+
+
 @pytest.mark.parametrize("provider", ["OpenAI", "Google", "Anthropic", "Ollama"])
 def test_provider_wrong_count_retains_raw_output_and_machine_readable_count(
     monkeypatch, provider
