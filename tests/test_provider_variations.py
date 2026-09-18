@@ -35,6 +35,10 @@ def _representative_loop_payload():
     }
 
 
+def _variation_payload(description="Distinct rhythmic treatment"):
+    return {"description": description, "loop": _representative_loop_payload()}
+
+
 def _anthropic_stream(raw_output, usage=None, text=""):
     chunks = []
     if usage is not None:
@@ -148,7 +152,12 @@ def _invoke_provider(monkeypatch, provider, raw_output, usage=None, text=""):
 def test_all_providers_use_same_schema_and_preserve_raw_item_positions(
     monkeypatch, provider
 ):
-    raw_items = [_loop_payload(), {"malformed": True}, "scalar", None]
+    raw_items = [
+        _variation_payload(),
+        {"description": "missing loop"},
+        "scalar",
+        None,
+    ]
     raw_output = json.dumps({"items": raw_items})
 
     result, _, schema = _invoke_provider(monkeypatch, provider, raw_output)
@@ -168,21 +177,35 @@ def test_all_providers_use_same_schema_and_preserve_raw_item_positions(
 
 def test_shared_schema_resolves_references_and_validates_representative_batch():
     schema = build_variation_schema(2)
-    batch = {"items": [_representative_loop_payload()] * 2}
+    batch = {"items": [_variation_payload()] * 2}
 
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema).validate(batch)
 
 
-def test_openai_strict_schema_closes_nested_loop_objects(monkeypatch):
-    raw_output = json.dumps({"items": [_loop_payload()] * 4})
+def test_openai_strict_schema_inlines_and_closes_nested_loop_objects(monkeypatch):
+    raw_output = json.dumps({"items": [_variation_payload()] * 4})
 
     _, _, schema = _invoke_provider(monkeypatch, "OpenAI", raw_output)
 
-    loop_schema = schema["properties"]["items"]["items"]
-    assert loop_schema["additionalProperties"] is False
-    for definition in ("Bar", "Note", "TimeInformation"):
-        assert schema["$defs"][definition]["additionalProperties"] is False
+    assert "$defs" not in schema
+    assert "$ref" not in json.dumps(schema)
+    item_schema = schema["properties"]["items"]["items"]
+    assert item_schema["required"] == ["description", "loop"]
+    assert item_schema["properties"]["description"]["minLength"] == 1
+
+    def assert_closed(value):
+        if isinstance(value, dict):
+            if value.get("type") == "object":
+                assert value["additionalProperties"] is False
+                assert set(value["required"]) == set(value["properties"])
+            for child in value.values():
+                assert_closed(child)
+        elif isinstance(value, list):
+            for child in value:
+                assert_closed(child)
+
+    assert_closed(schema)
 
 
 @pytest.mark.parametrize(

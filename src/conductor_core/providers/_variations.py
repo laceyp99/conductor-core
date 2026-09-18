@@ -1,12 +1,30 @@
 """Shared SDK-free mechanics for structured provider variation batches."""
 
 import json
+from copy import deepcopy
 from collections.abc import Mapping, Sequence
 
-from pydantic import JsonValue
+from pydantic import BaseModel, ConfigDict, JsonValue
 
 from conductor_core.models import Loop
-from conductor_core.variations import VariationDiagnostic
+from conductor_core.variations import NonblankString, VariationDiagnostic
+
+
+class VariationItem(BaseModel):
+    """Private provider-schema item; adapters never instantiate this model."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    description: NonblankString
+    loop: Loop
+
+
+class VariationBatch(BaseModel):
+    """Private provider-schema wrapper used only to generate JSON Schema."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[VariationItem]
 
 
 def _close_object_schemas(value: JsonValue) -> None:
@@ -21,25 +39,40 @@ def _close_object_schemas(value: JsonValue) -> None:
             _close_object_schemas(child)
 
 
+def _inline_local_references(value, definitions):
+    """Replace Pydantic's local definitions with their complete schema trees."""
+    if isinstance(value, dict):
+        reference = value.get("$ref")
+        if reference is not None:
+            if not isinstance(reference, str) or not reference.startswith("#/$defs/"):
+                raise ValueError(f"Unsupported variation schema reference: {reference}")
+            definition_name = reference.removeprefix("#/$defs/")
+            try:
+                resolved = deepcopy(definitions[definition_name])
+            except KeyError as exc:
+                raise ValueError(
+                    f"Missing variation schema definition: {definition_name}"
+                ) from exc
+            resolved.update(
+                {key: child for key, child in value.items() if key != "$ref"}
+            )
+            return _inline_local_references(resolved, definitions)
+        return {
+            key: _inline_local_references(child, definitions)
+            for key, child in value.items()
+        }
+    if isinstance(value, list):
+        return [_inline_local_references(child, definitions) for child in value]
+    return value
+
+
 def build_variation_schema(count: int) -> dict[str, JsonValue]:
-    """Return the exact provider-neutral ``items`` wrapper schema."""
-    loop_schema = Loop.model_json_schema()
-    definitions = loop_schema.pop("$defs", {})
-    schema = {
-        "type": "object",
-        "properties": {
-            "items": {
-                "type": "array",
-                "items": loop_schema,
-                "minItems": count,
-                "maxItems": count,
-            }
-        },
-        "required": ["items"],
-        "additionalProperties": False,
-    }
-    if definitions:
-        schema["$defs"] = definitions
+    """Return the closed, fully inlined provider variation schema."""
+    generated = VariationBatch.model_json_schema()
+    definitions = generated.pop("$defs", {})
+    schema = _inline_local_references(generated, definitions)
+    schema["properties"]["items"]["minItems"] = count
+    schema["properties"]["items"]["maxItems"] = count
     _close_object_schemas(schema)
     return schema
 
