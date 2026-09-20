@@ -11,6 +11,8 @@ from conductor_core.errors import (
     ProviderTimeoutError,
     error_for_status,
 )
+from conductor_core.providers._variations import VariationCollection
+from conductor_core.variations import VariationUsage
 
 try:
     import httpx
@@ -202,3 +204,84 @@ def loop_gen(
         messages.insert(2, {"role": "assistant", "content": thinking_content})
 
     return midi_loop, messages, calc_cost(model, response.usage_metadata)
+
+
+def variations_gen(
+    prompt,
+    model,
+    temp=0.0,
+    use_thinking=None,
+    effort=None,
+    api_key: str | None = None,
+    system_prompt: str | None = None,
+    request_timeout: float | None = None,
+):
+    """Generate an ordered collection of loops in one Gemini response."""
+    client = initialize_gemini_client(
+        api_key=api_key,
+        **({"timeout": request_timeout} if request_timeout is not None else {}),
+    )
+    loop_prompt = system_prompt or utils.get_variation_prompt()
+    model_config = utils.get_model_info()["models"]["Google"][model]
+    config = {
+        "system_instruction": loop_prompt,
+        "response_mime_type": "application/json",
+        "response_json_schema": VariationCollection.model_json_schema(),
+    }
+    if model_config.get("temperature_supported", True):
+        config["temperature"] = temp
+    effort_options = model_config.get("effort_options", [])
+    if effort_options and not use_thinking:
+        effort = effort_options[0]
+    if effort_options and effort in effort_options:
+        config["thinking_config"] = types.ThinkingConfig(
+            thinking_level=effort, include_thoughts=True
+        )
+    elif model_config.get("extended_thinking"):
+        config["thinking_config"] = types.ThinkingConfig(
+            thinking_budget=(
+                model_config["max_thinking_budget"]
+                if use_thinking
+                else model_config["min_thinking_budget"]
+            ),
+            include_thoughts=True,
+        )
+    try:
+        response = client.models.generate_content(
+            model=model, contents=prompt, config=config
+        )
+    except (genai_errors.APIError, httpx.TimeoutException, httpx.NetworkError) as exc:
+        _raise_google_error(exc, "request")
+    content, thinking_content = process_output(response)
+    collection = VariationCollection.model_validate_json(content)
+    messages = [
+        {"role": "system", "content": loop_prompt},
+        {"role": "user", "content": prompt},
+    ]
+    if thinking_content:
+        messages.append({"role": "assistant", "content": thinking_content})
+    messages.append({"role": "assistant", "content": content})
+    raw_usage = getattr(response, "usage_metadata", None)
+    prompt_tokens = getattr(raw_usage, "prompt_token_count", None)
+    candidate_tokens = getattr(raw_usage, "candidates_token_count", None)
+    thought_tokens = getattr(raw_usage, "thoughts_token_count", None)
+    output_tokens = (
+        (candidate_tokens or 0) + (thought_tokens or 0)
+        if candidate_tokens is not None or thought_tokens is not None
+        else None
+    )
+    usage = (
+        VariationUsage(
+            input_tokens=prompt_tokens,
+            output_tokens=output_tokens,
+            total_tokens=(
+                prompt_tokens + output_tokens
+                if prompt_tokens is not None and output_tokens is not None
+                else None
+            ),
+        )
+        if raw_usage is not None
+        else None
+    )
+    cost = calc_cost(model, raw_usage) if raw_usage is not None else None
+    return collection, messages, cost, usage

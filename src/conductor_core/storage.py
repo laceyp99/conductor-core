@@ -22,9 +22,9 @@ import tempfile
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Annotated, Literal, Optional
 
-from pydantic import BaseModel, PrivateAttr
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, PrivateAttr
 
 from conductor_core.paths import resolve_default_artifact_root
 
@@ -88,6 +88,25 @@ class FilesystemArtifactStore:
     def delete_generation(self, gen_id: str) -> bool:
         return _delete_generation(self.artifact_root, gen_id)
 
+    def save_variation_history(
+        self, metadata: object, generation_ids: list[str] | tuple[str, ...]
+    ) -> "VariationHistoryRecord":
+        return _save_variation_history(self.artifact_root, metadata, generation_ids)
+
+    def list_variation_history(self) -> list["VariationHistoryRecord"]:
+        return _list_variation_history(self.artifact_root)
+
+    def get_variation_history(
+        self, batch_id: str
+    ) -> Optional["VariationHistoryRecord"]:
+        return _get_variation_history(self.artifact_root, batch_id)
+
+    def delete_variation_history(self, batch_id: str) -> bool:
+        return _delete_variation_history(self.artifact_root, batch_id)
+
+    def clear_variation_history(self) -> int:
+        return _clear_variation_history(self.artifact_root)
+
 
 class GenerationMetadata(BaseModel):
     """Metadata for a single generation.
@@ -125,6 +144,49 @@ class GenerationMetadata(BaseModel):
     audio_path: str | None = None
     messages_path: str | None = None
     soundfont: str | None = None
+
+
+NonnegativeInt = Annotated[int, Field(strict=True, ge=0)]
+NonblankString = Annotated[str, Field(strict=True, min_length=1, pattern=r"\S")]
+
+
+class _VariationHistoryContract(BaseModel):
+    """Strict immutable base for public variation-history contracts."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+
+class VariationHistoryUsage(_VariationHistoryContract):
+    """Token totals recorded for the single shared provider request."""
+
+    input_tokens: NonnegativeInt | None = None
+    output_tokens: NonnegativeInt | None = None
+    total_tokens: NonnegativeInt | None = None
+
+
+class VariationHistoryManifest(_VariationHistoryContract):
+    """Versioned durable index for one successfully persisted variation batch."""
+
+    schema_version: Literal[1] = 1
+    batch_id: NonblankString
+    created_at: datetime
+    model: NonblankString
+    provider: NonblankString
+    prompt_version: NonblankString
+    requested_count: Annotated[int, Field(strict=True, ge=2, le=8)]
+    received_count: NonnegativeInt | None = None
+    messages: tuple[dict[str, JsonValue], ...] = ()
+    usage: VariationHistoryUsage | None = None
+    cost: Annotated[float, Field(strict=True, ge=0, allow_inf_nan=False)] | None = None
+    generation_ids: tuple[NonblankString, ...]
+
+
+class VariationHistoryRecord(_VariationHistoryContract):
+    """A manifest resolved against generation history as it exists right now."""
+
+    manifest: VariationHistoryManifest
+    generations: tuple[GenerationMetadata, ...]
+    missing_generation_ids: tuple[str, ...]
 
 
 class GenerationWorkspace(BaseModel):
@@ -198,6 +260,43 @@ def _validate_generation_id(gen_id: str) -> None:
         or "\x00" in gen_id
     ):
         raise ValueError("generation ID must be a non-empty path component")
+
+
+def _validate_batch_id(batch_id: str) -> None:
+    """Reject batch IDs that can be interpreted as filesystem paths."""
+    if (
+        not isinstance(batch_id, str)
+        or not batch_id
+        or batch_id in {".", ".."}
+        or "/" in batch_id
+        or "\\" in batch_id
+        or "\x00" in batch_id
+    ):
+        raise ValueError("batch ID must be a non-empty path component")
+
+
+def _get_variations_dir(artifact_root: str | Path) -> Path:
+    """Return the canonical sibling directory used for variation manifests."""
+    artifact_path = Path(_resolve_artifact_root(artifact_root)).resolve()
+    parent = artifact_path.parent
+    candidate = (parent / "variations").resolve()
+    if candidate.parent != parent or candidate.name != "variations":
+        raise ValueError(
+            "variations path must be a direct sibling of the artifact root"
+        )
+    return candidate
+
+
+def _get_variation_manifest_path(artifact_root: str | Path, batch_id: str) -> Path:
+    _validate_batch_id(batch_id)
+    root = _get_variations_dir(artifact_root)
+    name = f"batch_{batch_id}.json"
+    candidate = (root / name).resolve()
+    if candidate.parent != root or candidate.name != name:
+        raise ValueError(
+            "variation manifest must be a direct child of its history root"
+        )
+    return candidate
 
 
 def _build_workspace(
@@ -284,6 +383,164 @@ def _write_metadata_file(path: str, metadata: GenerationMetadata) -> None:
     finally:
         if os.path.exists(temporary_path):
             os.unlink(temporary_path)
+
+
+def _metadata_values(metadata: object) -> dict:
+    """Convert batch metadata without importing the variation result module."""
+    if isinstance(metadata, BaseModel):
+        return metadata.model_dump(mode="json")
+    if isinstance(metadata, dict):
+        return dict(metadata)
+    fields = (
+        "batch_id",
+        "model",
+        "provider",
+        "prompt_version",
+        "requested_count",
+        "received_count",
+        "messages",
+        "usage",
+        "cost",
+    )
+    try:
+        return {field: getattr(metadata, field) for field in fields}
+    except AttributeError as exc:
+        raise TypeError(
+            "metadata must provide variation batch metadata fields"
+        ) from exc
+
+
+def _resolve_variation_manifest(
+    artifact_root: str | Path, manifest: VariationHistoryManifest
+) -> VariationHistoryRecord:
+    generations = []
+    missing_ids = []
+    for generation_id in manifest.generation_ids:
+        generation = _get_generation(artifact_root, generation_id)
+        if generation is None:
+            missing_ids.append(generation_id)
+        else:
+            generations.append(generation)
+    return VariationHistoryRecord(
+        manifest=manifest,
+        generations=tuple(generations),
+        missing_generation_ids=tuple(missing_ids),
+    )
+
+
+def _save_variation_history(
+    artifact_root: str | Path,
+    metadata: object,
+    generation_ids: list[str] | tuple[str, ...],
+) -> VariationHistoryRecord:
+    """Atomically persist one successful variation batch manifest."""
+    values = _metadata_values(metadata)
+    ordered_ids = tuple(generation_ids)
+    for generation_id in ordered_ids:
+        _validate_generation_id(generation_id)
+    if len(set(ordered_ids)) != len(ordered_ids):
+        raise ValueError("variation generation IDs must be unique")
+    allowed_fields = {
+        "batch_id",
+        "model",
+        "provider",
+        "prompt_version",
+        "requested_count",
+        "received_count",
+        "messages",
+        "usage",
+        "cost",
+    }
+    manifest = VariationHistoryManifest(
+        **{key: value for key, value in values.items() if key in allowed_fields},
+        created_at=datetime.now(),
+        generation_ids=ordered_ids,
+    )
+    if len(ordered_ids) != manifest.requested_count:
+        raise ValueError("generation ID count must match requested variation count")
+
+    variations_dir = _get_variations_dir(artifact_root)
+    variations_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = _get_variation_manifest_path(artifact_root, manifest.batch_id)
+    file_descriptor, temporary_path = tempfile.mkstemp(
+        prefix=".variation-", suffix=".tmp", dir=variations_dir
+    )
+    try:
+        with os.fdopen(file_descriptor, "w", encoding="utf-8") as manifest_file:
+            manifest_file.write(manifest.model_dump_json(indent=2))
+        os.replace(temporary_path, manifest_path)
+    finally:
+        if os.path.exists(temporary_path):
+            os.unlink(temporary_path)
+    return _resolve_variation_manifest(artifact_root, manifest)
+
+
+def _load_variation_manifest(
+    artifact_root: str | Path, batch_id: str
+) -> VariationHistoryManifest:
+    path = _get_variation_manifest_path(artifact_root, batch_id)
+    validated_path = _validate_artifact_file(str(path), required=True)
+    assert validated_path is not None
+    with open(validated_path, encoding="utf-8") as manifest_file:
+        manifest = VariationHistoryManifest(**json.load(manifest_file))
+    if manifest.batch_id != batch_id:
+        raise ValueError(
+            f"manifest batch ID {manifest.batch_id!r} does not match filename ID "
+            f"{batch_id!r}"
+        )
+    return manifest
+
+
+def _get_variation_history(
+    artifact_root: str | Path, batch_id: str
+) -> VariationHistoryRecord | None:
+    _validate_batch_id(batch_id)
+    try:
+        manifest = _load_variation_manifest(artifact_root, batch_id)
+    except FileNotFoundError:
+        return None
+    except Exception as exc:
+        logger.error(f"Failed to load variation batch {batch_id}: {exc}")
+        return None
+    return _resolve_variation_manifest(artifact_root, manifest)
+
+
+def _list_variation_history(
+    artifact_root: str | Path,
+) -> list[VariationHistoryRecord]:
+    variations_dir = _get_variations_dir(artifact_root)
+    if not variations_dir.is_dir():
+        return []
+    records = []
+    for item in variations_dir.iterdir():
+        if not item.name.startswith("batch_") or item.suffix != ".json":
+            continue
+        batch_id = item.stem.removeprefix("batch_")
+        record = _get_variation_history(artifact_root, batch_id)
+        if record is not None:
+            records.append(record)
+    records.sort(key=lambda record: record.manifest.created_at, reverse=True)
+    return records
+
+
+def _delete_variation_history(artifact_root: str | Path, batch_id: str) -> bool:
+    path = _get_variation_manifest_path(artifact_root, batch_id)
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return False
+    except OSError as exc:
+        logger.error(f"Failed to delete variation batch {batch_id}: {exc}")
+        return False
+    return True
+
+
+def _clear_variation_history(artifact_root: str | Path) -> int:
+    records = _list_variation_history(artifact_root)
+    return sum(
+        _delete_variation_history(artifact_root, record.manifest.batch_id)
+        for record in records
+    )
 
 
 def _copy_artifact_file(source: str, destination: str) -> None:
@@ -811,3 +1068,30 @@ def clear_history() -> int:
             count += 1
 
     return count
+
+
+def save_variation_history(
+    metadata: object, generation_ids: list[str] | tuple[str, ...]
+) -> VariationHistoryRecord:
+    """Persist a variation manifest under the default history location."""
+    return _save_variation_history(_resolve_artifact_root(), metadata, generation_ids)
+
+
+def list_variation_history() -> list[VariationHistoryRecord]:
+    """List variation records newest first, resolving surviving generations."""
+    return _list_variation_history(_resolve_artifact_root())
+
+
+def get_variation_history(batch_id: str) -> VariationHistoryRecord | None:
+    """Load a variation record, or return None when its manifest is absent."""
+    return _get_variation_history(_resolve_artifact_root(), batch_id)
+
+
+def delete_variation_history(batch_id: str) -> bool:
+    """Delete one variation manifest without deleting any generation artifacts."""
+    return _delete_variation_history(_resolve_artifact_root(), batch_id)
+
+
+def clear_variation_history() -> int:
+    """Delete all valid variation manifests, leaving generations untouched."""
+    return _clear_variation_history(_resolve_artifact_root())

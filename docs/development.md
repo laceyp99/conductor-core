@@ -73,6 +73,8 @@ uv run mkdocs build --strict
 
 - [`scripts/generate_midi.py`](https://github.com/laceyp99/conductor-core/blob/main/scripts/generate_midi.py): complete online
   generation workflow.
+- [`scripts/generate_variations.py`](https://github.com/laceyp99/conductor-core/blob/main/scripts/generate_variations.py): one-request online
+  workflow for generating and inspecting several loop alternatives.
 - [`scripts/inspect_models.py`](https://github.com/laceyp99/conductor-core/blob/main/scripts/inspect_models.py): model and
   capability inspection without a provider call.
 - [`scripts/midi_loop_roundtrip.py`](https://github.com/laceyp99/conductor-core/blob/main/scripts/midi_loop_roundtrip.py): offline

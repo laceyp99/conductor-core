@@ -12,6 +12,8 @@ from conductor_core.errors import (
     ProviderRequestError,
     ProviderTimeoutError,
 )
+from conductor_core.providers._variations import VariationCollection
+from conductor_core.variations import VariationUsage
 
 try:
     from openai import (
@@ -173,3 +175,75 @@ def loop_gen(
     messages.append({"role": "assistant", "content": str(response.output_parsed)})
 
     return response.output_parsed, messages, calc_price(model, response)
+
+
+def variations_gen(
+    prompt,
+    model,
+    temp=0.0,
+    use_thinking=False,
+    effort=None,
+    api_key: str | None = None,
+    system_prompt: str | None = None,
+    request_timeout: float | None = None,
+):
+    """Generate an ordered collection of loops in one OpenAI response."""
+    client = initialize_openai_client(
+        api_key=api_key,
+        **({"timeout": request_timeout} if request_timeout is not None else {}),
+    )
+    loop_prompt = system_prompt or utils.get_variation_prompt()
+    messages = [
+        {"role": "system", "content": loop_prompt},
+        {"role": "user", "content": prompt},
+    ]
+    request_params = {
+        "model": model,
+        "instructions": loop_prompt,
+        "input": prompt,
+        "text_format": VariationCollection,
+        "store": False,
+    }
+    model_config = utils.get_model_info()["models"]["OpenAI"][model]
+    effort_options = model_config.get("effort_options") or []
+    if effort_options and not use_thinking:
+        effort = effort_options[0]
+    if model_config.get("extended_thinking") and effort:
+        request_params["reasoning"] = {"effort": effort, "summary": "auto"}
+    else:
+        request_params["temperature"] = temp
+    try:
+        response = client.responses.parse(**request_params)
+    except (
+        AuthenticationError,
+        RateLimitError,
+        APITimeoutError,
+        APIConnectionError,
+        APIError,
+    ) as exc:
+        _raise_openai_error(exc, "request")
+    if response.output_parsed is None:
+        raise ValueError("OpenAI response did not include parsed variation content.")
+    collection = VariationCollection.model_validate(response.output_parsed)
+    reasoning = extract_reasoning(response)
+    if reasoning:
+        messages.append({"role": "assistant", "content": reasoning})
+    messages.append({"role": "assistant", "content": collection.model_dump_json()})
+    raw_usage = getattr(response, "usage", None)
+    input_tokens = getattr(raw_usage, "input_tokens", None)
+    output_tokens = getattr(raw_usage, "output_tokens", None)
+    usage = (
+        VariationUsage(
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=(
+                input_tokens + output_tokens
+                if input_tokens is not None and output_tokens is not None
+                else None
+            ),
+        )
+        if raw_usage is not None
+        else None
+    )
+    cost = calc_price(model, response) if raw_usage is not None else None
+    return collection, messages, cost, usage

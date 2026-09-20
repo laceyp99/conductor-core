@@ -105,80 +105,109 @@ class GenerationRequest:
     soundfont_path: str | os.PathLike | None = None
 
     def __post_init__(self) -> None:
-        valid_keys = tuple(note for notes in ENHARMONIC_NOTE_NAMES for note in notes)
-        if not isinstance(self.key, str):
-            raise TypeError(f"Invalid key {self.key!r}. Expected a string")
-        if self.key not in valid_keys:
+        _validate_generation_request_fields(self)
+
+
+@dataclass(frozen=True)
+class VariationGenerationRequest:
+    """One request for an ordered collection of complete loop alternatives."""
+
+    key: str
+    scale: str
+    description: str
+    model: str
+    count: int = 4
+    temperature: float = 0.0
+    use_thinking: bool = False
+    effort: str | None = None
+    prompt_override: str | None = None
+    render_audio: bool = False
+    soundfont_path: str | os.PathLike | None = None
+
+    def __post_init__(self) -> None:
+        _validate_generation_request_fields(self)
+        validate_variation_count(self.count)
+
+
+def _validate_generation_request_fields(
+    request: GenerationRequest | VariationGenerationRequest,
+) -> None:
+    """Validate fields shared by singular and variation generation requests."""
+    valid_keys = tuple(note for notes in ENHARMONIC_NOTE_NAMES for note in notes)
+    if not isinstance(request.key, str):
+        raise TypeError(f"Invalid key {request.key!r}. Expected a string")
+    if request.key not in valid_keys:
+        raise ValueError(
+            f"Invalid key {request.key!r}. Expected one of: {', '.join(valid_keys)}"
+        )
+
+    if not isinstance(request.scale, str):
+        raise TypeError(f"Invalid scale {request.scale!r}. Expected a string")
+    if request.scale.lower() not in SCALE_INTERVALS:
+        raise ValueError(
+            f"Invalid scale {request.scale!r}. Expected one of: "
+            f"{', '.join(SCALE_INTERVALS)} (case-insensitive)"
+        )
+
+    for field_name, value in (
+        ("description", request.description),
+        ("model", request.model),
+    ):
+        if not isinstance(value, str):
+            raise TypeError(f"Invalid {field_name} {value!r}. Expected a string")
+        if not value.strip():
             raise ValueError(
-                f"Invalid key {self.key!r}. Expected one of: {', '.join(valid_keys)}"
+                f"Invalid {field_name} {value!r}. Expected a nonblank string"
             )
 
-        if not isinstance(self.scale, str):
-            raise TypeError(f"Invalid scale {self.scale!r}. Expected a string")
-        if self.scale.lower() not in SCALE_INTERVALS:
-            raise ValueError(
-                f"Invalid scale {self.scale!r}. Expected one of: "
-                f"{', '.join(SCALE_INTERVALS)} (case-insensitive)"
-            )
+    if isinstance(request.temperature, bool) or not isinstance(
+        request.temperature, int | float
+    ):
+        raise TypeError(
+            f"Invalid temperature {request.temperature!r}. Expected a finite number"
+        )
+    if not isfinite(request.temperature) or not 0.0 <= request.temperature <= 2.0:
+        raise ValueError(
+            f"Invalid temperature {request.temperature!r}. "
+            "Expected a finite number between 0.0 and 2.0 (inclusive)"
+        )
 
-        for field_name, value in (
-            ("description", self.description),
-            ("model", self.model),
-        ):
-            if not isinstance(value, str):
-                raise TypeError(f"Invalid {field_name} {value!r}. Expected a string")
-            if not value.strip():
-                raise ValueError(
-                    f"Invalid {field_name} {value!r}. Expected a nonblank string"
-                )
+    for field_name, value in (
+        ("use_thinking", request.use_thinking),
+        ("render_audio", request.render_audio),
+    ):
+        if type(value) is not bool:
+            raise TypeError(f"Invalid {field_name} {value!r}. Expected a boolean")
 
-        if isinstance(self.temperature, bool) or not isinstance(
-            self.temperature, int | float
-        ):
+    if request.effort is not None and not isinstance(request.effort, str):
+        raise TypeError(f"Invalid effort {request.effort!r}. Expected a string or None")
+
+    if request.prompt_override is not None:
+        if not isinstance(request.prompt_override, str):
             raise TypeError(
-                f"Invalid temperature {self.temperature!r}. Expected a finite number"
+                f"Invalid prompt_override {request.prompt_override!r}. "
+                "Expected a string or None"
             )
-        if not isfinite(self.temperature) or not 0.0 <= self.temperature <= 2.0:
+        if not request.prompt_override.strip():
             raise ValueError(
-                f"Invalid temperature {self.temperature!r}. "
-                "Expected a finite number between 0.0 and 2.0 (inclusive)"
+                f"Invalid prompt_override {request.prompt_override!r}. "
+                "Expected a nonblank string or None"
             )
 
-        for field_name, value in (
-            ("use_thinking", self.use_thinking),
-            ("render_audio", self.render_audio),
-        ):
-            if type(value) is not bool:
-                raise TypeError(f"Invalid {field_name} {value!r}. Expected a boolean")
-
-        if self.effort is not None and not isinstance(self.effort, str):
+    if request.soundfont_path is not None:
+        if not isinstance(request.soundfont_path, str | os.PathLike):
             raise TypeError(
-                f"Invalid effort {self.effort!r}. Expected a string or None"
+                f"Invalid soundfont_path {request.soundfont_path!r}. "
+                "Expected a string, os.PathLike, or None"
             )
-
-        if self.prompt_override is not None:
-            if not isinstance(self.prompt_override, str):
-                raise TypeError(
-                    f"Invalid prompt_override {self.prompt_override!r}. "
-                    "Expected a string or None"
-                )
-            if not self.prompt_override.strip():
-                raise ValueError(
-                    f"Invalid prompt_override {self.prompt_override!r}. "
-                    "Expected a nonblank string or None"
-                )
-
-        if self.soundfont_path is not None:
-            if not isinstance(self.soundfont_path, str | os.PathLike):
-                raise TypeError(
-                    f"Invalid soundfont_path {self.soundfont_path!r}. "
-                    "Expected a string, os.PathLike, or None"
-                )
-            if isinstance(self.soundfont_path, str) and not self.soundfont_path.strip():
-                raise ValueError(
-                    f"Invalid soundfont_path {self.soundfont_path!r}. "
-                    "Expected a nonblank string, os.PathLike, or None"
-                )
+        if (
+            isinstance(request.soundfont_path, str)
+            and not request.soundfont_path.strip()
+        ):
+            raise ValueError(
+                f"Invalid soundfont_path {request.soundfont_path!r}. "
+                "Expected a nonblank string, os.PathLike, or None"
+            )
 
 
 @dataclass(frozen=True)
