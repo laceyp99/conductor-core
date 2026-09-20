@@ -3,6 +3,7 @@
 import json
 import os
 from collections.abc import Callable
+from uuid import uuid4
 
 from mido import MidiFile
 
@@ -12,10 +13,17 @@ from conductor_core.config import (
     GenerationRequest,
     GenerationResult,
     ProgressEvent,
+    VariationGenerationRequest,
 )
 from conductor_core.errors import AudioRenderingError
 from conductor_core.midi import loop_to_midi
 from conductor_core.storage import FilesystemArtifactStore
+from conductor_core.variations import (
+    VariationBatchMetadata,
+    VariationBatchResult,
+    VariationDiagnostic,
+    VariationResult,
+)
 
 ProgressCallback = Callable[[ProgressEvent], None]
 
@@ -40,10 +48,21 @@ class LoopGenerationEngine:
         stage: str,
         message: str,
         detail: str | None = None,
+        *,
+        batch_id: str | None = None,
+        variation_index: int | None = None,
+        status: str | None = None,
     ) -> None:
         if progress_callback:
             progress_callback(
-                ProgressEvent(stage=stage, message=message, detail=detail)
+                ProgressEvent(
+                    stage=stage,
+                    message=message,
+                    detail=detail,
+                    batch_id=batch_id,
+                    variation_index=variation_index,
+                    status=status,
+                )
             )
 
     def generate(
@@ -157,6 +176,206 @@ class LoopGenerationEngine:
                 metadata=metadata,
                 warnings=warnings,
             )
+        finally:
+            if workspace is not None and not finalized:
+                self.store.cleanup_generation_workspace(workspace)
+
+    def generate_variations(
+        self,
+        request: VariationGenerationRequest,
+        progress_callback: ProgressCallback | None = None,
+    ) -> VariationBatchResult:
+        """Generate and persist one ordered, all-or-nothing variation batch."""
+        batch_id = uuid4().hex
+        self._emit(
+            progress_callback,
+            "variations",
+            "Generating variations...",
+            batch_id=batch_id,
+            status="started",
+        )
+
+        system_prompt = (
+            request.prompt_override
+            or self.config.prompt_override
+            or music.get_variation_prompt()
+        )
+        prompt_version = (
+            "override"
+            if request.prompt_override or self.config.prompt_override
+            else music.VARIATION_PROMPT_VERSION
+        )
+        prompt = f"{request.key} {request.scale} {request.description}."
+
+        try:
+            provider_result = routing.generate_variations(
+                model_choice=request.model,
+                prompt=prompt,
+                count=request.count,
+                temp=request.temperature,
+                use_thinking=request.use_thinking,
+                effort=request.effort,
+                provider_credentials=self.config.provider_credentials,
+                request_timeout=self.config.request_timeout,
+                system_prompt=system_prompt,
+            )
+            received_count = len(provider_result.variations)
+            metadata = VariationBatchMetadata(
+                batch_id=batch_id,
+                model=request.model,
+                provider=provider_result.provider,
+                prompt_version=prompt_version,
+                requested_count=request.count,
+                received_count=received_count,
+                messages=provider_result.messages,
+                usage=provider_result.usage,
+                cost=provider_result.cost,
+            )
+
+            if received_count != request.count:
+                result = VariationBatchResult(
+                    metadata=metadata,
+                    diagnostic=VariationDiagnostic(
+                        code="wrong_count",
+                        message=(
+                            f"Provider returned {received_count} variations; "
+                            f"expected {request.count}."
+                        ),
+                    ),
+                )
+                self._emit(
+                    progress_callback,
+                    "variations",
+                    "Variation generation failed.",
+                    batch_id=batch_id,
+                    status="failed",
+                )
+                return result
+
+            items = []
+            for index, loop in enumerate(provider_result.variations):
+                self._emit(
+                    progress_callback,
+                    "variations",
+                    f"Persisting variation {index + 1} of {request.count}...",
+                    batch_id=batch_id,
+                    variation_index=index,
+                    status="persisting",
+                )
+                generation, warnings = self._persist_variation(loop, request, metadata)
+                items.append(
+                    VariationResult(
+                        index=index,
+                        loop=loop,
+                        generation=generation,
+                        warnings=warnings,
+                    )
+                )
+                self._emit(
+                    progress_callback,
+                    "variations",
+                    f"Completed variation {index + 1} of {request.count}.",
+                    batch_id=batch_id,
+                    variation_index=index,
+                    status="complete",
+                )
+
+            result = VariationBatchResult(metadata=metadata, items=tuple(items))
+            self.store.save_variation_history(
+                metadata,
+                tuple(item.generation.id for item in result.items),
+            )
+            self._emit(
+                progress_callback,
+                "variations",
+                "Variation batch complete.",
+                batch_id=batch_id,
+                status="complete",
+            )
+            return result
+        except Exception:
+            self._emit(
+                progress_callback,
+                "variations",
+                "Variation generation failed.",
+                batch_id=batch_id,
+                status="failed",
+            )
+            raise
+
+    def _persist_variation(
+        self,
+        loop,
+        request: VariationGenerationRequest,
+        metadata: VariationBatchMetadata,
+    ):
+        """Persist one already-validated variation in an ordinary workspace."""
+        workspace = None
+        finalized = False
+        warnings = []
+        try:
+            workspace = self.store.create_generation_workspace()
+            midi = MidiFile()
+            warnings.extend(loop_to_midi(midi, loop))
+            midi.save(workspace.midi_path)
+
+            audio_path = None
+            resolved_soundfont = None
+            if request.render_audio:
+                audio_error = None
+                try:
+                    selected_soundfont = (
+                        request.soundfont_path
+                        if request.soundfont_path is not None
+                        else self.config.default_soundfont_path
+                    )
+                    requested_soundfont = (
+                        os.fspath(selected_soundfont)
+                        if selected_soundfont is not None
+                        else None
+                    )
+                    if isinstance(requested_soundfont, bytes):
+                        raise TypeError(
+                            "soundfont_path must resolve to a text path, not bytes"
+                        )
+                    resolved_soundfont = playback.resolve_soundfont(requested_soundfont)
+                    audio_path = playback.midi_to_mp3(
+                        workspace.midi_path,
+                        output_path=workspace.audio_path,
+                        soundfont_name=resolved_soundfont or requested_soundfont,
+                    )
+                except AudioRenderingError as exc:
+                    audio_error = str(exc)
+                except Exception as exc:
+                    audio_error = (
+                        f"{type(exc).__name__}: {exc}"
+                        if str(exc)
+                        else type(exc).__name__
+                    )
+                if audio_path is None:
+                    warning = "Audio rendering was skipped or failed."
+                    if audio_error:
+                        warning = f"{warning} {audio_error}"
+                    warnings.append(warning)
+
+            generation = self.store.finalize_generation(
+                workspace=workspace,
+                prompt=request.description,
+                key=request.key,
+                scale=request.scale,
+                model=request.model,
+                provider=metadata.provider,
+                temperature=request.temperature,
+                use_thinking=request.use_thinking,
+                effort=request.effort,
+                cost=None,
+                soundfont=os.path.basename(resolved_soundfont)
+                if audio_path and resolved_soundfont
+                else None,
+                audio_render_succeeded=audio_path is not None,
+            )
+            finalized = True
+            return generation, tuple(warnings)
         finally:
             if workspace is not None and not finalized:
                 self.store.cleanup_generation_workspace(workspace)

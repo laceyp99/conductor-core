@@ -8,6 +8,7 @@ from conductor_core.config import (
     GenerationResult,
     ProgressEvent,
     ProviderCredentials,
+    VariationGenerationRequest,
     validate_variation_count,
 )
 from conductor_core.engine import LoopGenerationEngine
@@ -25,7 +26,16 @@ from conductor_core.paths import (
     resolve_data_dir,
     resolve_default_artifact_root,
 )
-from conductor_core.storage import GenerationMetadata
+from conductor_core.storage import (
+    GenerationMetadata,
+    VariationHistoryManifest,
+    VariationHistoryRecord,
+    VariationHistoryUsage,
+    clear_variation_history,
+    delete_variation_history,
+    get_variation_history,
+    list_variation_history,
+)
 from conductor_core.variations import (
     VariationBatchMetadata,
     VariationBatchResult,
@@ -33,7 +43,6 @@ from conductor_core.variations import (
     VariationDiagnostic,
     VariationProgressStatus,
     VariationResult,
-    VariationStatus,
     VariationUsage,
 )
 
@@ -61,10 +70,17 @@ __all__ = [
     "VariationBatchResult",
     "VariationBatchStatus",
     "VariationDiagnostic",
+    "VariationGenerationRequest",
+    "VariationHistoryManifest",
+    "VariationHistoryRecord",
+    "VariationHistoryUsage",
     "VariationProgressStatus",
     "VariationResult",
-    "VariationStatus",
     "VariationUsage",
+    "clear_variation_history",
+    "delete_variation_history",
+    "get_variation_history",
+    "list_variation_history",
     "resolve_conductor_home",
     "resolve_data_dir",
     "resolve_default_artifact_root",
