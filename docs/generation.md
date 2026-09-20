@@ -100,7 +100,8 @@ Lower-level audio failures raise `AudioRenderingError`. The generation engine
 treats optional audio failure as non-fatal and returns the MIDI with a warning
 and `audio_path=None`.
 
-For the planned batch API, see [Variation contracts](variations.md).
+For single-request ordered alternatives, see
+[Generate loop variations](variations.md).
 
 ## Logging
 

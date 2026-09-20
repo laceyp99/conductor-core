@@ -1,67 +1,91 @@
-# Variation contracts (preparation for batch generation)
+# Generate loop variations
 
-Core now exposes variation data contracts and a canonical initial prompt.
-The `generate_variations(request, count=4)` engine operation, provider array
-handling, and batch persistence are follow-up work; they are not available yet.
-The planned operation reuses `GenerationRequest` for one shared musical brief.
-`validate_variation_count()` defaults to 4 and accepts only integers from 2 to 8;
-booleans, floats, and strings are rejected without coercion.
+Core can generate 2 through 8 ordered alternatives for one musical brief with a
+single provider request. Use the dedicated `VariationGenerationRequest`; it is
+separate from `GenerationRequest` so count and batch prompt behavior remain
+explicit.
 
-`VariationResult` contains a zero-based `index`, derived `status` (`valid` or
-`invalid`), `loop`, optional `generation` (`GenerationMetadata` with artifact
-information), and optional `diagnostic`. Invalid items require `loop=None`, a
-diagnostic, and no generation information. Valid items can exist before artifacts
-are persisted and must not carry a validation diagnostic. Optional audio failure
-does not make a valid MIDI loop invalid. Per-item `warnings` default to an empty
-sequence and preserve non-fatal MIDI or audio messages independently of item
-and batch status. Warnings serialize as a JSON array, including `[]` when empty.
+```python
+from conductor_core import (
+    LoopGenerationEngine,
+    VariationGenerationRequest,
+)
 
-`VariationDiagnostic` uses a nonblank `code` and `message`, plus a nullable
-`location` sequence of JSON field names and array indexes. Initial producers
-should use `invalid_loop`, `invalid_response`, and `wrong_count` for those three
-failure cases. Codes are extensible strings; consumers should tolerate unknown
-codes. A location such as `["Bar_1", "notes", 0, "pitch"]` is relative to the item.
+engine = LoopGenerationEngine()
+result = engine.generate_variations(
+    VariationGenerationRequest(
+        key="C",
+        scale="Major",
+        description="warm neo-soul electric piano",
+        model="gpt-4o-mini",
+        count=4,
+    )
+)
 
-`VariationBatchResult` contains ordered `items`, `metadata`, derived `status`,
-and a nullable batch-level `diagnostic`. It derives `complete` when all items
-are valid, `partial` when some are valid, and `failed` when none are valid.
-Callers may omit statuses; contradictory explicit statuses are rejected.
-Items must retain every original position in contiguous order, including invalid
-neighbors. A wrong top-level count requires an empty item sequence and a batch
-diagnostic, so it cannot reference generation artifacts. A non-array response
-uses `received_count=None`. An all-invalid array retains its indexed diagnostics.
-These contracts never create files or substitute musical fallback content.
+for item in result.items:
+    print(item.index, item.generation.midi_path)
+```
 
-`VariationBatchMetadata` contains `batch_id`, `model`, `provider`, `prompt_version`,
-`requested_count`, `received_count`, ordered JSON `messages`, nullable `usage`,
-and nullable `cost`. Usage holds nullable `input_tokens`, `output_tokens`, and
-`total_tokens`. Cost and usage describe the one shared request, including failed
-results; unavailable values remain `None`, not zero. Do not sum or divide these
-values from per-item generation records. The batch exposes read-only
-`requested_count` and `received_count` properties forwarding its metadata.
+`count` defaults to 4. `validate_variation_count()` and the request constructor
+accept only integers from 2 through 8; booleans, floats, and strings are not
+coerced. Core sends one shared brief and count to the selected OpenAI,
+Anthropic, Google, or Ollama adapter. The provider returns one internal JSON
+object with an ordered `variations` array, allowing later items to follow the
+earlier output context. Provider SDK objects never enter the public result.
 
-The new Pydantic models reject unknown fields and support `model_dump_json()`
-and `model_validate_json()`. JSON has the shape
-`{"metadata": {...}, "items": [...], "status": "partial", "diagnostic": null}`;
-counts occur only inside `metadata`, locations/items become arrays, and optional
-fields remain explicit `null` values by default. Existing `Loop` parsing is unchanged.
+## All-or-nothing validation
 
-`conductor_core.music.get_variation_prompt()` loads the packaged
-`variation_gen_v1.txt`; `VARIATION_PROMPT_VERSION` identifies it. The planned
-engine operation uses the existing request override, then engine override, then
-this packaged default. An override replaces the entire system prompt and should
-be recorded with `prompt_version="override"`. The requested count and shared
-brief belong in the provider request, not string interpolation of the resource.
-Retry prompts are outside this contract.
+The complete collection is parsed as typed `Loop` data before any artifact is
+created. If one sibling is malformed, validation raises and Core writes no
+generation workspace or variation manifest. Setup, credential, transport,
+service, and storage failures also raise; Core does not retry or synthesize
+fallback music.
 
-`ProgressEvent` adds nullable `batch_id`, `variation_index`, and `status` while
-preserving the existing three positional fields and extensible `stage` string.
-The correlation status vocabulary is `started`, `validating`, `persisting`,
-`valid`, `invalid`, `complete`, `partial`, and `failed`. The planned synchronous
-event order is: batch `started`; each item in array order emits `validating`,
-then either `invalid` or `persisting` followed by `valid`; finally the batch emits
-`complete`, `partial`, or `failed`. Batch events have no variation index; item
-events share the batch ID and original zero-based index. A top-level response
-failure goes directly from `started` to `failed`. Request/setup/transport errors
-remain exceptions. Actual emission belongs to the engine follow-up; current
-single-generation events retain `None` for all three new fields.
+A decoded collection with a different length returns an empty failed
+`VariationBatchResult` with a `wrong_count` diagnostic. It creates no child
+artifacts and no manifest. A successful exact-count result contains ordered
+`VariationResult` items, each with its validated loop, finalized ordinary
+`GenerationMetadata`, and any non-fatal MIDI or audio warnings.
+
+## Accounting, messages, and prompts
+
+`VariationBatchMetadata` records the batch ID, provider, model, requested and
+received counts, canonical messages, nullable token usage, and nullable total
+cost for the single provider request. Child generation metadata always has
+`cost=None`; Core never divides or duplicates the batch cost.
+
+The shared provider messages are stored once in the variation manifest. Child
+generation workspaces contain `loop.mid`, optional `loop.mp3`, and
+`metadata.json`, but no duplicate `messages.json`.
+
+Prompt precedence is the request's `prompt_override`, then the shared
+`EngineConfig.prompt_override`, then the packaged `variation_gen_v1` prompt.
+Either override replaces the complete variation system prompt and records
+`prompt_version="override"`.
+
+## Progress
+
+Pass `progress_callback` to `generate_variations()` to receive correlated
+`ProgressEvent` values. A batch emits `started`; each item then emits
+`persisting` and `complete` in provider order; the batch finally emits
+`complete`. A failure emits batch `failed` before Core returns or raises. Batch
+events have no variation index, while item events use zero-based indexes.
+
+## Variation history
+
+Successful children remain ordinary generations under the configured artifact
+root. Core stores one immutable, versioned batch manifest in the sibling
+`variations/` directory (by default `~/.conductor/core/variations/`). It contains
+the ordered generation IDs and batch request metadata, not copied MIDI, audio,
+or `Loop` data.
+
+Use `list_variation_history()`, `get_variation_history()`,
+`delete_variation_history()`, and `clear_variation_history()` from the top-level
+package, or the corresponding `FilesystemArtifactStore` methods. Loading a
+record resolves all surviving ordinary generations and explicitly reports
+`missing_generation_ids` in manifest order. Generation deletion and retention
+never rewrite a manifest, and deleting a manifest never deletes a generation.
+
+Variation manifests are retained indefinitely and can accumulate. They include
+provider messages, so applications should apply their own privacy and lifecycle
+policy and explicitly delete or clear them when no longer needed.

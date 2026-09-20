@@ -10,6 +10,13 @@ while its public API is still in initial development.
 
 ### Added
 
+- Synchronous `generate_variations()` support for 2-8 ordered loops in one
+  structured OpenAI, Anthropic, Google, or Ollama request, with exact-count
+  results, correlated progress, batch-level usage and cost, and ordinary MIDI
+  and optional audio artifacts.
+- Versioned variation-history manifests preserve ordered generation references,
+  shared provider messages, and batch metadata, with explicit list, get, delete,
+  and clear APIs and missing-generation reporting.
 - Public variation results, batch metadata, structured diagnostics, strict
   2–8 count validation, and optional progress correlation fields. These contracts
   prepare for batch generation without changing existing single-loop generation.
