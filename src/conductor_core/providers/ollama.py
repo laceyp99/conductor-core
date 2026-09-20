@@ -11,6 +11,8 @@ from conductor_core.errors import (
     ProviderTimeoutError,
     error_for_status,
 )
+from conductor_core.providers._variations import VariationCollection
+from conductor_core.variations import VariationUsage
 
 try:
     import httpx
@@ -148,3 +150,63 @@ def loop_gen(
         messages.append({"role": "assistant", "content": thinking})
     messages.append({"role": "assistant", "content": str(midi_loop)})
     return midi_loop, messages, 0
+
+
+def variations_gen(
+    prompt,
+    model,
+    temp=0.0,
+    host_address: str | None = None,
+    system_prompt: str | None = None,
+    request_timeout: float | None = None,
+):
+    """Generate an ordered collection of loops in one Ollama response."""
+    client = initialize_ollama_client(
+        host_address=host_address,
+        **({"timeout": request_timeout} if request_timeout is not None else {}),
+    )
+    loop_prompt = system_prompt or utils.get_variation_prompt()
+    messages = [
+        {"role": "system", "content": loop_prompt},
+        {"role": "user", "content": prompt},
+    ]
+    try:
+        completion = client.chat(
+            model=model,
+            messages=messages,
+            format=VariationCollection.model_json_schema(),
+            options={"temperature": temp},
+        )
+    except (
+        httpx.TimeoutException,
+        httpx.NetworkError,
+        ConnectionError,
+        ollama.RequestError,
+        ollama.ResponseError,
+    ) as exc:
+        _raise_ollama_error(exc, "request")
+    message = getattr(completion, "message", None)
+    content = getattr(message, "content", None)
+    if not content:
+        raise ValueError("Ollama response did not include generated content.")
+    collection = VariationCollection.model_validate_json(content)
+    thinking = getattr(message, "thinking", None)
+    if thinking:
+        messages.append({"role": "assistant", "content": thinking})
+    messages.append({"role": "assistant", "content": content})
+    input_tokens = getattr(completion, "prompt_eval_count", None)
+    output_tokens = getattr(completion, "eval_count", None)
+    usage = (
+        VariationUsage(
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=(
+                input_tokens + output_tokens
+                if input_tokens is not None and output_tokens is not None
+                else None
+            ),
+        )
+        if input_tokens is not None or output_tokens is not None
+        else None
+    )
+    return collection, messages, 0, usage

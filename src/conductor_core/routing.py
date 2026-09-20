@@ -1,15 +1,30 @@
 """Provider routing for Conductor Core."""
 
 import logging
+from dataclasses import dataclass
+from typing import Any
 
 from conductor_core.config import ProviderCredentials
+from conductor_core.models import Loop
 from conductor_core.music import get_model_info
 from conductor_core.providers import anthropic as claude_api
 from conductor_core.providers import google as gemini_api
 from conductor_core.providers import ollama as ollama_api
 from conductor_core.providers import openai as openai_api
+from conductor_core.variations import VariationUsage
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class VariationProviderResult:
+    """Normalized result of a single provider variation request."""
+
+    variations: tuple[Loop, ...]
+    provider: str
+    messages: list[dict[str, Any]]
+    usage: VariationUsage | None
+    cost: float | None
 
 
 def _resolve_reasoning_effort(model_choice, model_config, use_thinking, effort):
@@ -159,3 +174,91 @@ def generate_midi(
             raise ValueError("Invalid Model Selected")
 
     return loop, messages, loop_cost, provider
+
+
+def generate_variations(
+    model_choice,
+    prompt,
+    count,
+    temp=0.0,
+    use_thinking=False,
+    effort="low",
+    provider_credentials: ProviderCredentials | None = None,
+    request_timeout: float | None = None,
+    system_prompt: str | None = None,
+):
+    """Route one ordered variation collection request to a provider."""
+    credentials = provider_credentials or ProviderCredentials()
+    model_info = get_model_info()
+    timeout = (
+        {"request_timeout": request_timeout} if request_timeout is not None else {}
+    )
+    common = {
+        "prompt": f"Requested variation count: {count}\n\n{prompt}",
+        "model": model_choice,
+        "temp": temp,
+        "system_prompt": system_prompt,
+        **timeout,
+    }
+    if model_choice in model_info["models"]["OpenAI"]:
+        provider = "OpenAI"
+        adapter = openai_api
+        common.update(
+            use_thinking=use_thinking,
+            effort=_resolve_reasoning_effort(
+                model_choice,
+                model_info["models"][provider][model_choice],
+                use_thinking,
+                effort,
+            ),
+            api_key=credentials.openai_api_key,
+        )
+    elif model_choice in model_info["models"]["Google"]:
+        provider = "Google"
+        adapter = gemini_api
+        common.update(
+            use_thinking=use_thinking,
+            effort=_resolve_reasoning_effort(
+                model_choice,
+                model_info["models"][provider][model_choice],
+                use_thinking,
+                effort,
+            ),
+            api_key=credentials.google_api_key,
+        )
+    elif model_choice in model_info["models"]["Anthropic"]:
+        provider = "Anthropic"
+        adapter = claude_api
+        common.update(
+            use_thinking=use_thinking,
+            effort=_resolve_reasoning_effort(
+                model_choice,
+                model_info["models"][provider][model_choice],
+                use_thinking,
+                effort,
+            ),
+            api_key=credentials.anthropic_api_key,
+        )
+    else:
+        status = ollama_api.get_ollama_status(
+            host_address=credentials.ollama_host, **timeout
+        )
+        if model_choice not in status["models"]:
+            if not status["available"]:
+                raise ValueError(
+                    "Invalid Model Selected. If you intended to use Ollama, it is currently unavailable."
+                )
+            raise ValueError("Invalid Model Selected")
+        _resolve_reasoning_effort(model_choice, {}, use_thinking, effort)
+        provider = "Ollama"
+        adapter = ollama_api
+        common["host_address"] = credentials.ollama_host
+
+    collection, messages, cost, usage = adapter.variations_gen(**common)
+    return VariationProviderResult(
+        variations=tuple(collection.variations),
+        provider=provider,
+        messages=messages,
+        usage=usage,
+        cost=cost,
+    )

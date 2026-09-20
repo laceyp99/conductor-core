@@ -12,6 +12,8 @@ from conductor_core.errors import (
     ProviderRequestError,
     ProviderTimeoutError,
 )
+from conductor_core.providers._variations import VariationCollection
+from conductor_core.variations import VariationUsage
 
 try:
     from anthropic import (
@@ -280,3 +282,100 @@ def loop_gen(
     messages.append({"role": "assistant", "content": output["loop"]})
 
     return loop, messages, calc_price(model, output)
+
+
+def variations_gen(
+    prompt,
+    model,
+    temp=0.0,
+    use_thinking=False,
+    effort="low",
+    api_key: str | None = None,
+    system_prompt: str | None = None,
+    request_timeout: float | None = None,
+):
+    """Generate an ordered collection of loops in one Anthropic response."""
+    client = initialize_anthropic_client(
+        api_key=api_key,
+        **({"timeout": request_timeout} if request_timeout is not None else {}),
+    )
+    loop_prompt = system_prompt or utils.get_variation_prompt()
+    model_config = utils.get_model_info()["models"]["Anthropic"][model]
+    api_params = {
+        "model": model,
+        "max_tokens": model_config["max_tokens"],
+        "system": [build_system_prompt_block(loop_prompt)],
+        "messages": [{"role": "user", "content": prompt}],
+        "tools": [
+            {
+                "name": "build_MIDI_variations",
+                "description": "builds ordered music-loop variations",
+                "input_schema": VariationCollection.model_json_schema(),
+            }
+        ],
+        "tool_choice": {"type": "tool", "name": "build_MIDI_variations"},
+        "stream": True,
+        "temperature": temp,
+    }
+    effort_options = model_config.get("effort_options") or []
+    always_on = model_config.get("always_on_adaptive_thinking", False)
+    if always_on:
+        api_params.pop("temperature")
+    if effort_options:
+        if not use_thinking:
+            effort = effort_options[0]
+        api_params["tool_choice"] = {"type": "auto"}
+        api_params["output_config"] = {"effort": effort}
+        if not always_on:
+            api_params["thinking"] = {"type": "adaptive"}
+            api_params["temperature"] = 1.0
+    elif use_thinking and model_config.get("extended_thinking"):
+        api_params["tool_choice"] = {"type": "auto"}
+        api_params["thinking"] = {
+            "type": "enabled",
+            "budget_tokens": model_config["max_thinking_budget"],
+        }
+        api_params["temperature"] = 1.0
+    try:
+        completion = client.messages.create(**api_params)
+    except (
+        AuthenticationError,
+        RateLimitError,
+        APITimeoutError,
+        APIConnectionError,
+        APIError,
+    ) as exc:
+        _raise_anthropic_error(exc, "request")
+    try:
+        output = process_streaming_response(completion)
+    except (
+        AuthenticationError,
+        RateLimitError,
+        APITimeoutError,
+        APIConnectionError,
+        APIError,
+    ) as exc:
+        _raise_anthropic_error(exc, "stream")
+    if not output["loop"]:
+        raise ValueError(f"Model {model} did not call the build_MIDI_variations tool.")
+    collection = VariationCollection.model_validate_json(output["loop"])
+    messages = [
+        {"role": "system", "content": loop_prompt},
+        {"role": "user", "content": prompt},
+    ]
+    if output["thinking_content"]:
+        messages.append({"role": "assistant", "content": output["thinking_content"]})
+    messages.append({"role": "assistant", "content": output["loop"]})
+    input_tokens = output.get("input_tokens")
+    output_tokens = output.get("output_tokens")
+    usage = (
+        VariationUsage(
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=input_tokens + output_tokens,
+        )
+        if input_tokens or output_tokens
+        else None
+    )
+    cost = calc_price(model, output) if usage is not None else None
+    return collection, messages, cost, usage
