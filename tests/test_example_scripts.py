@@ -19,7 +19,13 @@ def load_script(name):
 
 @pytest.mark.parametrize(
     "name",
-    ["generate_midi", "midi_loop_roundtrip", "inspect_models", "check_copied_history"],
+    [
+        "generate_midi",
+        "generate_variations",
+        "midi_loop_roundtrip",
+        "inspect_models",
+        "check_copied_history",
+    ],
 )
 def test_example_script_imports_without_running_main(name, monkeypatch):
     monkeypatch.setattr(
@@ -66,6 +72,69 @@ def test_generate_midi_builds_expected_paid_request(capsys):
     output = capsys.readouterr().out
     assert "[provider_call] Generating MIDI..." in output
     assert "generations/example/loop.mp3" in output
+
+
+def test_generate_variations_builds_expected_paid_batch_request(capsys):
+    script = load_script("generate_variations")
+    captured = {}
+    result = SimpleNamespace(
+        status="complete",
+        metadata=SimpleNamespace(batch_id="batch-id", cost=0.84),
+        diagnostic=None,
+        items=(
+            SimpleNamespace(
+                index=0,
+                generation=SimpleNamespace(
+                    id="first-id",
+                    midi_path="generations/first/loop.mid",
+                    audio_path="generations/first/loop.mp3",
+                ),
+                warnings=(),
+            ),
+            SimpleNamespace(
+                index=1,
+                generation=SimpleNamespace(
+                    id="second-id",
+                    midi_path="generations/second/loop.mid",
+                    audio_path=None,
+                ),
+                warnings=("Audio rendering was skipped.",),
+            ),
+        ),
+    )
+
+    class FakeEngine:
+        def generate_variations(self, request, progress_callback=None):
+            captured["request"] = request
+            progress_callback(
+                SimpleNamespace(
+                    stage="variations",
+                    message="Persisting variation 1 of 4...",
+                    detail=None,
+                    variation_index=0,
+                    status="persisting",
+                )
+            )
+            return result
+
+    assert script.main(engine=FakeEngine()) is result
+
+    request = captured["request"]
+    assert request.model == "gpt-5.6-luna"
+    assert request.count == 4
+    assert request.description == (
+        "warm neo-soul electric piano chords with syncopated upper extensions "
+        "and a simple bass movement"
+    )
+    assert request.effort == "medium"
+    assert request.prompt_override is None
+    assert request.render_audio is True
+    assert request.soundfont_path is None
+    output = capsys.readouterr().out
+    assert "variation=1 status=persisting" in output
+    assert "Batch ID: batch-id" in output
+    assert "generations/first/loop.mp3" in output
+    assert "Audio rendering was skipped." in output
 
 
 def test_midi_roundtrip_uses_sixteenth_note_integer_timing(

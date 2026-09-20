@@ -5,6 +5,9 @@ single provider request. Use the dedicated `VariationGenerationRequest`; it is
 separate from `GenerationRequest` so count and batch prompt behavior remain
 explicit.
 
+For an editable manual-testing example that can make a real provider request,
+see [`scripts/generate_variations.py`](https://github.com/laceyp99/conductor-core/blob/main/scripts/generate_variations.py).
+
 ```python
 from conductor_core import (
     LoopGenerationEngine,
