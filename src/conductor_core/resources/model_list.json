@@ -17,6 +17,38 @@
                     "RPD": null
                 }
             },
+            "gpt-6-sol": {
+                "extended_thinking": true,
+                "effort_options": ["none", "low", "medium", "high", "xhigh", "max"],
+                "max_tokens": 128000,
+                "cost": {
+                    "input": 2.00,
+                    "cached input": 0.20,
+                    "cache write": 2.50,
+                    "output": 10.00
+                },
+                "rate_limits": {
+                    "RPM": 500,
+                    "TPM": 500000,
+                    "RPD": null
+                }
+            },
+            "gpt-6-luna": {
+                "extended_thinking": true,
+                "effort_options": ["none", "low", "medium", "high", "xhigh", "max"],
+                "max_tokens": 128000,
+                "cost": {
+                    "input": 0.10,
+                    "cached input": 0.01,
+                    "cache write": 0.125,
+                    "output": 0.50
+                },
+                "rate_limits": {
+                    "RPM": 500,
+                    "TPM": 500000,
+                    "RPD": null
+                }
+            },
             "gpt-5.6-sol": {
                 "extended_thinking": true,
                 "effort_options": ["none", "low", "medium", "high", "xhigh", "max"],

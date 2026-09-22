@@ -10,6 +10,9 @@ while its public API is still in initial development.
 
 ### Added
 
+- GPT-6 Sol and Luna model support with six reasoning effort levels, 128K
+  output tokens, standard token and cache pricing, and Tier 1 rate limits.
+
 - Claude Opus 5.5 model support with always-on adaptive thinking, five effort
   levels, 128K output tokens, and published pricing and rate limits. The Claude
   registry now starts with Opus 5.5, Fable 5.1, Fable 5, Opus 5, and Sonnet 5.

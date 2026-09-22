@@ -577,7 +577,9 @@ def test_claude_disabled_thinking_uses_lowest_effort(
     assert ("thinking" in captured) is expects_thinking
 
 
-def test_openai_disabled_thinking_uses_lowest_effort(monkeypatch):
+@pytest.mark.parametrize("model", ["gpt-5.6-sol", "gpt-6-sol", "gpt-6-luna"])
+@pytest.mark.parametrize("use_thinking", [False, True])
+def test_openai_thinking_selects_supported_effort(monkeypatch, model, use_thinking):
     captured = {}
     response = SimpleNamespace(
         output=[],
@@ -601,12 +603,17 @@ def test_openai_disabled_thinking_uses_lowest_effort(monkeypatch):
 
     openai_api.loop_gen(
         "write a loop",
-        "gpt-5.6-sol",
-        use_thinking=False,
+        model,
+        use_thinking=use_thinking,
         effort="max",
     )
 
-    assert captured["reasoning"] == {"effort": "none", "summary": "auto"}
+    assert captured["model"] == model
+    assert captured["reasoning"] == {
+        "effort": "max" if use_thinking else "none",
+        "summary": "auto",
+    }
+    assert "temperature" not in captured
 
 
 def test_gemini_disabled_thinking_uses_lowest_effort(monkeypatch):
