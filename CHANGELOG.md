@@ -10,6 +10,10 @@ while its public API is still in initial development.
 
 ### Added
 
+- Claude Opus 5.5 model support with always-on adaptive thinking, five effort
+  levels, 128K output tokens, and published pricing and rate limits. The Claude
+  registry now starts with Opus 5.5, Fable 5.1, Fable 5, Opus 5, and Sonnet 5.
+
 - Synchronous `generate_variations()` support for 2-8 ordered loops in one
   structured OpenAI, Anthropic, Google, or Ollama request, with exact-count
   results, correlated progress, batch-level usage and cost, and ordinary MIDI

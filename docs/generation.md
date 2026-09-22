@@ -115,3 +115,30 @@ logging.basicConfig(level=logging.INFO)
 # Or route only Core records:
 logging.getLogger("conductor_core").addHandler(my_handler)
 ```
+
+### Claude Opus 5.5
+
+`claude-opus-5-5` supports `low`, `medium`, `high`, `xhigh`, and `max` effort
+with always-on adaptive thinking. Core omits temperature and explicit thinking
+parameters and uses automatic tool choice for both loops and variations.
+As with other effort-based models, `use_thinking=False` selects `low` effort;
+it does not disable reasoning. Core explicitly selects effort, so Anthropic's
+`medium` API default does not override Core's default `low`.
+
+The registry records a 128,000-token output limit (the model's 1M context window
+is a separate limit), standard per-million-token prices of $4 input and $20
+output, $5/$8 cache writes for 5 minutes/1 hour, and $0.20 cache reads.
+The rate-limit baseline is 1,000 RPM and 400,000 TPM, using the published
+Start-tier output-token limit conservatively for Core's single TPM field;
+Anthropic separately allows 2,000,000 input tokens per minute. RPD is unknown
+and recorded as null. Actual account limits can differ.
+
+Sources: [model overview](https://platform.claude.com/docs/en/models/opus-5-5/overview),
+[compatibility notes](https://platform.claude.com/docs/en/models/opus-5-5/whats-new-opus-5-5),
+[effort](https://platform.claude.com/docs/en/build-with-claude/effort),
+[pricing](https://platform.claude.com/docs/en/about-claude/pricing), and
+[rate limits](https://platform.claude.com/docs/en/api/rate-limits).
+
+Downstream model selectors should preserve registry order and expose effort,
+with temperature and the thinking-off control hidden for this model. Conductor
+Main and Eval should verify these controls when adopting Core 0.5.4.

@@ -231,3 +231,35 @@ def test_ollama_requests_one_collection_format(monkeypatch):
     assert len(collection.variations) == 1
     assert cost == 0
     assert usage.total_tokens == 10
+
+
+@pytest.mark.parametrize(("use_thinking", "effort"), [(False, "low"), (True, "max")])
+def test_opus_5_5_variations_use_always_on_thinking(monkeypatch, use_thinking, effort):
+    calls = []
+    payload = json.dumps({"variations": [_loop_payload()]})
+    completion = [
+        SimpleNamespace(
+            type="content_block_delta",
+            delta=SimpleNamespace(partial_json=payload),
+        ),
+        SimpleNamespace(type="message_stop"),
+    ]
+    client = SimpleNamespace(
+        messages=SimpleNamespace(
+            create=lambda **kwargs: calls.append(kwargs) or completion
+        )
+    )
+    monkeypatch.setattr(
+        anthropic, "initialize_anthropic_client", lambda **kwargs: client
+    )
+
+    collection, _, _, _ = anthropic.variations_gen(
+        "brief", "claude-opus-5-5", temp=0.5, use_thinking=use_thinking, effort="max"
+    )
+
+    assert len(collection.variations) == 1
+    assert calls[0]["max_tokens"] == 128000
+    assert calls[0]["output_config"] == {"effort": effort}
+    assert calls[0]["tool_choice"] == {"type": "auto"}
+    assert "temperature" not in calls[0]
+    assert "thinking" not in calls[0]

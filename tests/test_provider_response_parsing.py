@@ -520,8 +520,10 @@ def test_claude_opus_5_uses_adaptive_thinking_and_effort(monkeypatch):
     assert captured["tool_choice"] == {"type": "auto"}
 
 
-@pytest.mark.parametrize("model", ["claude-fable-5", "claude-fable-5-1"])
-def test_claude_fable_uses_metadata_driven_always_on_thinking(monkeypatch, model):
+@pytest.mark.parametrize(
+    "model", ["claude-opus-5-5", "claude-fable-5", "claude-fable-5-1"]
+)
+def test_claude_uses_metadata_driven_always_on_thinking(monkeypatch, model):
     captured = {}
     payload = json.dumps(_loop_payload())
 
@@ -548,6 +550,7 @@ def test_claude_fable_uses_metadata_driven_always_on_thinking(monkeypatch, model
     ("model", "expects_thinking"),
     [
         ("claude-opus-5", True),
+        ("claude-opus-5-5", False),
         ("claude-fable-5", False),
         ("claude-fable-5-1", False),
     ],
