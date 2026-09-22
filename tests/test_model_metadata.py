@@ -201,7 +201,7 @@ def test_claude_fable_5_1_capabilities_match_anthropic_documentation():
     }
 
 
-def test_fable_models_have_always_on_adaptive_thinking():
+def test_models_have_documented_always_on_adaptive_thinking():
     anthropic_models = music.get_model_info()["models"]["Anthropic"]
 
     always_on_models = {
@@ -210,7 +210,7 @@ def test_fable_models_have_always_on_adaptive_thinking():
         if model_config.get("always_on_adaptive_thinking")
     }
 
-    assert always_on_models == {"claude-fable-5", "claude-fable-5-1"}
+    assert always_on_models == {"claude-opus-5-5", "claude-fable-5", "claude-fable-5-1"}
 
 
 def test_model_metadata_rejects_non_boolean_always_on_adaptive_thinking():
