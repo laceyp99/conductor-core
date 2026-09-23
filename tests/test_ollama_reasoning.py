@@ -79,6 +79,36 @@ def test_ollama_status_reports_show_failure_as_temperature_only(monkeypatch):
     }
 
 
+def test_ollama_status_discovers_effort_levels_from_raw_show(monkeypatch):
+    class RawResponse:
+        def json(self):
+            return {
+                "thinking": {
+                    "values": ["low", "medium", "high"],
+                    "default": "medium",
+                }
+            }
+
+    raw_calls = []
+    client = SimpleNamespace(
+        list=lambda: SimpleNamespace(models=[SimpleNamespace(model="gpt-oss")]),
+        show=lambda name: SimpleNamespace(capabilities=["completion", "thinking"]),
+        _request_raw=lambda *args, **kwargs: (
+            raw_calls.append((args, kwargs)) or RawResponse()
+        ),
+    )
+    monkeypatch.setattr(ollama, "initialize_ollama_client", lambda **kwargs: client)
+
+    status = ollama.get_ollama_status()
+
+    assert status["model_capabilities"]["gpt-oss"] == {
+        "extended_thinking": True,
+        "effort_options": ["low", "medium", "high"],
+        "temperature_supported": True,
+    }
+    assert raw_calls == [(("POST", "/api/show"), {"json": {"model": "gpt-oss"}})]
+
+
 @pytest.mark.parametrize(
     ("generation", "model_capabilities", "use_thinking", "effort", "expected"),
     [

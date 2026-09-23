@@ -11,9 +11,10 @@ while its public API is still in initial development.
 ### Added
 
 - Ollama status now includes a per-model `model_capabilities` mapping with
-  thinking and temperature support, while retaining the existing model-name
-  list. Ollama loop and variation generation accept `use_thinking` and `effort`
-  parameters and pass supported thinking settings to Ollama.
+  thinking, effort levels reported by Ollama, and temperature support, while
+  retaining the existing model-name list. Ollama loop and variation generation
+  accept `use_thinking` and `effort` parameters and pass supported thinking
+  settings to Ollama.
 
 ## [0.5.5] - 2026-09-22
 

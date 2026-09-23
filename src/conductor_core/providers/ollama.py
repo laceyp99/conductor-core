@@ -24,21 +24,47 @@ except ImportError:  # pragma: no cover - exercised only in minimal installs
 logger = logging.getLogger(__name__)
 
 
+def _get_thinking_metadata(client, model_name, model_info):
+    """Read Ollama's per-model think values when the SDK preserves them."""
+    thinking = getattr(model_info, "thinking", None)
+
+    # ollama-python currently parses /api/show into ShowResponse, which drops
+    # the API's `thinking` field. Use its raw request path so SDK auth, host,
+    # and timeout settings are retained. Keep this optional for older SDKs and
+    # lightweight client implementations.
+    if thinking is None:
+        request_raw = getattr(client, "_request_raw", None)
+        if callable(request_raw):
+            try:
+                response = request_raw("POST", "/api/show", json={"model": model_name})
+                thinking = response.json().get("thinking")
+            except Exception:
+                logger.debug("Could not read Ollama think values for %s", model_name)
+
+    if not isinstance(thinking, dict):
+        return []
+    values = thinking.get("values") or []
+    # The API exposes explicit accepted values. Only advertise the supported
+    # effort vocabulary Core can route; never infer it from a model name.
+    supported = {value for value in values if isinstance(value, str)}
+    return [level for level in ("low", "medium", "high") if level in supported]
+
+
 def _get_model_capabilities(client, model_name, host):
+    effort_options = []
     try:
         model_info = client.show(model_name)
         capabilities = getattr(model_info, "capabilities", None) or []
-        supports_thinking = "thinking" in capabilities
+        effort_options = _get_thinking_metadata(client, model_name, model_info)
+        supports_thinking = "thinking" in capabilities or bool(effort_options)
     except Exception as exc:
         logger.warning(
             "Could not inspect Ollama model %s at %s: %s", model_name, host, exc
         )
         supports_thinking = False
-    # Ollama's show capabilities only reports thinking support, not whether the
-    # model accepts effort levels, so expose on/off only.
     return {
         "extended_thinking": supports_thinking,
-        "effort_options": [],
+        "effort_options": effort_options,
         "temperature_supported": True,
     }
 
