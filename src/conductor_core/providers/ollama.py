@@ -24,6 +24,25 @@ except ImportError:  # pragma: no cover - exercised only in minimal installs
 logger = logging.getLogger(__name__)
 
 
+def _get_model_capabilities(client, model_name, host):
+    try:
+        model_info = client.show(model_name)
+        capabilities = getattr(model_info, "capabilities", None) or []
+        supports_thinking = "thinking" in capabilities
+    except Exception as exc:
+        logger.warning(
+            "Could not inspect Ollama model %s at %s: %s", model_name, host, exc
+        )
+        supports_thinking = False
+    # Ollama's show capabilities only reports thinking support, not whether the
+    # model accepts effort levels, so expose on/off only.
+    return {
+        "extended_thinking": supports_thinking,
+        "effort_options": [],
+        "temperature_supported": True,
+    }
+
+
 def _resolve_host(host_address: str | None = None) -> str:
     return (
         host_address or os.getenv("OLLAMA_API_HOST_ADDRESS") or "http://localhost:11434"
@@ -78,6 +97,7 @@ def get_ollama_status(
     status = {
         "available": False,
         "models": [],
+        "model_capabilities": {},
         "host": host,
         "error": None,
     }
@@ -92,6 +112,10 @@ def get_ollama_status(
             **({"timeout": request_timeout} if request_timeout is not None else {}),
         )
         status["models"] = [model.model for model in client.list().models]
+        status["model_capabilities"] = {
+            model_name: _get_model_capabilities(client, model_name, host)
+            for model_name in status["models"]
+        }
         status["available"] = True
     except Exception as exc:
         status["error"] = str(exc)
@@ -105,6 +129,14 @@ def get_model_list(host_address: str | None = None):
     return get_ollama_status(host_address=host_address)["models"]
 
 
+def _thinking_option(model_capabilities, use_thinking, effort):
+    """Return the Ollama ``think`` value, or None when unsupported/unknown."""
+    if not model_capabilities or not model_capabilities.get("extended_thinking"):
+        return None
+    effort_options = model_capabilities.get("effort_options") or []
+    return effort if effort_options else bool(use_thinking)
+
+
 def loop_gen(
     prompt,
     model,
@@ -112,6 +144,9 @@ def loop_gen(
     host_address: str | None = None,
     system_prompt: str | None = None,
     request_timeout: float | None = None,
+    use_thinking: bool = False,
+    effort: str | None = "low",
+    model_capabilities: dict | None = None,
 ):
     """Generate a MIDI loop using the specified Ollama model and prompt."""
     client = initialize_ollama_client(
@@ -123,13 +158,21 @@ def loop_gen(
         {"role": "system", "content": loop_prompt},
         {"role": "user", "content": prompt},
     ]
-    try:
-        completion = client.chat(
-            model=model,
-            messages=messages,
-            format=objects.Loop.model_json_schema(),
-            options={"temperature": temp},
+    if model_capabilities is None:
+        model_capabilities = _get_model_capabilities(
+            client, model, _resolve_host(host_address)
         )
+    think = _thinking_option(model_capabilities, use_thinking, effort)
+    chat_options = {
+        "model": model,
+        "messages": messages,
+        "format": objects.Loop.model_json_schema(),
+        "options": {"temperature": temp},
+    }
+    if think is not None:
+        chat_options["think"] = think
+    try:
+        completion = client.chat(**chat_options)
     except (
         httpx.TimeoutException,
         httpx.NetworkError,
@@ -159,6 +202,9 @@ def variations_gen(
     host_address: str | None = None,
     system_prompt: str | None = None,
     request_timeout: float | None = None,
+    use_thinking: bool = False,
+    effort: str | None = "low",
+    model_capabilities: dict | None = None,
 ):
     """Generate an ordered collection of loops in one Ollama response."""
     client = initialize_ollama_client(
@@ -170,13 +216,21 @@ def variations_gen(
         {"role": "system", "content": loop_prompt},
         {"role": "user", "content": prompt},
     ]
-    try:
-        completion = client.chat(
-            model=model,
-            messages=messages,
-            format=VariationCollection.model_json_schema(),
-            options={"temperature": temp},
+    if model_capabilities is None:
+        model_capabilities = _get_model_capabilities(
+            client, model, _resolve_host(host_address)
         )
+    think = _thinking_option(model_capabilities, use_thinking, effort)
+    chat_options = {
+        "model": model,
+        "messages": messages,
+        "format": VariationCollection.model_json_schema(),
+        "options": {"temperature": temp},
+    }
+    if think is not None:
+        chat_options["think"] = think
+    try:
+        completion = client.chat(**chat_options)
     except (
         httpx.TimeoutException,
         httpx.NetworkError,
