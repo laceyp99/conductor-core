@@ -151,7 +151,7 @@ def loop_gen(
         effort = effort_options[0]
     if model_config.get("extended_thinking") and effort:
         request_params["reasoning"] = {"effort": effort, "summary": "auto"}
-    else:
+    elif model_config.get("temperature_supported", True):
         request_params["temperature"] = temp
 
     try:
@@ -210,7 +210,7 @@ def variations_gen(
         effort = effort_options[0]
     if model_config.get("extended_thinking") and effort:
         request_params["reasoning"] = {"effort": effort, "summary": "auto"}
-    else:
+    elif model_config.get("temperature_supported", True):
         request_params["temperature"] = temp
     try:
         response = client.responses.parse(**request_params)

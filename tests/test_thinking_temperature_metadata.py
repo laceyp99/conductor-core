@@ -78,12 +78,31 @@ def test_thinking_fixed_temperature_matches_adapter_request(
 
     sent = _sent_temperature(provider, model, generation, monkeypatch)
 
-    if fixed_temperature is not None:
+    if not model_config.get("temperature_supported", True):
+        assert sent is None
+    elif fixed_temperature is not None:
         assert sent == fixed_temperature
     else:
-        # Null means Core never substitutes its own value. Some models omit
-        # temperature entirely while reasoning, which is also not an override.
-        assert sent in (REQUESTED_TEMPERATURE, None)
+        assert sent == REQUESTED_TEMPERATURE
+
+
+def test_models_that_reject_temperature_are_marked_unsupported():
+    models = music.get_model_info()["models"]
+    anthropic_models = (
+        "claude-opus-5-5",
+        "claude-fable-5-1",
+        "claude-fable-5",
+        "claude-opus-5",
+        "claude-sonnet-5",
+        "claude-opus-4-8",
+        "claude-opus-4-7",
+    )
+
+    for model in anthropic_models:
+        assert models["Anthropic"][model]["temperature_supported"] is False, model
+    for model, model_config in models["OpenAI"].items():
+        if model_config["extended_thinking"]:
+            assert model_config["temperature_supported"] is False, model
 
 
 def test_anthropic_budget_thinking_models_report_fixed_temperature():
@@ -103,20 +122,29 @@ def test_only_anthropic_models_report_fixed_temperature():
             )
 
 
-@pytest.mark.parametrize("value", [True, "1.0", -0.5])
-def test_model_metadata_rejects_invalid_thinking_fixed_temperature(value):
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"thinking_fixed_temperature": True},
+        {"thinking_fixed_temperature": "1.0"},
+        {"thinking_fixed_temperature": -0.5},
+        {"thinking_fixed_temperature": 1.0, "temperature_supported": False},
+        {"temperature_supported": "no"},
+    ],
+)
+def test_model_metadata_rejects_invalid_temperature_fields(fields):
     model_info = {
         "models": {
             "Anthropic": {
                 "model": {
-                    "thinking_fixed_temperature": value,
+                    **fields,
                     "rate_limits": {"RPM": 1, "TPM": None, "RPD": None},
                 }
             }
         }
     }
 
-    with pytest.raises(ValueError, match="thinking_fixed_temperature"):
+    with pytest.raises(ValueError, match="temperature"):
         music._validate_model_info(model_info)
 
 

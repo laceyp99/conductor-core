@@ -12,10 +12,16 @@ while its public API is still in initial development.
 
 - Model metadata now includes `thinking_fixed_temperature`, the temperature
   Core sends when extended thinking is enabled regardless of the requested
-  value. It is `1.0` for Anthropic budget-thinking models and effort models
-  without always-on adaptive thinking, absent for OpenAI and Google models, and
-  `null` in each Ollama `model_capabilities` entry. Requests sent to providers
-  are unchanged.
+  value. It is `1.0` for Claude Opus 4.6, Sonnet 4.6, and the Claude 4.5
+  models, absent for OpenAI and Google models, and `null` in each Ollama
+  `model_capabilities` entry.
+
+### Changed
+
+- OpenAI reasoning models and Claude Opus 4.7 and later, Sonnet 5, and Fable
+  models now report `temperature_supported: false`, and Core no longer sends
+  `temperature` to them. Claude Opus 4.7, Opus 4.8, Opus 5, and Sonnet 5
+  previously received a fixed `temperature` of `1.0`, their API default.
 
 ## [0.5.6] - 2026-09-23
 

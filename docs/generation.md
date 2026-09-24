@@ -63,14 +63,17 @@ using thinking budgets retain their provider-specific limits. Because `effort`
 defaults to `None`, callers enabling thinking for a model with discrete options
 must select a supported value.
 
-Some providers require a specific temperature while thinking is enabled. A
-model's `thinking_fixed_temperature` reports the temperature Core sends in that
-case, regardless of the requested one. It is `1.0` for Anthropic models that
-use thinking budgets or adaptive thinking without always-on thinking. When the
-field is absent or `null`, Core never substitutes its own temperature: it sends
-the requested value, or omits temperature entirely where the model does not
-accept one while reasoning. Ollama's `model_capabilities` entries always include
-the field as `null`.
+Models with `temperature_supported: false` reject a caller-selected
+temperature, so Core never sends one to them; the requested `temperature` is
+ignored. This covers OpenAI reasoning models, Gemini 3.7 and 3.8 Flash, and
+Claude Opus 4.7 and later, Sonnet 5, and Fable models.
+
+Some models require a specific temperature while thinking is enabled. A model's
+`thinking_fixed_temperature` reports the temperature Core sends in that case,
+regardless of the requested one. It is `1.0` for Claude Opus 4.6, Sonnet 4.6,
+and the Claude 4.5 models. When the field is absent or `null` and the model
+supports temperature, Core sends the requested value. Ollama's
+`model_capabilities` entries always include the field as `null`.
 
 ## Rate-limit metadata
 

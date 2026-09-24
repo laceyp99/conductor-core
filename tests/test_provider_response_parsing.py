@@ -516,7 +516,7 @@ def test_claude_opus_5_uses_adaptive_thinking_and_effort(monkeypatch):
 
     assert captured["thinking"] == {"type": "adaptive"}
     assert captured["output_config"] == {"effort": "max"}
-    assert captured["temperature"] == 1.0
+    assert "temperature" not in captured
     assert captured["tool_choice"] == {"type": "auto"}
 
 

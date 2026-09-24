@@ -209,6 +209,7 @@ def loop_gen(
     model_info = utils.get_model_info()
     model_config = model_info["models"]["Anthropic"][model]
     always_on_adaptive_thinking = model_config.get("always_on_adaptive_thinking", False)
+    temperature_supported = model_config.get("temperature_supported", True)
     effort_options = model_config.get("effort_options") or []
     if effort_options and not use_thinking:
         effort = effort_options[0]
@@ -221,7 +222,7 @@ def loop_gen(
         "tool_choice": {"type": "tool", "name": "build_MIDI_loop"},
         "stream": True,
     }
-    if not always_on_adaptive_thinking:
+    if temperature_supported:
         api_params["temperature"] = temp
 
     if effort_options:
@@ -229,7 +230,7 @@ def loop_gen(
         if not always_on_adaptive_thinking:
             api_params["thinking"] = {"type": "adaptive"}
         api_params["output_config"] = {"effort": effort}
-        if not always_on_adaptive_thinking:
+        if temperature_supported:
             api_params["temperature"] = 1.0
     elif use_thinking and model_config.get("extended_thinking"):
         api_params["tool_choice"] = {"type": "auto"}
@@ -315,12 +316,12 @@ def variations_gen(
         ],
         "tool_choice": {"type": "tool", "name": "build_MIDI_variations"},
         "stream": True,
-        "temperature": temp,
     }
+    temperature_supported = model_config.get("temperature_supported", True)
+    if temperature_supported:
+        api_params["temperature"] = temp
     effort_options = model_config.get("effort_options") or []
     always_on = model_config.get("always_on_adaptive_thinking", False)
-    if always_on:
-        api_params.pop("temperature")
     if effort_options:
         if not use_thinking:
             effort = effort_options[0]
@@ -328,6 +329,7 @@ def variations_gen(
         api_params["output_config"] = {"effort": effort}
         if not always_on:
             api_params["thinking"] = {"type": "adaptive"}
+        if temperature_supported:
             api_params["temperature"] = 1.0
     elif use_thinking and model_config.get("extended_thinking"):
         api_params["tool_choice"] = {"type": "auto"}

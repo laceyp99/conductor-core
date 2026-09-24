@@ -58,6 +58,9 @@ Anthropic models whose adapter forces a temperature while thinking is enabled
 should set `thinking_fixed_temperature` to that value (currently `1.0`); omit
 it otherwise. `tests/test_thinking_temperature_metadata.py` checks every model
 against the request its adapter builds.
+Set `temperature_supported` to `false` for models whose API rejects a
+caller-selected temperature (for example OpenAI reasoning models and Claude
+Opus 4.7 and later); adapters then omit temperature entirely.
 
 ## Provider Module Checks
 
