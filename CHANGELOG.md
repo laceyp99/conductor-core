@@ -8,6 +8,8 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.5.6] - 2026-09-23
+
 ### Added
 
 - Ollama status now includes a per-model `model_capabilities` mapping with
