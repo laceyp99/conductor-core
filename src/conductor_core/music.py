@@ -155,6 +155,16 @@ def _validate_model_info(model_info):
                 raise ValueError(
                     f"{model_label} always_on_adaptive_thinking must be a boolean"
                 )
+            fixed_temperature = model_config.get("thinking_fixed_temperature")
+            if fixed_temperature is not None and (
+                isinstance(fixed_temperature, bool)
+                or not isinstance(fixed_temperature, (int, float))
+                or fixed_temperature < 0
+            ):
+                raise ValueError(
+                    f"{model_label} thinking_fixed_temperature must be a "
+                    "non-negative number or null"
+                )
             if not isinstance(rate_limits, dict):
                 raise ValueError(f"{model_label} must define rate_limits")
             if set(rate_limits) != expected_rate_limit_fields:

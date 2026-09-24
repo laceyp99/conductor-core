@@ -48,6 +48,7 @@ def test_ollama_status_reports_thinking_capability(monkeypatch, capabilities, ex
             "extended_thinking": expected,
             "effort_options": [],
             "temperature_supported": True,
+            "thinking_fixed_temperature": None,
         }
     }
 
@@ -76,6 +77,7 @@ def test_ollama_status_reports_show_failure_as_temperature_only(monkeypatch):
         "extended_thinking": False,
         "effort_options": [],
         "temperature_supported": True,
+        "thinking_fixed_temperature": None,
     }
 
 
@@ -105,6 +107,7 @@ def test_ollama_status_discovers_effort_levels_from_raw_show(monkeypatch):
         "extended_thinking": True,
         "effort_options": ["low", "medium", "high"],
         "temperature_supported": True,
+        "thinking_fixed_temperature": None,
     }
     assert raw_calls == [(("POST", "/api/show"), {"json": {"model": "gpt-oss"}})]
 

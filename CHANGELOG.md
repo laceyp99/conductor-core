@@ -8,6 +8,15 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+### Added
+
+- Model metadata now includes `thinking_fixed_temperature`, the temperature
+  Core sends when extended thinking is enabled regardless of the requested
+  value. It is `1.0` for Anthropic budget-thinking models and effort models
+  without always-on adaptive thinking, absent for OpenAI and Google models, and
+  `null` in each Ollama `model_capabilities` entry. Requests sent to providers
+  are unchanged.
+
 ## [0.5.6] - 2026-09-23
 
 ### Added

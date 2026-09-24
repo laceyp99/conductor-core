@@ -66,6 +66,7 @@ def _get_model_capabilities(client, model_name, host):
         "extended_thinking": supports_thinking,
         "effort_options": effort_options,
         "temperature_supported": True,
+        "thinking_fixed_temperature": None,
     }
 
 

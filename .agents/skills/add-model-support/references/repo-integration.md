@@ -54,6 +54,10 @@ Example shape:
 Keep field names and nesting consistent with nearby entries. If a provider does not publish one of these values, do not fabricate it.
 Anthropic models that always apply adaptive thinking should set
 `always_on_adaptive_thinking` to `true`; omit the field otherwise.
+Anthropic models whose adapter forces a temperature while thinking is enabled
+should set `thinking_fixed_temperature` to that value (currently `1.0`); omit
+it otherwise. `tests/test_thinking_temperature_metadata.py` checks every model
+against the request its adapter builds.
 
 ## Provider Module Checks
 

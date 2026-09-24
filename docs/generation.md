@@ -63,6 +63,15 @@ using thinking budgets retain their provider-specific limits. Because `effort`
 defaults to `None`, callers enabling thinking for a model with discrete options
 must select a supported value.
 
+Some providers require a specific temperature while thinking is enabled. A
+model's `thinking_fixed_temperature` reports the temperature Core sends in that
+case, regardless of the requested one. It is `1.0` for Anthropic models that
+use thinking budgets or adaptive thinking without always-on thinking. When the
+field is absent or `null`, Core never substitutes its own temperature: it sends
+the requested value, or omits temperature entirely where the model does not
+accept one while reasoning. Ollama's `model_capabilities` entries always include
+the field as `null`.
+
 ## Rate-limit metadata
 
 Packaged cloud models expose `RPM`, `TPM`, and `RPD`. `RPM` is a conservative
