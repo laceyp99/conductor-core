@@ -42,6 +42,10 @@ class ProviderRequestError(ProviderError):
     """A provider rejected or failed while processing a request."""
 
 
+class ProviderContextLengthError(ProviderRequestError):
+    """The model ran out of context while generating a response."""
+
+
 def error_for_status(
     provider: str,
     message: str,
