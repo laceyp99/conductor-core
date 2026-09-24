@@ -58,6 +58,12 @@ if the request contains a higher valid `effort`. The lowest option may be
 `none`, `minimal`, or `low`; `False` therefore means the lowest available
 setting, not necessarily no provider reasoning.
 
+Anthropic models that support adaptive thinking are the exception: with
+`use_thinking=False`, Core sends `thinking: {"type": "disabled"}` and no effort,
+so the model does not think and uses a caller-selected temperature where the
+model accepts one. Claude Opus 5.5 and Fable models always think; for them,
+`False` sends the lowest effort.
+
 With `use_thinking=True`, Core validates and sends the requested effort. Models
 using thinking budgets retain their provider-specific limits. Because `effort`
 defaults to `None`, callers enabling thinking for a model with discrete options

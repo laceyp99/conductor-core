@@ -11,6 +11,10 @@ from conductor_core.providers import ollama as ollama_api
 from conductor_core.providers import openai as openai_api
 
 
+class _RequestCaptured(Exception):
+    """Stop an adapter after it has built its provider request."""
+
+
 def _loop_payload():
     bar = {
         "num": 1,
@@ -547,17 +551,9 @@ def test_claude_uses_metadata_driven_always_on_thinking(monkeypatch, model):
 
 
 @pytest.mark.parametrize(
-    ("model", "expects_thinking"),
-    [
-        ("claude-opus-5", True),
-        ("claude-opus-5-5", False),
-        ("claude-fable-5", False),
-        ("claude-fable-5-1", False),
-    ],
+    "model", ["claude-opus-5-5", "claude-fable-5", "claude-fable-5-1"]
 )
-def test_claude_disabled_thinking_uses_lowest_effort(
-    monkeypatch, model, expects_thinking
-):
+def test_claude_always_on_thinking_off_uses_lowest_effort(monkeypatch, model):
     captured = {}
     payload = json.dumps(_loop_payload())
 
@@ -574,7 +570,48 @@ def test_claude_disabled_thinking_uses_lowest_effort(
     claude_api.loop_gen("write a loop", model, use_thinking=False, effort="max")
 
     assert captured["output_config"] == {"effort": "low"}
-    assert ("thinking" in captured) is expects_thinking
+    assert "thinking" not in captured
+    assert captured["tool_choice"] == {"type": "auto"}
+
+
+@pytest.mark.parametrize("generation", ["loop", "variations"])
+@pytest.mark.parametrize(
+    ("model", "expected_temperature"),
+    [
+        ("claude-opus-5", None),
+        ("claude-sonnet-5", None),
+        ("claude-opus-4-8", None),
+        ("claude-opus-4-7", None),
+        ("claude-opus-4-6", 0.4),
+        ("claude-sonnet-4-6", 0.4),
+    ],
+)
+def test_claude_thinking_off_disables_adaptive_thinking(
+    monkeypatch, model, expected_temperature, generation
+):
+    calls = []
+
+    def fake_create(**kwargs):
+        calls.append(kwargs)
+        raise _RequestCaptured
+
+    fake_client = SimpleNamespace(messages=SimpleNamespace(create=fake_create))
+    monkeypatch.setattr(
+        claude_api, "initialize_anthropic_client", lambda api_key: fake_client
+    )
+    function = (
+        claude_api.loop_gen if generation == "loop" else claude_api.variations_gen
+    )
+
+    with pytest.raises(_RequestCaptured):
+        function("prompt", model, temp=0.4, use_thinking=False, effort="max")
+
+    request = calls[0]
+    tool_name = request["tools"][0]["name"]
+    assert request["thinking"] == {"type": "disabled"}
+    assert "output_config" not in request
+    assert request["tool_choice"] == {"type": "tool", "name": tool_name}
+    assert request.get("temperature") == expected_temperature
 
 
 @pytest.mark.parametrize("model", ["gpt-5.6-sol", "gpt-6-sol", "gpt-6-luna"])

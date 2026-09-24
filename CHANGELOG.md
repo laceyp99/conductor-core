@@ -22,6 +22,12 @@ while its public API is still in initial development.
   models now report `temperature_supported: false`, and Core no longer sends
   `temperature` to them. Claude Opus 4.7, Opus 4.8, Opus 5, and Sonnet 5
   previously received a fixed `temperature` of `1.0`, their API default.
+- Anthropic adaptive-thinking models (Claude Opus 4.6 through Opus 5, and
+  Sonnet 4.6 and 5) no longer think when `use_thinking=False`. Core now sends
+  `thinking: {"type": "disabled"}` without an effort level, forces the loop
+  tool, and uses the requested temperature where the model accepts one.
+  Previously these requests still enabled adaptive thinking at the lowest
+  effort and fixed temperature at `1.0`.
 
 ## [0.5.6] - 2026-09-23
 
