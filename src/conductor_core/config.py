@@ -104,6 +104,7 @@ class GenerationRequest:
     prompt_override: str | None = None
     render_audio: bool = False
     soundfont_path: str | os.PathLike | None = None
+    ollama_num_ctx: int | None = None
 
     def __post_init__(self) -> None:
         _validate_generation_request_fields(self)
@@ -124,6 +125,7 @@ class VariationGenerationRequest:
     prompt_override: str | None = None
     render_audio: bool = False
     soundfont_path: str | os.PathLike | None = None
+    ollama_num_ctx: int | None = None
 
     def __post_init__(self) -> None:
         _validate_generation_request_fields(self)
@@ -182,6 +184,20 @@ def _validate_generation_request_fields(
 
     if request.effort is not None and not isinstance(request.effort, str):
         raise TypeError(f"Invalid effort {request.effort!r}. Expected a string or None")
+
+    if request.ollama_num_ctx is not None:
+        if isinstance(request.ollama_num_ctx, bool) or not isinstance(
+            request.ollama_num_ctx, int
+        ):
+            raise TypeError(
+                f"Invalid ollama_num_ctx {request.ollama_num_ctx!r}. "
+                "Expected an integer or None"
+            )
+        if request.ollama_num_ctx <= 0:
+            raise ValueError(
+                f"Invalid ollama_num_ctx {request.ollama_num_ctx!r}. "
+                "Expected a positive integer or None"
+            )
 
     if request.prompt_override is not None:
         if not isinstance(request.prompt_override, str):

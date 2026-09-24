@@ -165,7 +165,15 @@ def _thinking_option(model_capabilities, use_thinking, effort):
     return effort if effort_options else bool(use_thinking)
 
 
-def _raise_if_out_of_context(completion, model):
+def _chat_options(temp, num_ctx):
+    """Build Ollama model options, leaving context size to Ollama by default."""
+    options = {"temperature": temp}
+    if num_ctx is not None:
+        options["num_ctx"] = num_ctx
+    return options
+
+
+def _raise_if_out_of_context(completion, model, num_ctx):
     """Raise a clear error when Ollama stopped because the context was full."""
     if getattr(completion, "done_reason", None) != "length":
         return
@@ -174,6 +182,7 @@ def _raise_if_out_of_context(completion, model):
         model,
         prompt_tokens=getattr(completion, "prompt_eval_count", None),
         output_tokens=getattr(completion, "eval_count", None),
+        context_length=num_ctx,
         operation="response",
     )
 
@@ -188,6 +197,7 @@ def loop_gen(
     use_thinking: bool = False,
     effort: str | None = "low",
     model_capabilities: dict | None = None,
+    num_ctx: int | None = None,
 ):
     """Generate a MIDI loop using the specified Ollama model and prompt."""
     client = initialize_ollama_client(
@@ -208,7 +218,7 @@ def loop_gen(
         "model": model,
         "messages": messages,
         "format": objects.Loop.model_json_schema(),
-        "options": {"temperature": temp},
+        "options": _chat_options(temp, num_ctx),
     }
     if think is not None:
         chat_options["think"] = think
@@ -223,7 +233,7 @@ def loop_gen(
     ) as exc:
         logger.error("Ollama request failed: %s", exc)
         _raise_ollama_error(exc, "request")
-    _raise_if_out_of_context(completion, model)
+    _raise_if_out_of_context(completion, model, num_ctx)
     message = getattr(completion, "message", None)
     content = getattr(message, "content", None)
     if not content:
@@ -247,6 +257,7 @@ def variations_gen(
     use_thinking: bool = False,
     effort: str | None = "low",
     model_capabilities: dict | None = None,
+    num_ctx: int | None = None,
 ):
     """Generate an ordered collection of loops in one Ollama response."""
     client = initialize_ollama_client(
@@ -267,7 +278,7 @@ def variations_gen(
         "model": model,
         "messages": messages,
         "format": VariationCollection.model_json_schema(),
-        "options": {"temperature": temp},
+        "options": _chat_options(temp, num_ctx),
     }
     if think is not None:
         chat_options["think"] = think
@@ -281,7 +292,7 @@ def variations_gen(
         ollama.ResponseError,
     ) as exc:
         _raise_ollama_error(exc, "request")
-    _raise_if_out_of_context(completion, model)
+    _raise_if_out_of_context(completion, model, num_ctx)
     message = getattr(completion, "message", None)
     content = getattr(message, "content", None)
     if not content:

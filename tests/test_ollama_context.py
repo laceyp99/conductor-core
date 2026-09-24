@@ -1,11 +1,14 @@
 """Offline Ollama context-window handling tests."""
 
 import json
+import logging
 from types import SimpleNamespace
 
 import pytest
 
 import conductor_core
+from conductor_core import routing
+from conductor_core.config import GenerationRequest, VariationGenerationRequest
 from conductor_core.errors import ProviderContextLengthError, ProviderRequestError
 from conductor_core.providers import ollama
 
@@ -101,3 +104,102 @@ def test_ollama_stop_response_is_unchanged(monkeypatch, generation):
 def test_context_error_is_public():
     assert conductor_core.ProviderContextLengthError is ProviderContextLengthError
     assert "ProviderContextLengthError" in conductor_core.__all__
+
+
+@pytest.mark.parametrize("generation", ["loop", "variations"])
+def test_ollama_default_request_leaves_num_ctx_to_ollama(monkeypatch, generation):
+    completion = SimpleNamespace(
+        done_reason="stop",
+        message=SimpleNamespace(content=_content(generation), thinking=None),
+    )
+
+    _, calls = _generate(monkeypatch, generation, completion)
+
+    assert calls[0]["options"] == {"temperature": 0.4}
+
+
+@pytest.mark.parametrize("generation", ["generate_midi", "generate_variations"])
+def test_routing_forwards_ollama_num_ctx(monkeypatch, generation):
+    calls = []
+    completion = SimpleNamespace(
+        done_reason="stop",
+        message=SimpleNamespace(
+            content=_content("loop" if generation == "generate_midi" else "var"),
+            thinking=None,
+        ),
+    )
+    client = SimpleNamespace(
+        list=lambda: SimpleNamespace(models=[SimpleNamespace(model="local-model")]),
+        show=lambda name: SimpleNamespace(capabilities=["completion"]),
+        chat=lambda **kwargs: calls.append(kwargs) or completion,
+    )
+    monkeypatch.setattr(ollama, "initialize_ollama_client", lambda **kwargs: client)
+
+    if generation == "generate_midi":
+        routing.generate_midi("local-model", "prompt", ollama_num_ctx=16384)
+    else:
+        routing.generate_variations("local-model", "prompt", 1, ollama_num_ctx=16384)
+
+    assert calls[0]["options"]["num_ctx"] == 16384
+
+
+def test_context_error_reports_requested_num_ctx(monkeypatch):
+    calls = []
+    completion = SimpleNamespace(
+        done_reason="length",
+        message=SimpleNamespace(content="", thinking=None),
+    )
+    client = SimpleNamespace(chat=lambda **kwargs: calls.append(kwargs) or completion)
+    monkeypatch.setattr(ollama, "initialize_ollama_client", lambda **kwargs: client)
+
+    with pytest.raises(ProviderContextLengthError) as exc_info:
+        ollama.loop_gen(
+            "prompt", "local-model", model_capabilities=CAPABILITIES, num_ctx=8192
+        )
+
+    assert exc_info.value.context_length == 8192
+    assert "8,192-token context window" in str(exc_info.value)
+
+
+def test_routing_ignores_ollama_num_ctx_for_cloud_models(monkeypatch, caplog):
+    calls = []
+    monkeypatch.setattr(
+        routing.openai_api,
+        "loop_gen",
+        lambda **kwargs: calls.append(kwargs) or (None, [], 0),
+    )
+
+    with caplog.at_level(logging.WARNING, logger="conductor_core.routing"):
+        routing.generate_midi("gpt-4.1", "prompt", ollama_num_ctx=16384)
+
+    assert "num_ctx" not in calls[0]
+    assert "only applies to Ollama models" in caplog.text
+
+
+@pytest.mark.parametrize(
+    "request_type", [GenerationRequest, VariationGenerationRequest]
+)
+@pytest.mark.parametrize(
+    ("value", "error"),
+    [(0, ValueError), (-1, ValueError), (True, TypeError), (4096.0, TypeError)],
+)
+def test_requests_reject_invalid_ollama_num_ctx(request_type, value, error):
+    with pytest.raises(error, match="ollama_num_ctx"):
+        request_type(
+            key="C",
+            scale="major",
+            description="loop",
+            model="local-model",
+            ollama_num_ctx=value,
+        )
+
+
+@pytest.mark.parametrize(
+    "request_type", [GenerationRequest, VariationGenerationRequest]
+)
+def test_requests_accept_ollama_num_ctx(request_type):
+    request = request_type(
+        key="C", scale="major", description="loop", model="m", ollama_num_ctx=16384
+    )
+
+    assert request.ollama_num_ctx == 16384

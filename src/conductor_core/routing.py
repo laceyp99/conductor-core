@@ -56,6 +56,18 @@ def _resolve_reasoning_effort(model_choice, model_config, use_thinking, effort):
     return effort
 
 
+def _warn_ignored_num_ctx(model_choice, model_info, ollama_num_ctx):
+    """Log when an Ollama-only context size is set for a cloud model."""
+    if ollama_num_ctx is None:
+        return
+    if any(model_choice in models for models in model_info["models"].values()):
+        logger.warning(
+            "ollama_num_ctx=%r only applies to Ollama models; ignoring it for %s.",
+            ollama_num_ctx,
+            model_choice,
+        )
+
+
 def generate_midi(
     model_choice,
     prompt,
@@ -65,6 +77,7 @@ def generate_midi(
     provider_credentials: ProviderCredentials | None = None,
     request_timeout: float | None = None,
     system_prompt: str | None = None,
+    ollama_num_ctx: int | None = None,
 ):
     """Generate loop data by routing a prompt to the selected provider.
 
@@ -74,6 +87,7 @@ def generate_midi(
     """
     credentials = provider_credentials or ProviderCredentials()
     model_info = get_model_info()
+    _warn_ignored_num_ctx(model_choice, model_info, ollama_num_ctx)
 
     if model_choice in model_info["models"]["OpenAI"]:
         effective_effort = _resolve_reasoning_effort(
@@ -173,6 +187,7 @@ def generate_midi(
                     if request_timeout is not None
                     else {}
                 ),
+                **({"num_ctx": ollama_num_ctx} if ollama_num_ctx is not None else {}),
             )
         elif not ollama_status["available"]:
             raise ValueError(
@@ -194,10 +209,12 @@ def generate_variations(
     provider_credentials: ProviderCredentials | None = None,
     request_timeout: float | None = None,
     system_prompt: str | None = None,
+    ollama_num_ctx: int | None = None,
 ):
     """Route one ordered variation collection request to a provider."""
     credentials = provider_credentials or ProviderCredentials()
     model_info = get_model_info()
+    _warn_ignored_num_ctx(model_choice, model_info, ollama_num_ctx)
     timeout = (
         {"request_timeout": request_timeout} if request_timeout is not None else {}
     )
@@ -269,6 +286,8 @@ def generate_variations(
             effort=effective_effort,
             model_capabilities=model_capabilities,
         )
+        if ollama_num_ctx is not None:
+            common["num_ctx"] = ollama_num_ctx
 
     collection, messages, cost, usage = adapter.variations_gen(**common)
     return VariationProviderResult(

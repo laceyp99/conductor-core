@@ -19,6 +19,10 @@ while its public API is still in initial development.
   raised when an Ollama response stops because it filled the context window
   (`done_reason="length"`), instead of a misleading empty-content or JSON
   parsing error. It reports the model and token counts when known.
+- `GenerationRequest` and `VariationGenerationRequest` accept an optional
+  positive-integer `ollama_num_ctx`, sent to Ollama as `num_ctx`. When omitted,
+  Core sends no context size and Ollama's own default applies. Cloud models
+  ignore it with a warning.
 
 ### Changed
 
