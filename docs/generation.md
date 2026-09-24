@@ -109,6 +109,14 @@ key is missing or blank. Authentication failures raise
 `ProviderAuthenticationError`; other SDK failures use the public
 `ProviderError` hierarchy and identify the provider and operation.
 
+When an Ollama response stops because the prompt and response filled the
+model's context window, Core raises `ProviderContextLengthError`, a
+`ProviderRequestError` subclass, instead of a parsing error. Its `model`,
+`prompt_tokens`, `output_tokens`, and `context_length` attributes are set when
+known; the message never includes partial output or thinking text. Core does
+not retry. Disable thinking, choose a model or server with a larger context, or
+request a larger context size.
+
 Provider, parsing, and MIDI conversion errors are raised to the caller. Core
 removes an unfinished generation workspace when an error occurs after allocation.
 Callers should catch exceptions at their application boundary and decide how to

@@ -15,6 +15,10 @@ while its public API is still in initial development.
   value. It is `1.0` for Claude Opus 4.6, Sonnet 4.6, and the Claude 4.5
   models, absent for OpenAI and Google models, and `null` in each Ollama
   `model_capabilities` entry.
+- `ProviderContextLengthError`, a public `ProviderRequestError` subclass, is
+  raised when an Ollama response stops because it filled the context window
+  (`done_reason="length"`), instead of a misleading empty-content or JSON
+  parsing error. It reports the model and token counts when known.
 
 ### Changed
 

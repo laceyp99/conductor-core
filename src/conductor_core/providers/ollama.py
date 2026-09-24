@@ -7,6 +7,7 @@ from conductor_core import models as objects
 from conductor_core import music as utils
 from conductor_core.errors import (
     ProviderConnectionError,
+    ProviderContextLengthError,
     ProviderRequestError,
     ProviderTimeoutError,
     error_for_status,
@@ -164,6 +165,19 @@ def _thinking_option(model_capabilities, use_thinking, effort):
     return effort if effort_options else bool(use_thinking)
 
 
+def _raise_if_out_of_context(completion, model):
+    """Raise a clear error when Ollama stopped because the context was full."""
+    if getattr(completion, "done_reason", None) != "length":
+        return
+    raise ProviderContextLengthError(
+        "Ollama",
+        model,
+        prompt_tokens=getattr(completion, "prompt_eval_count", None),
+        output_tokens=getattr(completion, "eval_count", None),
+        operation="response",
+    )
+
+
 def loop_gen(
     prompt,
     model,
@@ -209,6 +223,7 @@ def loop_gen(
     ) as exc:
         logger.error("Ollama request failed: %s", exc)
         _raise_ollama_error(exc, "request")
+    _raise_if_out_of_context(completion, model)
     message = getattr(completion, "message", None)
     content = getattr(message, "content", None)
     if not content:
@@ -266,6 +281,7 @@ def variations_gen(
         ollama.ResponseError,
     ) as exc:
         _raise_ollama_error(exc, "request")
+    _raise_if_out_of_context(completion, model)
     message = getattr(completion, "message", None)
     content = getattr(message, "content", None)
     if not content:
