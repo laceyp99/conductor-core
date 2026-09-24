@@ -100,6 +100,8 @@ class GenerationRequest:
     temperature: float = 0.0
     use_thinking: bool = False
     effort: str | None = None
+    ollama_num_ctx: int | None = None
+    ollama_num_ctx: int | None = None
     prompt_override: str | None = None
     render_audio: bool = False
     soundfont_path: str | os.PathLike | None = None
@@ -120,6 +122,8 @@ class VariationGenerationRequest:
     temperature: float = 0.0
     use_thinking: bool = False
     effort: str | None = None
+    ollama_num_ctx: int | None = None
+    ollama_num_ctx: int | None = None
     prompt_override: str | None = None
     render_audio: bool = False
     soundfont_path: str | os.PathLike | None = None
@@ -179,6 +183,18 @@ def _validate_generation_request_fields(
         if type(value) is not bool:
             raise TypeError(f"Invalid {field_name} {value!r}. Expected a boolean")
 
+
+    if getattr(request, "ollama_num_ctx", None) is not None:
+        if type(request.ollama_num_ctx) is bool or not isinstance(request.ollama_num_ctx, int):
+            raise TypeError(
+                f"Invalid ollama_num_ctx {request.ollama_num_ctx!r}. "
+                "Expected an integer or None"
+            )
+        if request.ollama_num_ctx <= 0:
+            raise ValueError(
+                f"Invalid ollama_num_ctx {request.ollama_num_ctx!r}. "
+                "Expected a positive integer or None"
+            )
     if request.effort is not None and not isinstance(request.effort, str):
         raise TypeError(f"Invalid effort {request.effort!r}. Expected a string or None")
 
