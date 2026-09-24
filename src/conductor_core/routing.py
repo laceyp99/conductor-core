@@ -152,14 +152,22 @@ def generate_midi(
         )
 
         if model_choice in ollama_status["models"]:
-            _resolve_reasoning_effort(model_choice, {}, use_thinking, effort)
+            model_capabilities = ollama_status.get("model_capabilities", {}).get(
+                model_choice, {}
+            )
+            effective_effort = _resolve_reasoning_effort(
+                model_choice, model_capabilities, use_thinking, effort
+            )
             provider = "Ollama"
             loop, messages, loop_cost = ollama_api.loop_gen(
-                prompt,
-                model_choice,
+                prompt=prompt,
+                model=model_choice,
                 temp=temp,
                 host_address=credentials.ollama_host,
                 system_prompt=system_prompt,
+                use_thinking=use_thinking,
+                effort=effective_effort,
+                model_capabilities=model_capabilities,
                 **(
                     {"request_timeout": request_timeout}
                     if request_timeout is not None
@@ -249,10 +257,18 @@ def generate_variations(
                     "Invalid Model Selected. If you intended to use Ollama, it is currently unavailable."
                 )
             raise ValueError("Invalid Model Selected")
-        _resolve_reasoning_effort(model_choice, {}, use_thinking, effort)
+        model_capabilities = status.get("model_capabilities", {}).get(model_choice, {})
+        effective_effort = _resolve_reasoning_effort(
+            model_choice, model_capabilities, use_thinking, effort
+        )
         provider = "Ollama"
         adapter = ollama_api
         common["host_address"] = credentials.ollama_host
+        common.update(
+            use_thinking=use_thinking,
+            effort=effective_effort,
+            model_capabilities=model_capabilities,
+        )
 
     collection, messages, cost, usage = adapter.variations_gen(**common)
     return VariationProviderResult(

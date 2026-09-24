@@ -165,7 +165,16 @@ def test_generate_midi_routes_to_ollama_and_forwards_temperature(monkeypatch):
         },
     )
 
-    def fake_loop_gen(prompt, model, temp=0.0, host_address=None, system_prompt=None):
+    def fake_loop_gen(
+        prompt,
+        model,
+        temp=0.0,
+        host_address=None,
+        system_prompt=None,
+        use_thinking=False,
+        effort="low",
+        model_capabilities=None,
+    ):
         captured.update(
             {
                 "prompt": prompt,
@@ -173,6 +182,9 @@ def test_generate_midi_routes_to_ollama_and_forwards_temperature(monkeypatch):
                 "temp": temp,
                 "host_address": host_address,
                 "system_prompt": system_prompt,
+                "use_thinking": use_thinking,
+                "effort": effort,
+                "model_capabilities": model_capabilities,
             }
         )
         return "loop", ["message"], 0
@@ -194,6 +206,9 @@ def test_generate_midi_routes_to_ollama_and_forwards_temperature(monkeypatch):
         "temp": 0.7,
         "host_address": "http://ollama.test",
         "system_prompt": "system",
+        "use_thinking": False,
+        "effort": "low",
+        "model_capabilities": {},
     }
 
 

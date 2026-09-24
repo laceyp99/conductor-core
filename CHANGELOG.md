@@ -8,6 +8,18 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.5.6] - 2026-09-23
+
+### Added
+
+- Ollama status now includes a per-model `model_capabilities` mapping with
+  thinking, effort levels reported by Ollama, and temperature support, while
+  retaining the existing model-name list. Ollama loop and variation generation
+  accept `use_thinking` and `effort` parameters and pass supported thinking
+  settings to Ollama.
+
+## [0.5.5] - 2026-09-22
+
 ### Added
 
 - GPT-6 Sol and Luna model support with six reasoning effort levels, 128K
@@ -17,15 +29,25 @@ while its public API is still in initial development.
   levels, 128K output tokens, and published pricing and rate limits. The Claude
   registry now starts with Opus 5.5, Fable 5.1, Fable 5, Opus 5, and Sonnet 5.
 
-- Synchronous `generate_variations()` support for 2-8 ordered loops in one
-  structured OpenAI, Anthropic, Google, or Ollama request, with exact-count
-  results, correlated progress, batch-level usage and cost, and ordinary MIDI
-  and optional audio artifacts.
+## [0.5.3] - 2026-09-20
+
+### Added
+
+- `LoopGenerationEngine.generate_variations()` and
+  `VariationGenerationRequest` generate 2–8 ordered loops in one structured
+  OpenAI, Anthropic, Google, or Ollama request, with exact-count results,
+  correlated progress, batch-level usage and cost, and ordinary MIDI and
+  optional audio artifacts.
 - Versioned variation-history manifests preserve ordered generation references,
   shared provider messages, and batch metadata, with explicit list, get, delete,
   and clear APIs and missing-generation reporting.
 - An editable `scripts/generate_variations.py` example supports manual provider,
   MIDI, audio, progress, and artifact testing.
+
+## [0.5.2] - 2026-09-15
+
+### Added
+
 - Public variation results, batch metadata, structured diagnostics, strict
   2–8 count validation, and optional progress correlation fields. These contracts
   prepare for batch generation without changing existing single-loop generation.
