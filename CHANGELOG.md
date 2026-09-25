@@ -8,6 +8,8 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-24
+
 ### Added
 
 - Model metadata now includes `thinking_fixed_temperature`, the temperature
@@ -431,7 +433,8 @@ other Conductor repositories could build on a shared engine.
 - Deterministic tests and package-boundary checks suitable for reuse outside the
   original LoopGPT application.
 
-[Unreleased]: https://github.com/laceyp99/conductor-core/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/laceyp99/conductor-core/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/laceyp99/conductor-core/compare/v0.5.6...v0.6.0
 [0.5.1]: https://github.com/laceyp99/conductor-core/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/laceyp99/conductor-core/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/laceyp99/conductor-core/compare/v0.3.0...v0.4.0
