@@ -821,7 +821,7 @@ def test_ollama_loop_gen_accepts_missing_thinking(monkeypatch):
     midi_loop, messages, cost = ollama_api.loop_gen("write a loop", "llama3")
 
     assert isinstance(midi_loop, objects.Loop)
-    assert messages[-1]["content"] == str(midi_loop)
+    assert objects.Loop.model_validate_json(messages[-1]["content"]) == midi_loop
     assert cost == 0
 
 
@@ -848,7 +848,7 @@ def test_openai_loop_gen_does_not_write_message_log(monkeypatch):
     midi_loop, messages, cost = openai_api.loop_gen("write a loop", "gpt-4o-mini")
 
     assert isinstance(midi_loop, objects.Loop)
-    assert messages[-1]["content"] == str(midi_loop)
+    assert objects.Loop.model_validate_json(messages[-1]["content"]) == midi_loop
     assert cost == 0
 
 

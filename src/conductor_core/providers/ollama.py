@@ -322,7 +322,7 @@ def loop_gen(
     thinking = getattr(message, "thinking", None)
     if thinking:
         messages.append({"role": "assistant", "content": thinking})
-    messages.append({"role": "assistant", "content": str(midi_loop)})
+    messages.append({"role": "assistant", "content": midi_loop.model_dump_json()})
     return midi_loop, messages, 0
 
 

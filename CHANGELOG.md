@@ -49,6 +49,12 @@ while its public API is still in initial development.
   `providers.ollama.get_model_status()` performs that single-model lookup, and
   `get_model_list()` no longer inspects any model.
 
+### Fixed
+
+- Single-loop OpenAI and Ollama generations now save the generated loop to
+  `messages.json` as JSON, like the other providers, instead of Python's text
+  representation. Existing history files are unchanged.
+
 ## [0.5.6] - 2026-09-23
 
 ### Added
