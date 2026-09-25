@@ -26,7 +26,11 @@ logger = logging.getLogger(__name__)
 
 
 def _get_thinking_metadata(client, model_name, model_info):
-    """Read Ollama's per-model think values when the SDK preserves them."""
+    """Read Ollama's per-model think values when the SDK preserves them.
+
+    Returns the supported effort levels and whether ``think=False`` is
+    accepted, or ``None`` when Ollama did not report its think values.
+    """
     thinking = getattr(model_info, "thinking", None)
 
     # ollama-python currently parses /api/show into ShowResponse, which drops
@@ -43,31 +47,47 @@ def _get_thinking_metadata(client, model_name, model_info):
                 logger.debug("Could not read Ollama think values for %s", model_name)
 
     if not isinstance(thinking, dict):
-        return []
+        return [], None
     values = thinking.get("values") or []
     # The API exposes explicit accepted values. Only advertise the supported
     # effort vocabulary Core can route; never infer it from a model name.
     supported = {value for value in values if isinstance(value, str)}
-    return [level for level in ("low", "medium", "high") if level in supported]
+    effort_options = [
+        level for level in ("low", "medium", "high") if level in supported
+    ]
+    return effort_options, any(value is False for value in values)
 
 
 def _get_model_capabilities(client, model_name, host):
     effort_options = []
+    accepts_think_false = None
     try:
         model_info = client.show(model_name)
         capabilities = getattr(model_info, "capabilities", None) or []
-        effort_options = _get_thinking_metadata(client, model_name, model_info)
+        effort_options, accepts_think_false = _get_thinking_metadata(
+            client, model_name, model_info
+        )
         supports_thinking = "thinking" in capabilities or bool(effort_options)
     except Exception as exc:
         logger.warning(
             "Could not inspect Ollama model %s at %s: %s", model_name, host, exc
         )
         supports_thinking = False
+    if not supports_thinking:
+        thinking_off = None
+    elif accepts_think_false is False:
+        # Ollama reports only effort levels (for example gpt-oss).
+        thinking_off = "lowest_effort"
+    else:
+        # Reported values include false, or none were reported and the model
+        # takes a boolean think value.
+        thinking_off = "disabled"
     return {
         "extended_thinking": supports_thinking,
         "effort_options": effort_options,
         "temperature_supported": True,
         "thinking_fixed_temperature": None,
+        "thinking_off": thinking_off,
     }
 
 
@@ -162,7 +182,16 @@ def _thinking_option(model_capabilities, use_thinking, effort):
     if not model_capabilities or not model_capabilities.get("extended_thinking"):
         return None
     effort_options = model_capabilities.get("effort_options") or []
-    return effort if effort_options else bool(use_thinking)
+    if use_thinking:
+        return effort if effort_options else True
+    thinking_off = model_capabilities.get(
+        "thinking_off", "lowest_effort" if effort_options else "disabled"
+    )
+    if thinking_off == "disabled":
+        return False
+    # Reasoning cannot be turned off: send the lowest level, or leave the
+    # model's default when it has no levels.
+    return effort if effort_options else None
 
 
 def _chat_options(temp, num_ctx):

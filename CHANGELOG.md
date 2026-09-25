@@ -27,7 +27,9 @@ while its public API is still in initial development.
 - Thinking-capable models report `thinking_off`: `"disabled"` when
   `use_thinking=False` sends the provider's official no-reasoning setting, or
   `"lowest_effort"` when reasoning cannot be turned off and Core sends the
-  lowest effort instead.
+  lowest effort instead. Ollama `model_capabilities` entries derive it from the
+  think values Ollama reports, and thinking-off requests send `think=false`
+  whenever the model accepts it.
 
 ### Changed
 

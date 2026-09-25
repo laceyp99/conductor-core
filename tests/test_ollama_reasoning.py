@@ -49,6 +49,7 @@ def test_ollama_status_reports_thinking_capability(monkeypatch, capabilities, ex
             "effort_options": [],
             "temperature_supported": True,
             "thinking_fixed_temperature": None,
+            "thinking_off": "disabled" if expected else None,
         }
     }
 
@@ -78,6 +79,7 @@ def test_ollama_status_reports_show_failure_as_temperature_only(monkeypatch):
         "effort_options": [],
         "temperature_supported": True,
         "thinking_fixed_temperature": None,
+        "thinking_off": None,
     }
 
 
@@ -108,6 +110,7 @@ def test_ollama_status_discovers_effort_levels_from_raw_show(monkeypatch):
         "effort_options": ["low", "medium", "high"],
         "temperature_supported": True,
         "thinking_fixed_temperature": None,
+        "thinking_off": "lowest_effort",
     }
     assert raw_calls == [(("POST", "/api/show"), {"json": {"model": "gpt-oss"}})]
 
@@ -278,3 +281,91 @@ def test_ollama_effort_levels_are_forwarded_by_both_adapters(monkeypatch):
     assert loop_calls[0]["think"] == "medium"
     assert variations_calls[0]["think"] == "high"
     assert len(VariationCollection.model_json_schema()) > 0
+
+
+class _RawThinking:
+    def __init__(self, values):
+        self.values = values
+
+    def json(self):
+        return {"thinking": {"values": self.values}}
+
+
+@pytest.mark.parametrize(
+    ("values", "capabilities", "expected"),
+    [
+        # Values reported by Ollama 0.34.4 for local models.
+        ([False, True], ["completion", "thinking"], ("disabled", [])),
+        (
+            ["low", "medium", "high"],
+            ["completion", "thinking"],
+            ("lowest_effort", None),
+        ),
+        ([False], ["completion"], (None, [])),
+        (None, ["completion", "thinking"], ("disabled", [])),
+        (
+            [False, True, "low", "high"],
+            ["completion", "thinking"],
+            ("disabled", ["low", "high"]),
+        ),
+    ],
+)
+def test_ollama_status_reports_thinking_off(
+    monkeypatch, values, capabilities, expected
+):
+    thinking_off, effort_options = expected
+    client = SimpleNamespace(
+        list=lambda: SimpleNamespace(models=[SimpleNamespace(model="local-model")]),
+        show=lambda name: SimpleNamespace(capabilities=capabilities),
+        _request_raw=lambda *args, **kwargs: (
+            _RawThinking(values) if values is not None else SimpleNamespace(json=dict)
+        ),
+    )
+    monkeypatch.setattr(ollama, "initialize_ollama_client", lambda **kwargs: client)
+
+    model_capabilities = ollama.get_ollama_status()["model_capabilities"]["local-model"]
+
+    assert model_capabilities["thinking_off"] == thinking_off
+    if effort_options is not None:
+        assert model_capabilities["effort_options"] == effort_options
+
+
+@pytest.mark.parametrize(
+    ("model_capabilities", "use_thinking", "effort", "expected"),
+    [
+        ({"extended_thinking": True, "thinking_off": "disabled"}, False, None, False),
+        ({"extended_thinking": True, "thinking_off": "disabled"}, True, None, True),
+        (
+            {
+                "extended_thinking": True,
+                "effort_options": ["low", "medium", "high"],
+                "thinking_off": "disabled",
+            },
+            False,
+            "low",
+            False,
+        ),
+        (
+            {
+                "extended_thinking": True,
+                "effort_options": ["low", "medium", "high"],
+                "thinking_off": "lowest_effort",
+            },
+            False,
+            "low",
+            "low",
+        ),
+        # Capabilities built before thinking_off existed keep the old behavior.
+        ({"extended_thinking": True, "effort_options": []}, False, None, False),
+        (
+            {"extended_thinking": True, "effort_options": ["low", "high"]},
+            False,
+            "low",
+            "low",
+        ),
+    ],
+)
+def test_ollama_thinking_off_selects_think_value(
+    model_capabilities, use_thinking, effort, expected
+):
+    assert ollama._thinking_option(model_capabilities, use_thinking, effort) == expected
