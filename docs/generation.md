@@ -84,6 +84,22 @@ and the Claude 4.5 models. When the field is absent or `null` and the model
 supports temperature, Core sends the requested value. Ollama's
 `model_capabilities` entries always include the field as `null`.
 
+### Ollama reasoning capabilities
+
+`get_ollama_status()["model_capabilities"]` reports only the reasoning
+controls Ollama confirms for each model. Offer controls from these fields:
+
+| Capabilities | Control to offer | What Core sends |
+| --- | --- | --- |
+| `thinking_off: "disabled"` | On/off toggle | `think=true` or `think=false` |
+| `thinking_off: "lowest_effort"` | Effort dropdown with no off option | The chosen level, or the lowest when thinking is off |
+| `extended_thinking: false` | None | No `think` value |
+
+A model is also reported as `extended_thinking: false` when Core cannot
+inspect it. Core then sends no `think` value, so the request cannot fail on
+reasoning settings: models that reason by default still reason, and models
+without reasoning are never asked to.
+
 ## Rate-limit metadata
 
 Packaged cloud models expose `RPM`, `TPM`, and `RPD`. `RPM` is a conservative
