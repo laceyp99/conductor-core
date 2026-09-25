@@ -56,6 +56,18 @@ def _resolve_reasoning_effort(model_choice, model_config, use_thinking, effort):
     return effort
 
 
+def _warn_ignored_num_ctx(model_choice, model_info, ollama_num_ctx):
+    """Log when an Ollama-only context size is set for a cloud model."""
+    if ollama_num_ctx is None:
+        return
+    if any(model_choice in models for models in model_info["models"].values()):
+        logger.warning(
+            "ollama_num_ctx=%r only applies to Ollama models; ignoring it for %s.",
+            ollama_num_ctx,
+            model_choice,
+        )
+
+
 def generate_midi(
     model_choice,
     prompt,
@@ -65,6 +77,7 @@ def generate_midi(
     provider_credentials: ProviderCredentials | None = None,
     request_timeout: float | None = None,
     system_prompt: str | None = None,
+    ollama_num_ctx: int | None = None,
 ):
     """Generate loop data by routing a prompt to the selected provider.
 
@@ -74,6 +87,7 @@ def generate_midi(
     """
     credentials = provider_credentials or ProviderCredentials()
     model_info = get_model_info()
+    _warn_ignored_num_ctx(model_choice, model_info, ollama_num_ctx)
 
     if model_choice in model_info["models"]["OpenAI"]:
         effective_effort = _resolve_reasoning_effort(
@@ -142,7 +156,8 @@ def generate_midi(
             ),
         )
     else:
-        ollama_status = ollama_api.get_ollama_status(
+        ollama_status = ollama_api.get_model_status(
+            model_choice,
             host_address=credentials.ollama_host,
             **(
                 {"request_timeout": request_timeout}
@@ -151,10 +166,8 @@ def generate_midi(
             ),
         )
 
-        if model_choice in ollama_status["models"]:
-            model_capabilities = ollama_status.get("model_capabilities", {}).get(
-                model_choice, {}
-            )
+        if ollama_status["installed"]:
+            model_capabilities = ollama_status["model_capabilities"]
             effective_effort = _resolve_reasoning_effort(
                 model_choice, model_capabilities, use_thinking, effort
             )
@@ -173,6 +186,7 @@ def generate_midi(
                     if request_timeout is not None
                     else {}
                 ),
+                **({"num_ctx": ollama_num_ctx} if ollama_num_ctx is not None else {}),
             )
         elif not ollama_status["available"]:
             raise ValueError(
@@ -194,10 +208,12 @@ def generate_variations(
     provider_credentials: ProviderCredentials | None = None,
     request_timeout: float | None = None,
     system_prompt: str | None = None,
+    ollama_num_ctx: int | None = None,
 ):
     """Route one ordered variation collection request to a provider."""
     credentials = provider_credentials or ProviderCredentials()
     model_info = get_model_info()
+    _warn_ignored_num_ctx(model_choice, model_info, ollama_num_ctx)
     timeout = (
         {"request_timeout": request_timeout} if request_timeout is not None else {}
     )
@@ -248,16 +264,16 @@ def generate_variations(
             api_key=credentials.anthropic_api_key,
         )
     else:
-        status = ollama_api.get_ollama_status(
-            host_address=credentials.ollama_host, **timeout
+        status = ollama_api.get_model_status(
+            model_choice, host_address=credentials.ollama_host, **timeout
         )
-        if model_choice not in status["models"]:
+        if not status["installed"]:
             if not status["available"]:
                 raise ValueError(
                     "Invalid Model Selected. If you intended to use Ollama, it is currently unavailable."
                 )
             raise ValueError("Invalid Model Selected")
-        model_capabilities = status.get("model_capabilities", {}).get(model_choice, {})
+        model_capabilities = status["model_capabilities"]
         effective_effort = _resolve_reasoning_effort(
             model_choice, model_capabilities, use_thinking, effort
         )
@@ -269,6 +285,8 @@ def generate_variations(
             effort=effective_effort,
             model_capabilities=model_capabilities,
         )
+        if ollama_num_ctx is not None:
+            common["num_ctx"] = ollama_num_ctx
 
     collection, messages, cost, usage = adapter.variations_gen(**common)
     return VariationProviderResult(

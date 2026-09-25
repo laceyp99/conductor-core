@@ -131,6 +131,10 @@ INTERVAL_NAMES = [
 
 _model_info_cache = None
 
+# What ``use_thinking=False`` sends: the provider's official "no reasoning"
+# setting, or the model's lowest effort when reasoning cannot be turned off.
+THINKING_OFF_MODES = ("disabled", "lowest_effort")
+
 VARIATION_PROMPT_VERSION = "variation_gen_v1"
 
 
@@ -154,6 +158,37 @@ def _validate_model_info(model_info):
             if not isinstance(always_on_adaptive_thinking, bool):
                 raise ValueError(
                     f"{model_label} always_on_adaptive_thinking must be a boolean"
+                )
+            fixed_temperature = model_config.get("thinking_fixed_temperature")
+            if fixed_temperature is not None and (
+                isinstance(fixed_temperature, bool)
+                or not isinstance(fixed_temperature, (int, float))
+                or fixed_temperature < 0
+            ):
+                raise ValueError(
+                    f"{model_label} thinking_fixed_temperature must be a "
+                    "non-negative number or null"
+                )
+            temperature_supported = model_config.get("temperature_supported", True)
+            if not isinstance(temperature_supported, bool):
+                raise ValueError(
+                    f"{model_label} temperature_supported must be a boolean"
+                )
+            if fixed_temperature is not None and not temperature_supported:
+                raise ValueError(
+                    f"{model_label} cannot set thinking_fixed_temperature when "
+                    "temperature_supported is false"
+                )
+            thinking_off = model_config.get("thinking_off")
+            if model_config.get("extended_thinking"):
+                if thinking_off not in THINKING_OFF_MODES:
+                    raise ValueError(
+                        f"{model_label} thinking_off must be one of: "
+                        f"{', '.join(THINKING_OFF_MODES)}"
+                    )
+            elif thinking_off is not None:
+                raise ValueError(
+                    f"{model_label} thinking_off requires extended_thinking"
                 )
             if not isinstance(rate_limits, dict):
                 raise ValueError(f"{model_label} must define rate_limits")

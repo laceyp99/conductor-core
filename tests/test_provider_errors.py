@@ -444,9 +444,10 @@ def test_routing_forwards_request_timeout(monkeypatch, provider, model, adapter_
     if provider == "Ollama":
         monkeypatch.setattr(
             routing.ollama_api,
-            "get_ollama_status",
-            lambda **kwargs: (
-                status_captured.update(kwargs) or {"available": True, "models": [model]}
+            "get_model_status",
+            lambda model_name, **kwargs: (
+                status_captured.update(kwargs)
+                or {"available": True, "installed": True, "model_capabilities": {}}
             ),
         )
 

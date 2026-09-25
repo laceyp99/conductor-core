@@ -151,7 +151,7 @@ def loop_gen(
         effort = effort_options[0]
     if model_config.get("extended_thinking") and effort:
         request_params["reasoning"] = {"effort": effort, "summary": "auto"}
-    else:
+    elif model_config.get("temperature_supported", True):
         request_params["temperature"] = temp
 
     try:
@@ -172,7 +172,9 @@ def loop_gen(
     reasoning = extract_reasoning(response)
     if reasoning:
         messages.append({"role": "assistant", "content": reasoning})
-    messages.append({"role": "assistant", "content": str(response.output_parsed)})
+    messages.append(
+        {"role": "assistant", "content": response.output_parsed.model_dump_json()}
+    )
 
     return response.output_parsed, messages, calc_price(model, response)
 
@@ -210,7 +212,7 @@ def variations_gen(
         effort = effort_options[0]
     if model_config.get("extended_thinking") and effort:
         request_params["reasoning"] = {"effort": effort, "summary": "auto"}
-    else:
+    elif model_config.get("temperature_supported", True):
         request_params["temperature"] = temp
     try:
         response = client.responses.parse(**request_params)

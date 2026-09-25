@@ -34,6 +34,7 @@ flowchart LR
 | `prompt_override` | Nonblank prompt for this request, or `None`. |
 | `render_audio` | Strict boolean requesting an MP3 preview after MIDI generation. |
 | `soundfont_path` | SoundFont name or path, or `None`. |
+| `ollama_num_ctx` | Positive integer context window size sent to Ollama as `num_ctx`, or `None` to keep Ollama's server or model default. Ignored, with a warning, for cloud models. Also available on `VariationGenerationRequest`. |
 
 ### Input Validation
 `GenerationRequest` validates provider-independent structure when constructed.
@@ -53,15 +54,48 @@ all models accept temperature or the same reasoning settings.
 For models with discrete `effort_options`, options are ordered from lowest to
 highest. 
 
-With `use_thinking=False`, Core sends the first supported option even
-if the request contains a higher valid `effort`. The lowest option may be
-`none`, `minimal`, or `low`; `False` therefore means the lowest available
-setting, not necessarily no provider reasoning.
+Every thinking-capable model reports `thinking_off`, which says what
+`use_thinking=False` does. Core ignores a higher `effort` in that case.
+
+| `thinking_off` | Meaning | Applies to |
+| --- | --- | --- |
+| `disabled` | Core sends the provider's official no-reasoning setting. | Models with a `none` effort, a zero thinking budget, or a switch that turns thinking off. |
+| `lowest_effort` | Reasoning cannot be turned off, so Core sends the lowest effort or thinking budget. | Models whose reasoning is always on. |
+
+Models without extended thinking omit the field. When Core turns thinking off,
+it sends no effort and uses the requested temperature where the model accepts
+one.
 
 With `use_thinking=True`, Core validates and sends the requested effort. Models
 using thinking budgets retain their provider-specific limits. Because `effort`
 defaults to `None`, callers enabling thinking for a model with discrete options
 must select a supported value.
+
+Models with `temperature_supported: false` reject a caller-selected
+temperature, so Core never sends one and ignores the requested `temperature`.
+Many reasoning models behave this way.
+
+Some models require a fixed temperature while thinking is enabled. A model's
+`thinking_fixed_temperature` reports the temperature Core sends in that case,
+regardless of the requested one. When the field is absent or `null` and the
+model supports temperature, Core sends the requested value. Ollama's
+`model_capabilities` entries always include the field as `null`.
+
+### Ollama reasoning capabilities
+
+`get_ollama_status()["model_capabilities"]` reports only the reasoning
+controls Ollama confirms for each model. Offer controls from these fields:
+
+| Capabilities | Control to offer | What Core sends |
+| --- | --- | --- |
+| `thinking_off: "disabled"` | On/off toggle | `think=true` or `think=false` |
+| `thinking_off: "lowest_effort"` | Effort dropdown with no off option | The chosen level, or the lowest when thinking is off |
+| `extended_thinking: false` | None | No `think` value |
+
+A model is also reported as `extended_thinking: false` when Core cannot
+inspect it. Core then sends no `think` value, so the request cannot fail on
+reasoning settings: models that reason by default still reason, and models
+without reasoning are never asked to.
 
 ## Rate-limit metadata
 
@@ -90,6 +124,16 @@ Hosted providers fail before constructing an SDK client when their required API
 key is missing or blank. Authentication failures raise
 `ProviderAuthenticationError`; other SDK failures use the public
 `ProviderError` hierarchy and identify the provider and operation.
+
+When an Ollama response stops because the prompt and response filled the
+model's context window, Core raises `ProviderContextLengthError`, a
+`ProviderRequestError` subclass, instead of a parsing error. Its `model`,
+`prompt_tokens`, `output_tokens`, and `context_length` attributes are set when
+known; the message never includes partial output or thinking text. Core does
+not retry. Lower or disable thinking, choose a model or server with a larger
+context, or set `ollama_num_ctx` on the request. Core never chooses a context
+size itself: larger windows use more memory and can prevent a model from
+loading.
 
 Provider, parsing, and MIDI conversion errors are raised to the caller. Core
 removes an unfinished generation workspace when an error occurs after allocation.

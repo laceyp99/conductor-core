@@ -54,6 +54,19 @@ Example shape:
 Keep field names and nesting consistent with nearby entries. If a provider does not publish one of these values, do not fabricate it.
 Anthropic models that always apply adaptive thinking should set
 `always_on_adaptive_thinking` to `true`; omit the field otherwise.
+Record reasoning and temperature behavior from the provider's documentation.
+Offline tests check these fields against the request each adapter builds
+(`tests/test_thinking_off_metadata.py` and
+`tests/test_thinking_temperature_metadata.py`):
+
+- `thinking_off` is required when `extended_thinking` is `true`. Use
+  `"disabled"` when the provider offers an official way to turn reasoning off,
+  such as a `none` effort, a zero thinking budget, or a disable switch. Use
+  `"lowest_effort"` when reasoning is always on.
+- Set `temperature_supported` to `false` when the API rejects a
+  caller-selected temperature; adapters then omit it. Omit the field otherwise.
+- Set `thinking_fixed_temperature` when the provider requires a fixed
+  temperature while thinking is enabled; omit it otherwise.
 
 ## Provider Module Checks
 

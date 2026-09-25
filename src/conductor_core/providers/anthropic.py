@@ -33,6 +33,44 @@ except ImportError:  # pragma: no cover - exercised only in minimal installs
 logger = logging.getLogger(__name__)
 
 ANTHROPIC_CACHE_CONTROL_MIN_CHARS = 4096
+# Anthropic requires this temperature whenever thinking is enabled.
+ANTHROPIC_THINKING_TEMPERATURE = 1.0
+
+
+def _apply_thinking_params(api_params, model_config, temp, use_thinking, effort):
+    """Add thinking, effort, tool-choice, and temperature settings to a request.
+
+    Thinking is only enabled when requested, except on models whose thinking
+    is always on; those can only lower effort. Forced tool choice is
+    incompatible with thinking, so thinking requests let the model choose.
+    """
+    effort_options = model_config.get("effort_options") or []
+    thinking_enabled = False
+    if model_config.get("always_on_adaptive_thinking", False):
+        api_params["output_config"] = {
+            "effort": effort if use_thinking else effort_options[0]
+        }
+        thinking_enabled = True
+    elif use_thinking and effort_options:
+        api_params["thinking"] = {"type": "adaptive"}
+        api_params["output_config"] = {"effort": effort}
+        thinking_enabled = True
+    elif use_thinking and model_config.get("extended_thinking"):
+        api_params["thinking"] = {
+            "type": "enabled",
+            "budget_tokens": model_config["max_thinking_budget"],
+        }
+        thinking_enabled = True
+    elif effort_options:
+        # Some adaptive-thinking models think by default unless disabled.
+        api_params["thinking"] = {"type": "disabled"}
+
+    if thinking_enabled:
+        api_params["tool_choice"] = {"type": "auto"}
+    if model_config.get("temperature_supported", True):
+        api_params["temperature"] = (
+            ANTHROPIC_THINKING_TEMPERATURE if thinking_enabled else temp
+        )
 
 
 def _raise_anthropic_error(exc: Exception, operation: str) -> None:
@@ -208,10 +246,6 @@ def loop_gen(
 
     model_info = utils.get_model_info()
     model_config = model_info["models"]["Anthropic"][model]
-    always_on_adaptive_thinking = model_config.get("always_on_adaptive_thinking", False)
-    effort_options = model_config.get("effort_options") or []
-    if effort_options and not use_thinking:
-        effort = effort_options[0]
     api_params = {
         "model": model,
         "max_tokens": model_config["max_tokens"],
@@ -221,27 +255,7 @@ def loop_gen(
         "tool_choice": {"type": "tool", "name": "build_MIDI_loop"},
         "stream": True,
     }
-    if not always_on_adaptive_thinking:
-        api_params["temperature"] = temp
-
-    if effort_options:
-        api_params["tool_choice"] = {"type": "auto"}
-        if not always_on_adaptive_thinking:
-            api_params["thinking"] = {"type": "adaptive"}
-        api_params["output_config"] = {"effort": effort}
-        if not always_on_adaptive_thinking:
-            api_params["temperature"] = 1.0
-    elif use_thinking and model_config.get("extended_thinking"):
-        api_params["tool_choice"] = {"type": "auto"}
-        api_params["thinking"] = {
-            "type": "enabled",
-            "budget_tokens": model_config["max_thinking_budget"],
-        }
-        api_params["temperature"] = 1.0
-    elif use_thinking and not model_config.get("extended_thinking"):
-        logger.warning(
-            "Extended thinking requested but not supported by model: %s", model
-        )
+    _apply_thinking_params(api_params, model_config, temp, use_thinking, effort)
 
     try:
         completion = client.messages.create(**api_params)
@@ -315,27 +329,8 @@ def variations_gen(
         ],
         "tool_choice": {"type": "tool", "name": "build_MIDI_variations"},
         "stream": True,
-        "temperature": temp,
     }
-    effort_options = model_config.get("effort_options") or []
-    always_on = model_config.get("always_on_adaptive_thinking", False)
-    if always_on:
-        api_params.pop("temperature")
-    if effort_options:
-        if not use_thinking:
-            effort = effort_options[0]
-        api_params["tool_choice"] = {"type": "auto"}
-        api_params["output_config"] = {"effort": effort}
-        if not always_on:
-            api_params["thinking"] = {"type": "adaptive"}
-            api_params["temperature"] = 1.0
-    elif use_thinking and model_config.get("extended_thinking"):
-        api_params["tool_choice"] = {"type": "auto"}
-        api_params["thinking"] = {
-            "type": "enabled",
-            "budget_tokens": model_config["max_thinking_budget"],
-        }
-        api_params["temperature"] = 1.0
+    _apply_thinking_params(api_params, model_config, temp, use_thinking, effort)
     try:
         completion = client.messages.create(**api_params)
     except (

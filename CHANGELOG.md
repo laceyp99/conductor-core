@@ -8,6 +8,55 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-24
+
+### Added
+
+- Model metadata now includes `thinking_fixed_temperature`, the temperature
+  Core sends when extended thinking is enabled regardless of the requested
+  value. It is `1.0` for Claude Opus 4.6, Sonnet 4.6, and the Claude 4.5
+  models, absent for OpenAI and Google models, and `null` in each Ollama
+  `model_capabilities` entry.
+- `ProviderContextLengthError`, a public `ProviderRequestError` subclass, is
+  raised when an Ollama response stops because it filled the context window
+  (`done_reason="length"`), instead of a misleading empty-content or JSON
+  parsing error. It reports the model and token counts when known.
+- `GenerationRequest` and `VariationGenerationRequest` accept an optional
+  positive-integer `ollama_num_ctx`, sent to Ollama as `num_ctx`. When omitted,
+  Core sends no context size and Ollama's own default applies. Cloud models
+  ignore it with a warning.
+
+- Thinking-capable models report `thinking_off`: `"disabled"` when
+  `use_thinking=False` sends the provider's official no-reasoning setting, or
+  `"lowest_effort"` when reasoning cannot be turned off and Core sends the
+  lowest effort instead. Ollama `model_capabilities` entries derive it from the
+  think values Ollama reports, and thinking-off requests send `think=false`
+  whenever the model accepts it.
+
+### Changed
+
+- OpenAI reasoning models and Claude Opus 4.7 and later, Sonnet 5, and Fable
+  models now report `temperature_supported: false`, and Core no longer sends
+  `temperature` to them. Claude Opus 4.7, Opus 4.8, Opus 5, and Sonnet 5
+  previously received a fixed `temperature` of `1.0`, their API default.
+- Anthropic adaptive-thinking models (Claude Opus 4.6 through Opus 5, and
+  Sonnet 4.6 and 5) no longer think when `use_thinking=False`. Core now sends
+  `thinking: {"type": "disabled"}` without an effort level, forces the loop
+  tool, and uses the requested temperature where the model accepts one.
+  Previously these requests still enabled adaptive thinking at the lowest
+  effort and fixed temperature at `1.0`.
+- Ollama generation now inspects only the requested model instead of every
+  installed model, cutting the status requests made before each generation
+  from two per installed model to two in total. The new
+  `providers.ollama.get_model_status()` performs that single-model lookup, and
+  `get_model_list()` no longer inspects any model.
+
+### Fixed
+
+- Single-loop OpenAI and Ollama generations now save the generated loop to
+  `messages.json` as JSON, like the other providers, instead of Python's text
+  representation. Existing history files are unchanged.
+
 ## [0.5.6] - 2026-09-23
 
 ### Added
@@ -384,7 +433,8 @@ other Conductor repositories could build on a shared engine.
 - Deterministic tests and package-boundary checks suitable for reuse outside the
   original LoopGPT application.
 
-[Unreleased]: https://github.com/laceyp99/conductor-core/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/laceyp99/conductor-core/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/laceyp99/conductor-core/compare/v0.5.6...v0.6.0
 [0.5.1]: https://github.com/laceyp99/conductor-core/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/laceyp99/conductor-core/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/laceyp99/conductor-core/compare/v0.3.0...v0.4.0

@@ -7,6 +7,7 @@ from conductor_core import models as objects
 from conductor_core import music as utils
 from conductor_core.errors import (
     ProviderConnectionError,
+    ProviderContextLengthError,
     ProviderRequestError,
     ProviderTimeoutError,
     error_for_status,
@@ -25,7 +26,11 @@ logger = logging.getLogger(__name__)
 
 
 def _get_thinking_metadata(client, model_name, model_info):
-    """Read Ollama's per-model think values when the SDK preserves them."""
+    """Read Ollama's per-model think values when the SDK preserves them.
+
+    Returns the supported effort levels and whether ``think=False`` is
+    accepted, or ``None`` when Ollama did not report its think values.
+    """
     thinking = getattr(model_info, "thinking", None)
 
     # ollama-python currently parses /api/show into ShowResponse, which drops
@@ -42,30 +47,47 @@ def _get_thinking_metadata(client, model_name, model_info):
                 logger.debug("Could not read Ollama think values for %s", model_name)
 
     if not isinstance(thinking, dict):
-        return []
+        return [], None
     values = thinking.get("values") or []
     # The API exposes explicit accepted values. Only advertise the supported
     # effort vocabulary Core can route; never infer it from a model name.
     supported = {value for value in values if isinstance(value, str)}
-    return [level for level in ("low", "medium", "high") if level in supported]
+    effort_options = [
+        level for level in ("low", "medium", "high") if level in supported
+    ]
+    return effort_options, any(value is False for value in values)
 
 
 def _get_model_capabilities(client, model_name, host):
     effort_options = []
+    accepts_think_false = None
     try:
         model_info = client.show(model_name)
         capabilities = getattr(model_info, "capabilities", None) or []
-        effort_options = _get_thinking_metadata(client, model_name, model_info)
+        effort_options, accepts_think_false = _get_thinking_metadata(
+            client, model_name, model_info
+        )
         supports_thinking = "thinking" in capabilities or bool(effort_options)
     except Exception as exc:
         logger.warning(
             "Could not inspect Ollama model %s at %s: %s", model_name, host, exc
         )
         supports_thinking = False
+    if not supports_thinking:
+        thinking_off = None
+    elif accepts_think_false is False:
+        # Ollama reports only effort levels (for example gpt-oss).
+        thinking_off = "lowest_effort"
+    else:
+        # Reported values include false, or none were reported and the model
+        # takes a boolean think value.
+        thinking_off = "disabled"
     return {
         "extended_thinking": supports_thinking,
         "effort_options": effort_options,
         "temperature_supported": True,
+        "thinking_fixed_temperature": None,
+        "thinking_off": thinking_off,
     }
 
 
@@ -150,9 +172,59 @@ def get_ollama_status(
     return status
 
 
+def get_model_status(
+    model_name: str,
+    host_address: str | None = None,
+    request_timeout: float | None = None,
+):
+    """Check whether one model is installed and inspect only that model.
+
+    Unlike :func:`get_ollama_status`, this lists installed models and then
+    requests details for ``model_name`` alone, so generation does not pay for
+    inspecting every installed model.
+    """
+    host = _resolve_host(host_address)
+    status = {
+        "available": False,
+        "installed": False,
+        "model_capabilities": None,
+        "host": host,
+        "error": None,
+    }
+    if ollama is None:
+        status["error"] = "Install conductor-core[ollama] to use Ollama models."
+        return status
+
+    try:
+        client = initialize_ollama_client(
+            host_address=host,
+            **({"timeout": request_timeout} if request_timeout is not None else {}),
+        )
+        models = [model.model for model in client.list().models]
+        status["available"] = True
+        if model_name in models:
+            status["installed"] = True
+            status["model_capabilities"] = _get_model_capabilities(
+                client, model_name, host
+            )
+    except Exception as exc:
+        status["error"] = str(exc)
+        logger.warning("Ollama unavailable at %s: %s", host, exc)
+
+    return status
+
+
 def get_model_list(host_address: str | None = None):
-    """Get the available Ollama model names."""
-    return get_ollama_status(host_address=host_address)["models"]
+    """Get the available Ollama model names without inspecting each model."""
+    if ollama is None:
+        return []
+    host = _resolve_host(host_address)
+    try:
+        client = initialize_ollama_client(host_address=host)
+        return [model.model for model in client.list().models]
+    except Exception as exc:
+        logger.warning("Ollama unavailable at %s: %s", host, exc)
+        return []
 
 
 def _thinking_option(model_capabilities, use_thinking, effort):
@@ -160,7 +232,38 @@ def _thinking_option(model_capabilities, use_thinking, effort):
     if not model_capabilities or not model_capabilities.get("extended_thinking"):
         return None
     effort_options = model_capabilities.get("effort_options") or []
-    return effort if effort_options else bool(use_thinking)
+    if use_thinking:
+        return effort if effort_options else True
+    thinking_off = model_capabilities.get(
+        "thinking_off", "lowest_effort" if effort_options else "disabled"
+    )
+    if thinking_off == "disabled":
+        return False
+    # Reasoning cannot be turned off: send the lowest level, or leave the
+    # model's default when it has no levels.
+    return effort if effort_options else None
+
+
+def _chat_options(temp, num_ctx):
+    """Build Ollama model options, leaving context size to Ollama by default."""
+    options = {"temperature": temp}
+    if num_ctx is not None:
+        options["num_ctx"] = num_ctx
+    return options
+
+
+def _raise_if_out_of_context(completion, model, num_ctx):
+    """Raise a clear error when Ollama stopped because the context was full."""
+    if getattr(completion, "done_reason", None) != "length":
+        return
+    raise ProviderContextLengthError(
+        "Ollama",
+        model,
+        prompt_tokens=getattr(completion, "prompt_eval_count", None),
+        output_tokens=getattr(completion, "eval_count", None),
+        context_length=num_ctx,
+        operation="response",
+    )
 
 
 def loop_gen(
@@ -173,6 +276,7 @@ def loop_gen(
     use_thinking: bool = False,
     effort: str | None = "low",
     model_capabilities: dict | None = None,
+    num_ctx: int | None = None,
 ):
     """Generate a MIDI loop using the specified Ollama model and prompt."""
     client = initialize_ollama_client(
@@ -193,7 +297,7 @@ def loop_gen(
         "model": model,
         "messages": messages,
         "format": objects.Loop.model_json_schema(),
-        "options": {"temperature": temp},
+        "options": _chat_options(temp, num_ctx),
     }
     if think is not None:
         chat_options["think"] = think
@@ -208,6 +312,7 @@ def loop_gen(
     ) as exc:
         logger.error("Ollama request failed: %s", exc)
         _raise_ollama_error(exc, "request")
+    _raise_if_out_of_context(completion, model, num_ctx)
     message = getattr(completion, "message", None)
     content = getattr(message, "content", None)
     if not content:
@@ -217,7 +322,7 @@ def loop_gen(
     thinking = getattr(message, "thinking", None)
     if thinking:
         messages.append({"role": "assistant", "content": thinking})
-    messages.append({"role": "assistant", "content": str(midi_loop)})
+    messages.append({"role": "assistant", "content": midi_loop.model_dump_json()})
     return midi_loop, messages, 0
 
 
@@ -231,6 +336,7 @@ def variations_gen(
     use_thinking: bool = False,
     effort: str | None = "low",
     model_capabilities: dict | None = None,
+    num_ctx: int | None = None,
 ):
     """Generate an ordered collection of loops in one Ollama response."""
     client = initialize_ollama_client(
@@ -251,7 +357,7 @@ def variations_gen(
         "model": model,
         "messages": messages,
         "format": VariationCollection.model_json_schema(),
-        "options": {"temperature": temp},
+        "options": _chat_options(temp, num_ctx),
     }
     if think is not None:
         chat_options["think"] = think
@@ -265,6 +371,7 @@ def variations_gen(
         ollama.ResponseError,
     ) as exc:
         _raise_ollama_error(exc, "request")
+    _raise_if_out_of_context(completion, model, num_ctx)
     message = getattr(completion, "message", None)
     content = getattr(message, "content", None)
     if not content:
