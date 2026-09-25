@@ -57,15 +57,14 @@ highest.
 Every thinking-capable model reports `thinking_off`, which says what
 `use_thinking=False` does. Core ignores a higher `effort` in that case.
 
-| `thinking_off` | Meaning | Models |
+| `thinking_off` | Meaning | Applies to |
 | --- | --- | --- |
-| `disabled` | The provider's official no-reasoning setting. | OpenAI models with a `none` effort, Claude models other than Opus 5.5 and Fable, Gemini 2.5 Flash and Flash-Lite, and Ollama models that accept `think=false`. |
-| `lowest_effort` | Reasoning cannot be turned off, so Core sends the lowest effort or budget. | Other OpenAI reasoning models, Claude Opus 5.5 and Fable, Gemini 2.5 Pro and Gemini 3, and Ollama models such as gpt-oss that only accept effort levels. |
+| `disabled` | Core sends the provider's official no-reasoning setting. | Models with a `none` effort, a zero thinking budget, or a switch that turns thinking off. |
+| `lowest_effort` | Reasoning cannot be turned off, so Core sends the lowest effort or thinking budget. | Models whose reasoning is always on. |
 
-Models without extended thinking omit the field. For Anthropic `disabled`
-models, Core sends `thinking: {"type": "disabled"}` (or no thinking settings on
-Claude 4.5), no effort, and a caller-selected temperature where the model
-accepts one.
+Models without extended thinking omit the field. When Core turns thinking off,
+it sends no effort and uses the requested temperature where the model accepts
+one.
 
 With `use_thinking=True`, Core validates and sends the requested effort. Models
 using thinking budgets retain their provider-specific limits. Because `effort`
@@ -73,15 +72,13 @@ defaults to `None`, callers enabling thinking for a model with discrete options
 must select a supported value.
 
 Models with `temperature_supported: false` reject a caller-selected
-temperature, so Core never sends one to them; the requested `temperature` is
-ignored. This covers OpenAI reasoning models, Gemini 3.7 and 3.8 Flash, and
-Claude Opus 4.7 and later, Sonnet 5, and Fable models.
+temperature, so Core never sends one and ignores the requested `temperature`.
+Many reasoning models behave this way.
 
-Some models require a specific temperature while thinking is enabled. A model's
+Some models require a fixed temperature while thinking is enabled. A model's
 `thinking_fixed_temperature` reports the temperature Core sends in that case,
-regardless of the requested one. It is `1.0` for Claude Opus 4.6, Sonnet 4.6,
-and the Claude 4.5 models. When the field is absent or `null` and the model
-supports temperature, Core sends the requested value. Ollama's
+regardless of the requested one. When the field is absent or `null` and the
+model supports temperature, Core sends the requested value. Ollama's
 `model_capabilities` entries always include the field as `null`.
 
 ### Ollama reasoning capabilities
@@ -133,9 +130,10 @@ model's context window, Core raises `ProviderContextLengthError`, a
 `ProviderRequestError` subclass, instead of a parsing error. Its `model`,
 `prompt_tokens`, `output_tokens`, and `context_length` attributes are set when
 known; the message never includes partial output or thinking text. Core does
-not retry. Lower or disable thinking, choose a model or server with a larger context, or
-set `ollama_num_ctx` on the request. Core never chooses a context size itself:
-larger windows use more memory and can prevent a model from loading.
+not retry. Lower or disable thinking, choose a model or server with a larger
+context, or set `ollama_num_ctx` on the request. Core never chooses a context
+size itself: larger windows use more memory and can prevent a model from
+loading.
 
 Provider, parsing, and MIDI conversion errors are raised to the caller. Core
 removes an unfinished generation workspace when an error occurs after allocation.

@@ -54,18 +54,19 @@ Example shape:
 Keep field names and nesting consistent with nearby entries. If a provider does not publish one of these values, do not fabricate it.
 Anthropic models that always apply adaptive thinking should set
 `always_on_adaptive_thinking` to `true`; omit the field otherwise.
-Anthropic models whose adapter forces a temperature while thinking is enabled
-should set `thinking_fixed_temperature` to that value (currently `1.0`); omit
-it otherwise. `tests/test_thinking_temperature_metadata.py` checks every model
-against the request its adapter builds.
-Set `temperature_supported` to `false` for models whose API rejects a
-caller-selected temperature (for example OpenAI reasoning models and Claude
-Opus 4.7 and later); adapters then omit temperature entirely.
-Every model with `extended_thinking: true` must set `thinking_off` to
-`"disabled"` when the provider has an official no-reasoning setting (for
-example an OpenAI `none` effort or a Gemini thinking budget of 0), or
-`"lowest_effort"` when reasoning cannot be turned off.
-`tests/test_thinking_off_metadata.py` checks it against adapter requests.
+Record reasoning and temperature behavior from the provider's documentation.
+Offline tests check these fields against the request each adapter builds
+(`tests/test_thinking_off_metadata.py` and
+`tests/test_thinking_temperature_metadata.py`):
+
+- `thinking_off` is required when `extended_thinking` is `true`. Use
+  `"disabled"` when the provider offers an official way to turn reasoning off,
+  such as a `none` effort, a zero thinking budget, or a disable switch. Use
+  `"lowest_effort"` when reasoning is always on.
+- Set `temperature_supported` to `false` when the API rejects a
+  caller-selected temperature; adapters then omit it. Omit the field otherwise.
+- Set `thinking_fixed_temperature` when the provider requires a fixed
+  temperature while thinking is enabled; omit it otherwise.
 
 ## Provider Module Checks
 
