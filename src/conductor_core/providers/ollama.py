@@ -172,9 +172,59 @@ def get_ollama_status(
     return status
 
 
+def get_model_status(
+    model_name: str,
+    host_address: str | None = None,
+    request_timeout: float | None = None,
+):
+    """Check whether one model is installed and inspect only that model.
+
+    Unlike :func:`get_ollama_status`, this lists installed models and then
+    requests details for ``model_name`` alone, so generation does not pay for
+    inspecting every installed model.
+    """
+    host = _resolve_host(host_address)
+    status = {
+        "available": False,
+        "installed": False,
+        "model_capabilities": None,
+        "host": host,
+        "error": None,
+    }
+    if ollama is None:
+        status["error"] = "Install conductor-core[ollama] to use Ollama models."
+        return status
+
+    try:
+        client = initialize_ollama_client(
+            host_address=host,
+            **({"timeout": request_timeout} if request_timeout is not None else {}),
+        )
+        models = [model.model for model in client.list().models]
+        status["available"] = True
+        if model_name in models:
+            status["installed"] = True
+            status["model_capabilities"] = _get_model_capabilities(
+                client, model_name, host
+            )
+    except Exception as exc:
+        status["error"] = str(exc)
+        logger.warning("Ollama unavailable at %s: %s", host, exc)
+
+    return status
+
+
 def get_model_list(host_address: str | None = None):
-    """Get the available Ollama model names."""
-    return get_ollama_status(host_address=host_address)["models"]
+    """Get the available Ollama model names without inspecting each model."""
+    if ollama is None:
+        return []
+    host = _resolve_host(host_address)
+    try:
+        client = initialize_ollama_client(host_address=host)
+        return [model.model for model in client.list().models]
+    except Exception as exc:
+        logger.warning("Ollama unavailable at %s: %s", host, exc)
+        return []
 
 
 def _thinking_option(model_capabilities, use_thinking, effort):

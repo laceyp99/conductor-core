@@ -158,10 +158,11 @@ def test_generate_midi_routes_to_ollama_and_forwards_temperature(monkeypatch):
     )
     monkeypatch.setattr(
         runs.ollama_api,
-        "get_ollama_status",
-        lambda host_address=None: {
+        "get_model_status",
+        lambda model_name, host_address=None: {
             "available": True,
-            "models": ["llama3"],
+            "installed": model_name == "llama3",
+            "model_capabilities": {},
         },
     )
 
@@ -227,7 +228,7 @@ def test_generate_midi_routes_to_openai_and_forwards_effort(monkeypatch):
         },
     )
     ollama_status = Mock()
-    monkeypatch.setattr(runs.ollama_api, "get_ollama_status", ollama_status)
+    monkeypatch.setattr(runs.ollama_api, "get_model_status", ollama_status)
 
     def fake_loop_gen(
         prompt,
@@ -291,7 +292,7 @@ def test_generate_midi_routes_to_gemini_and_forwards_reasoning_options(monkeypat
         },
     )
     ollama_status = Mock()
-    monkeypatch.setattr(runs.ollama_api, "get_ollama_status", ollama_status)
+    monkeypatch.setattr(runs.ollama_api, "get_model_status", ollama_status)
 
     def fake_loop_gen(
         prompt,
@@ -355,7 +356,7 @@ def test_generate_midi_routes_to_claude_and_forwards_reasoning_options(monkeypat
         },
     )
     ollama_status = Mock()
-    monkeypatch.setattr(runs.ollama_api, "get_ollama_status", ollama_status)
+    monkeypatch.setattr(runs.ollama_api, "get_model_status", ollama_status)
 
     def fake_loop_gen(
         prompt,
@@ -412,10 +413,11 @@ def test_generate_midi_rejects_unknown_models_when_ollama_is_unavailable(monkeyp
     )
     monkeypatch.setattr(
         runs.ollama_api,
-        "get_ollama_status",
-        lambda host_address=None: {
+        "get_model_status",
+        lambda model_name, host_address=None: {
             "available": False,
-            "models": [],
+            "installed": False,
+            "model_capabilities": None,
         },
     )
 
@@ -434,8 +436,12 @@ def test_generate_midi_rejects_unknown_models_when_ollama_is_available(monkeypat
     )
     monkeypatch.setattr(
         runs.ollama_api,
-        "get_ollama_status",
-        lambda host_address=None: {"available": True, "models": []},
+        "get_model_status",
+        lambda model_name, host_address=None: {
+            "available": True,
+            "installed": False,
+            "model_capabilities": None,
+        },
     )
 
     with pytest.raises(ValueError, match="Invalid Model Selected"):

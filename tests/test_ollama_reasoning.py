@@ -186,16 +186,14 @@ def test_ollama_routing_rejects_invalid_effort(monkeypatch, generator):
     monkeypatch.setattr(routing, "get_model_info", lambda: model_info)
     monkeypatch.setattr(
         routing.ollama_api,
-        "get_ollama_status",
-        lambda **kwargs: {
+        "get_model_status",
+        lambda model_name, **kwargs: {
             "available": True,
-            "models": ["thinking-model"],
+            "installed": True,
             "model_capabilities": {
-                "thinking-model": {
-                    "extended_thinking": True,
-                    "effort_options": ["low", "medium", "high"],
-                    "temperature_supported": True,
-                }
+                "extended_thinking": True,
+                "effort_options": ["low", "medium", "high"],
+                "temperature_supported": True,
             },
         },
     )
@@ -369,3 +367,62 @@ def test_ollama_thinking_off_selects_think_value(
     model_capabilities, use_thinking, effort, expected
 ):
     assert ollama._thinking_option(model_capabilities, use_thinking, effort) == expected
+
+
+def _counting_client(model_names, shown):
+    return SimpleNamespace(
+        list=lambda: SimpleNamespace(
+            models=[SimpleNamespace(model=name) for name in model_names]
+        ),
+        show=lambda name: (
+            shown.append(name)
+            or SimpleNamespace(capabilities=["completion", "thinking"])
+        ),
+    )
+
+
+def test_model_status_inspects_only_the_requested_model(monkeypatch):
+    shown = []
+    client = _counting_client(["a", "b", "c"], shown)
+    monkeypatch.setattr(ollama, "initialize_ollama_client", lambda **kwargs: client)
+
+    status = ollama.get_model_status("b")
+
+    assert shown == ["b"]
+    assert status["available"] is True
+    assert status["installed"] is True
+    assert status["model_capabilities"]["thinking_off"] == "disabled"
+
+
+def test_model_status_skips_inspection_for_missing_model(monkeypatch):
+    shown = []
+    client = _counting_client(["a"], shown)
+    monkeypatch.setattr(ollama, "initialize_ollama_client", lambda **kwargs: client)
+
+    status = ollama.get_model_status("missing")
+
+    assert shown == []
+    assert status["installed"] is False
+    assert status["model_capabilities"] is None
+
+
+def test_model_status_reports_unavailable_server(monkeypatch):
+    def fail(**kwargs):
+        raise ConnectionError("refused")
+
+    monkeypatch.setattr(ollama, "initialize_ollama_client", fail)
+
+    status = ollama.get_model_status("a")
+
+    assert status["available"] is False
+    assert status["installed"] is False
+    assert "refused" in status["error"]
+
+
+def test_model_list_does_not_inspect_models(monkeypatch):
+    shown = []
+    client = _counting_client(["a", "b"], shown)
+    monkeypatch.setattr(ollama, "initialize_ollama_client", lambda **kwargs: client)
+
+    assert ollama.get_model_list() == ["a", "b"]
+    assert shown == []

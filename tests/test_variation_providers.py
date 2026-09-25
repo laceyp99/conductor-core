@@ -57,8 +57,12 @@ def test_routing_normalizes_all_variation_providers(
     if provider == "Ollama":
         monkeypatch.setattr(
             routing.ollama_api,
-            "get_ollama_status",
-            lambda **kwargs: {"available": True, "models": [model]},
+            "get_model_status",
+            lambda model_name, **kwargs: {
+                "available": True,
+                "installed": True,
+                "model_capabilities": {},
+            },
         )
     collection = VariationCollection(
         variations=[Loop.model_validate(_loop_payload())] * 2

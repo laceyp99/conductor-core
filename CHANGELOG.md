@@ -43,6 +43,11 @@ while its public API is still in initial development.
   tool, and uses the requested temperature where the model accepts one.
   Previously these requests still enabled adaptive thinking at the lowest
   effort and fixed temperature at `1.0`.
+- Ollama generation now inspects only the requested model instead of every
+  installed model, cutting the status requests made before each generation
+  from two per installed model to two in total. The new
+  `providers.ollama.get_model_status()` performs that single-model lookup, and
+  `get_model_list()` no longer inspects any model.
 
 ## [0.5.6] - 2026-09-23
 

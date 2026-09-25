@@ -156,7 +156,8 @@ def generate_midi(
             ),
         )
     else:
-        ollama_status = ollama_api.get_ollama_status(
+        ollama_status = ollama_api.get_model_status(
+            model_choice,
             host_address=credentials.ollama_host,
             **(
                 {"request_timeout": request_timeout}
@@ -165,10 +166,8 @@ def generate_midi(
             ),
         )
 
-        if model_choice in ollama_status["models"]:
-            model_capabilities = ollama_status.get("model_capabilities", {}).get(
-                model_choice, {}
-            )
+        if ollama_status["installed"]:
+            model_capabilities = ollama_status["model_capabilities"]
             effective_effort = _resolve_reasoning_effort(
                 model_choice, model_capabilities, use_thinking, effort
             )
@@ -265,16 +264,16 @@ def generate_variations(
             api_key=credentials.anthropic_api_key,
         )
     else:
-        status = ollama_api.get_ollama_status(
-            host_address=credentials.ollama_host, **timeout
+        status = ollama_api.get_model_status(
+            model_choice, host_address=credentials.ollama_host, **timeout
         )
-        if model_choice not in status["models"]:
+        if not status["installed"]:
             if not status["available"]:
                 raise ValueError(
                     "Invalid Model Selected. If you intended to use Ollama, it is currently unavailable."
                 )
             raise ValueError("Invalid Model Selected")
-        model_capabilities = status.get("model_capabilities", {}).get(model_choice, {})
+        model_capabilities = status["model_capabilities"]
         effective_effort = _resolve_reasoning_effort(
             model_choice, model_capabilities, use_thinking, effort
         )
