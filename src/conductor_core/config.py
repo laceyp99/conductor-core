@@ -88,10 +88,10 @@ class EngineConfig:
 class GenerationRequest:
     """One prompt-to-loop generation request.
 
-    For models with configurable reasoning effort, ``use_thinking=False``
-    selects the model's lowest supported effort, except that Anthropic models
-    able to turn adaptive thinking off do so instead. The requested ``effort``
-    is used unchanged when thinking is enabled.
+    ``use_thinking=False`` turns reasoning off where the provider allows it,
+    otherwise it selects the model's lowest supported effort; each model's
+    ``thinking_off`` metadata reports which. The requested ``effort`` is used
+    unchanged when thinking is enabled.
     """
 
     key: str

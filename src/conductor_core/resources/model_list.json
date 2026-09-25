@@ -3,6 +3,7 @@
         "OpenAI": {
             "gpt-6-astra": {
                 "extended_thinking": true,
+                "thinking_off": "lowest_effort",
                 "temperature_supported": false,
                 "effort_options": ["low", "medium", "high", "xhigh", "max"],
                 "max_tokens": 128000,
@@ -20,6 +21,7 @@
             },
             "gpt-6-sol": {
                 "extended_thinking": true,
+                "thinking_off": "disabled",
                 "temperature_supported": false,
                 "effort_options": ["none", "low", "medium", "high", "xhigh", "max"],
                 "max_tokens": 128000,
@@ -37,6 +39,7 @@
             },
             "gpt-6-luna": {
                 "extended_thinking": true,
+                "thinking_off": "disabled",
                 "temperature_supported": false,
                 "effort_options": ["none", "low", "medium", "high", "xhigh", "max"],
                 "max_tokens": 128000,
@@ -54,6 +57,7 @@
             },
             "gpt-5.6-sol": {
                 "extended_thinking": true,
+                "thinking_off": "disabled",
                 "temperature_supported": false,
                 "effort_options": ["none", "low", "medium", "high", "xhigh", "max"],
                 "max_tokens": 128000,
@@ -71,6 +75,7 @@
             },
             "gpt-5.6-terra": {
                 "extended_thinking": true,
+                "thinking_off": "disabled",
                 "temperature_supported": false,
                 "effort_options": ["none", "low", "medium", "high", "xhigh", "max"],
                 "max_tokens": 128000,
@@ -88,6 +93,7 @@
             },
             "gpt-5.6-luna": {
                 "extended_thinking": true,
+                "thinking_off": "disabled",
                 "temperature_supported": false,
                 "effort_options": ["none", "low", "medium", "high", "xhigh", "max"],
                 "max_tokens": 128000,
@@ -105,6 +111,7 @@
             },
             "gpt-5.5": {
                 "extended_thinking": true,
+                "thinking_off": "disabled",
                 "temperature_supported": false,
                 "effort_options": ["none", "low", "medium", "high", "xhigh"],
                 "max_tokens": 128000,
@@ -121,6 +128,7 @@
             },
             "gpt-5.4-nano": {
                 "extended_thinking": true,
+                "thinking_off": "disabled",
                 "temperature_supported": false,
                 "effort_options": ["none", "low", "medium", "high", "xhigh"],
                 "max_tokens": 128000,
@@ -137,6 +145,7 @@
             },
             "gpt-5.4-mini": {
                 "extended_thinking": true,
+                "thinking_off": "disabled",
                 "temperature_supported": false,
                 "effort_options": ["none", "low", "medium", "high", "xhigh"],
                 "max_tokens": 128000,
@@ -153,6 +162,7 @@
             },
             "gpt-5.4": {
                 "extended_thinking": true,
+                "thinking_off": "disabled",
                 "temperature_supported": false,
                 "effort_options": ["none", "low", "medium", "high", "xhigh"],
                 "max_tokens": 128000,
@@ -169,6 +179,7 @@
             },
             "gpt-5.2": {
                 "extended_thinking": true,
+                "thinking_off": "disabled",
                 "temperature_supported": false,
                 "effort_options": ["none", "low", "medium", "high", "xhigh"],
                 "max_tokens": 128000,
@@ -185,6 +196,7 @@
             },
             "gpt-5.1": {
                 "extended_thinking": true,
+                "thinking_off": "disabled",
                 "temperature_supported": false,
                 "effort_options": ["none", "low", "medium", "high"],
                 "max_tokens": 128000,
@@ -201,6 +213,7 @@
             },
             "gpt-5": {
                 "extended_thinking": true,
+                "thinking_off": "lowest_effort",
                 "temperature_supported": false,
                 "effort_options": ["minimal", "low", "medium", "high"],
                 "max_tokens": 128000,
@@ -217,6 +230,7 @@
             },
             "gpt-5-mini": {
                 "extended_thinking": true,
+                "thinking_off": "lowest_effort",
                 "temperature_supported": false,
                 "effort_options": ["minimal", "low", "medium", "high"],
                 "max_tokens": 128000,
@@ -233,6 +247,7 @@
             },
             "gpt-5-nano": {
                 "extended_thinking": true,
+                "thinking_off": "lowest_effort",
                 "temperature_supported": false,
                 "effort_options": ["minimal", "low", "medium", "high"],
                 "max_tokens": 128000,
@@ -249,6 +264,7 @@
             },
             "o4-mini": {
                 "extended_thinking": true,
+                "thinking_off": "lowest_effort",
                 "temperature_supported": false,
                 "effort_options": ["low", "medium", "high"],
                 "max_tokens": 100000,
@@ -265,6 +281,7 @@
             },
             "o3": {
                 "extended_thinking": true,
+                "thinking_off": "lowest_effort",
                 "temperature_supported": false,
                 "effort_options": ["low", "medium", "high"],
                 "max_tokens": 100000,
@@ -281,6 +298,7 @@
             },
             "o3-mini": {
                 "extended_thinking": true,
+                "thinking_off": "lowest_effort",
                 "temperature_supported": false,
                 "effort_options": ["low", "medium", "high"],
                 "max_tokens": 100000,
@@ -297,6 +315,7 @@
             },
             "o1": {
                 "extended_thinking": true,
+                "thinking_off": "lowest_effort",
                 "temperature_supported": false,
                 "effort_options": ["low", "medium", "high"],
                 "max_tokens": 100000,
@@ -399,6 +418,7 @@
         "Anthropic": {
             "claude-opus-5-5":{
                 "extended_thinking": true,
+                "thinking_off": "lowest_effort",
                 "temperature_supported": false,
                 "always_on_adaptive_thinking": true,
                 "effort_options": ["low", "medium", "high", "xhigh", "max"],
@@ -418,6 +438,7 @@
             },
             "claude-fable-5-1":{
                 "extended_thinking": true,
+                "thinking_off": "lowest_effort",
                 "temperature_supported": false,
                 "always_on_adaptive_thinking": true,
                 "effort_options": ["low", "medium", "high", "xhigh", "max"],
@@ -437,6 +458,7 @@
             },
             "claude-fable-5":{
                 "extended_thinking": true,
+                "thinking_off": "lowest_effort",
                 "temperature_supported": false,
                 "always_on_adaptive_thinking": true,
                 "effort_options": ["low", "medium", "high", "xhigh", "max"],
@@ -456,6 +478,7 @@
             },
             "claude-opus-5":{
                 "extended_thinking": true,
+                "thinking_off": "disabled",
                 "temperature_supported": false,
                 "effort_options": ["low", "medium", "high", "xhigh", "max"],
                 "max_tokens": 128000,
@@ -474,6 +497,7 @@
             },
             "claude-sonnet-5":{
                 "extended_thinking": true,
+                "thinking_off": "disabled",
                 "temperature_supported": false,
                 "effort_options": ["low", "medium", "high", "xhigh", "max"],
                 "max_tokens": 128000,
@@ -492,6 +516,7 @@
             },
             "claude-opus-4-8":{
                 "extended_thinking": true,
+                "thinking_off": "disabled",
                 "temperature_supported": false,
                 "effort_options": ["low", "medium", "high", "xhigh", "max"],
                 "max_tokens": 128000,
@@ -510,6 +535,7 @@
             },
             "claude-opus-4-7":{
                 "extended_thinking": true,
+                "thinking_off": "disabled",
                 "temperature_supported": false,
                 "effort_options": ["low", "medium", "high", "xhigh", "max"],
                 "max_tokens": 128000,
@@ -528,6 +554,7 @@
             },
             "claude-sonnet-4-6":{
                 "extended_thinking": true,
+                "thinking_off": "disabled",
                 "thinking_fixed_temperature": 1.0,
                 "effort_options": ["low", "medium", "high"],
                 "max_tokens": 64000,
@@ -546,6 +573,7 @@
             },
             "claude-opus-4-6":{
                 "extended_thinking": true,
+                "thinking_off": "disabled",
                 "thinking_fixed_temperature": 1.0,
                 "effort_options": ["low", "medium", "high", "max"],
                 "max_tokens": 128000,
@@ -564,6 +592,7 @@
             },
             "claude-opus-4-5":{
                 "extended_thinking": true,
+                "thinking_off": "disabled",
                 "thinking_fixed_temperature": 1.0,
                 "max_tokens": 64000,
                 "max_thinking_budget": 59000,
@@ -582,6 +611,7 @@
             },
             "claude-haiku-4-5":{
                 "extended_thinking": true,
+                "thinking_off": "disabled",
                 "thinking_fixed_temperature": 1.0,
                 "max_tokens": 64000,
                 "max_thinking_budget": 59000,
@@ -600,6 +630,7 @@
             },
             "claude-sonnet-4-5":{
                 "extended_thinking": true,
+                "thinking_off": "disabled",
                 "thinking_fixed_temperature": 1.0,
                 "max_tokens": 64000,
                 "max_thinking_budget": 59000,
@@ -620,6 +651,7 @@
         "Google": {
             "gemini-3.8-flash": {
                 "extended_thinking": true,
+                "thinking_off": "lowest_effort",
                 "effort_options": ["low", "medium", "high"],
                 "temperature_supported": false,
                 "max_tokens": 65536,
@@ -639,6 +671,7 @@
             },
             "gemini-3.7-flash": {
                 "extended_thinking": true,
+                "thinking_off": "lowest_effort",
                 "effort_options": ["low", "medium", "high"],
                 "temperature_supported": false,
                 "max_tokens": 65536,
@@ -658,6 +691,7 @@
             },
             "gemini-3.6-flash": {
                 "extended_thinking": true,
+                "thinking_off": "lowest_effort",
                 "effort_options": ["minimal", "low", "medium", "high"],
                 "max_tokens": 65536,
                 "cost": {
@@ -676,6 +710,7 @@
             },
             "gemini-3.5-flash": {
                 "extended_thinking": true,
+                "thinking_off": "lowest_effort",
                 "effort_options": ["minimal", "low", "medium", "high"],
                 "max_tokens": 65536,
                 "cost": {
@@ -694,6 +729,7 @@
             },
             "gemini-3.5-flash-lite": {
                 "extended_thinking": true,
+                "thinking_off": "lowest_effort",
                 "effort_options": ["minimal", "low", "medium", "high"],
                 "max_tokens": 65536,
                 "cost": {
@@ -712,6 +748,7 @@
             },
             "gemini-3.1-flash-lite": {
                 "extended_thinking": true,
+                "thinking_off": "lowest_effort",
                 "effort_options": ["minimal", "low", "medium", "high"],
                 "max_tokens": 65536,
                 "cost": {
@@ -730,6 +767,7 @@
             },
             "gemini-3.1-pro-preview": {
                 "extended_thinking": true,
+                "thinking_off": "lowest_effort",
                 "effort_options": ["low", "medium", "high"],
                 "max_tokens": 65536,
                 "cost": {
@@ -748,6 +786,7 @@
             },
             "gemini-3-flash-preview": {
                 "extended_thinking": true,
+                "thinking_off": "lowest_effort",
                 "effort_options": ["minimal", "low", "medium", "high"],
                 "max_tokens": 65536,
                 "cost": {
@@ -766,6 +805,7 @@
             },
             "gemini-2.5-pro": {
                 "extended_thinking": true,
+                "thinking_off": "lowest_effort",
                 "min_thinking_budget": 128,
                 "max_thinking_budget": 32768,
                 "max_tokens": 65536,
@@ -785,6 +825,7 @@
             },
             "gemini-2.5-flash": {
                 "extended_thinking": true,
+                "thinking_off": "disabled",
                 "min_thinking_budget": 0,
                 "max_thinking_budget": -1,
                 "max_tokens": 65536,
@@ -804,6 +845,7 @@
             },
             "gemini-2.5-flash-lite": {
                 "extended_thinking": true,
+                "thinking_off": "disabled",
                 "min_thinking_budget": 0,
                 "max_thinking_budget": -1,
                 "max_tokens": 65536,

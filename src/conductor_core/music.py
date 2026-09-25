@@ -131,6 +131,10 @@ INTERVAL_NAMES = [
 
 _model_info_cache = None
 
+# What ``use_thinking=False`` sends: the provider's official "no reasoning"
+# setting, or the model's lowest effort when reasoning cannot be turned off.
+THINKING_OFF_MODES = ("disabled", "lowest_effort")
+
 VARIATION_PROMPT_VERSION = "variation_gen_v1"
 
 
@@ -174,6 +178,17 @@ def _validate_model_info(model_info):
                 raise ValueError(
                     f"{model_label} cannot set thinking_fixed_temperature when "
                     "temperature_supported is false"
+                )
+            thinking_off = model_config.get("thinking_off")
+            if model_config.get("extended_thinking"):
+                if thinking_off not in THINKING_OFF_MODES:
+                    raise ValueError(
+                        f"{model_label} thinking_off must be one of: "
+                        f"{', '.join(THINKING_OFF_MODES)}"
+                    )
+            elif thinking_off is not None:
+                raise ValueError(
+                    f"{model_label} thinking_off requires extended_thinking"
                 )
             if not isinstance(rate_limits, dict):
                 raise ValueError(f"{model_label} must define rate_limits")

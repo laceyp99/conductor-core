@@ -24,6 +24,11 @@ while its public API is still in initial development.
   Core sends no context size and Ollama's own default applies. Cloud models
   ignore it with a warning.
 
+- Thinking-capable models report `thinking_off`: `"disabled"` when
+  `use_thinking=False` sends the provider's official no-reasoning setting, or
+  `"lowest_effort"` when reasoning cannot be turned off and Core sends the
+  lowest effort instead.
+
 ### Changed
 
 - OpenAI reasoning models and Claude Opus 4.7 and later, Sonnet 5, and Fable

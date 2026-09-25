@@ -61,6 +61,11 @@ against the request its adapter builds.
 Set `temperature_supported` to `false` for models whose API rejects a
 caller-selected temperature (for example OpenAI reasoning models and Claude
 Opus 4.7 and later); adapters then omit temperature entirely.
+Every model with `extended_thinking: true` must set `thinking_off` to
+`"disabled"` when the provider has an official no-reasoning setting (for
+example an OpenAI `none` effort or a Gemini thinking budget of 0), or
+`"lowest_effort"` when reasoning cannot be turned off.
+`tests/test_thinking_off_metadata.py` checks it against adapter requests.
 
 ## Provider Module Checks
 

@@ -54,16 +54,18 @@ all models accept temperature or the same reasoning settings.
 For models with discrete `effort_options`, options are ordered from lowest to
 highest. 
 
-With `use_thinking=False`, Core sends the first supported option even
-if the request contains a higher valid `effort`. The lowest option may be
-`none`, `minimal`, or `low`; `False` therefore means the lowest available
-setting, not necessarily no provider reasoning.
+Every thinking-capable model reports `thinking_off`, which says what
+`use_thinking=False` does. Core ignores a higher `effort` in that case.
 
-Anthropic models that support adaptive thinking are the exception: with
-`use_thinking=False`, Core sends `thinking: {"type": "disabled"}` and no effort,
-so the model does not think and uses a caller-selected temperature where the
-model accepts one. Claude Opus 5.5 and Fable models always think; for them,
-`False` sends the lowest effort.
+| `thinking_off` | Meaning | Models |
+| --- | --- | --- |
+| `disabled` | The provider's official no-reasoning setting. | OpenAI models with a `none` effort, Claude models other than Opus 5.5 and Fable, Gemini 2.5 Flash and Flash-Lite, and Ollama models that accept `think=false`. |
+| `lowest_effort` | Reasoning cannot be turned off, so Core sends the lowest effort or budget. | Other OpenAI reasoning models, Claude Opus 5.5 and Fable, Gemini 2.5 Pro and Gemini 3, and Ollama models such as gpt-oss that only accept effort levels. |
+
+Models without extended thinking omit the field. For Anthropic `disabled`
+models, Core sends `thinking: {"type": "disabled"}` (or no thinking settings on
+Claude 4.5), no effort, and a caller-selected temperature where the model
+accepts one.
 
 With `use_thinking=True`, Core validates and sends the requested effort. Models
 using thinking budgets retain their provider-specific limits. Because `effort`
