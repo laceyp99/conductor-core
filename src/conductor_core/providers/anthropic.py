@@ -37,7 +37,7 @@ ANTHROPIC_CACHE_CONTROL_MIN_CHARS = 4096
 ANTHROPIC_THINKING_TEMPERATURE = 1.0
 
 
-def _apply_thinking_params(api_params, model, model_config, temp, use_thinking, effort):
+def _apply_thinking_params(api_params, model_config, temp, use_thinking, effort):
     """Add thinking, effort, tool-choice, and temperature settings to a request.
 
     Thinking is only enabled when requested, except on models whose thinking
@@ -64,10 +64,6 @@ def _apply_thinking_params(api_params, model, model_config, temp, use_thinking, 
     elif effort_options:
         # Some adaptive-thinking models think by default unless disabled.
         api_params["thinking"] = {"type": "disabled"}
-    elif use_thinking:
-        logger.warning(
-            "Extended thinking requested but not supported by model: %s", model
-        )
 
     if thinking_enabled:
         api_params["tool_choice"] = {"type": "auto"}
@@ -259,7 +255,7 @@ def loop_gen(
         "tool_choice": {"type": "tool", "name": "build_MIDI_loop"},
         "stream": True,
     }
-    _apply_thinking_params(api_params, model, model_config, temp, use_thinking, effort)
+    _apply_thinking_params(api_params, model_config, temp, use_thinking, effort)
 
     try:
         completion = client.messages.create(**api_params)
@@ -334,7 +330,7 @@ def variations_gen(
         "tool_choice": {"type": "tool", "name": "build_MIDI_variations"},
         "stream": True,
     }
-    _apply_thinking_params(api_params, model, model_config, temp, use_thinking, effort)
+    _apply_thinking_params(api_params, model_config, temp, use_thinking, effort)
     try:
         completion = client.messages.create(**api_params)
     except (

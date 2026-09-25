@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from conductor_core import models as objects
-from conductor_core import music
+from conductor_core import music, routing
 from conductor_core.providers import anthropic as claude_api
 from conductor_core.providers import google as gemini_api
 from conductor_core.providers import ollama as ollama_api
@@ -976,3 +976,39 @@ def test_ollama_loop_gen_rejects_missing_content(monkeypatch):
         ValueError, match="Ollama response did not include generated content"
     ):
         ollama_api.loop_gen("write a loop", "llama3")
+
+
+def test_claude_unsupported_thinking_warns_once(monkeypatch, caplog):
+    model_info = {
+        "models": {
+            "OpenAI": {},
+            "Google": {},
+            "Anthropic": {
+                "claude-test": {
+                    "extended_thinking": False,
+                    "max_tokens": 1024,
+                    "rate_limits": {"RPM": 1, "TPM": None, "RPD": None},
+                }
+            },
+        }
+    }
+    monkeypatch.setattr(routing, "get_model_info", lambda: model_info)
+    monkeypatch.setattr(claude_api.utils, "get_model_info", lambda: model_info)
+    calls = []
+
+    def fake_create(**kwargs):
+        calls.append(kwargs)
+        raise _RequestCaptured
+
+    fake_client = SimpleNamespace(messages=SimpleNamespace(create=fake_create))
+    monkeypatch.setattr(
+        claude_api, "initialize_anthropic_client", lambda **kwargs: fake_client
+    )
+
+    with caplog.at_level(logging.WARNING), pytest.raises(_RequestCaptured):
+        routing.generate_midi("claude-test", "prompt", use_thinking=True)
+
+    warnings = [r for r in caplog.records if "extended thinking" in r.getMessage()]
+    assert len(warnings) == 1
+    assert warnings[0].name == "conductor_core.routing"
+    assert "thinking" not in calls[0]
