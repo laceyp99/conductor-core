@@ -62,6 +62,7 @@ def generate_midi(
     temp=0.0,
     use_thinking=False,
     effort="low",
+    ollama_num_ctx: int | None = None,
     provider_credentials: ProviderCredentials | None = None,
     request_timeout: float | None = None,
     system_prompt: str | None = None,
@@ -167,6 +168,7 @@ def generate_midi(
                 system_prompt=system_prompt,
                 use_thinking=use_thinking,
                 effort=effective_effort,
+                ollama_num_ctx=ollama_num_ctx,
                 model_capabilities=model_capabilities,
                 **(
                     {"request_timeout": request_timeout}
@@ -191,6 +193,7 @@ def generate_variations(
     temp=0.0,
     use_thinking=False,
     effort="low",
+    ollama_num_ctx: int | None = None,
     provider_credentials: ProviderCredentials | None = None,
     request_timeout: float | None = None,
     system_prompt: str | None = None,
@@ -267,6 +270,7 @@ def generate_variations(
         common.update(
             use_thinking=use_thinking,
             effort=effective_effort,
+            ollama_num_ctx=ollama_num_ctx,
             model_capabilities=model_capabilities,
         )
 
