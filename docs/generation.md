@@ -133,7 +133,7 @@ model's context window, Core raises `ProviderContextLengthError`, a
 `ProviderRequestError` subclass, instead of a parsing error. Its `model`,
 `prompt_tokens`, `output_tokens`, and `context_length` attributes are set when
 known; the message never includes partial output or thinking text. Core does
-not retry. Disable thinking, choose a model or server with a larger context, or
+not retry. Lower or disable thinking, choose a model or server with a larger context, or
 set `ollama_num_ctx` on the request. Core never chooses a context size itself:
 larger windows use more memory and can prevent a model from loading.
 

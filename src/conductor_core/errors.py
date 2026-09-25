@@ -80,8 +80,8 @@ class ProviderContextLengthError(ProviderRequestError):
         super().__init__(
             provider,
             f"model {model!r} ran out of context: the {usage_text} filled the "
-            f"{window} before the answer was complete. Disable thinking, use a "
-            "model or server with a larger context, or request a larger context "
+            f"{window} before the answer was complete. Lower or disable thinking, "
+            "use a model or server with a larger context, or request a larger context "
             "size.",
             operation=operation,
         )

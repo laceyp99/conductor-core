@@ -74,6 +74,7 @@ def test_ollama_length_stop_raises_context_error(monkeypatch, generation, conten
     assert error.context_length is None
     message = str(error)
     assert "ran out of context" in message
+    assert "Lower or disable thinking" in message
     assert "prompt (506 tokens)" in message
     assert "response (3,567 tokens)" in message
     assert "private reasoning" not in message
