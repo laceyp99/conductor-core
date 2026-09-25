@@ -7,6 +7,7 @@ from conductor_core import models as objects
 from conductor_core import music as utils
 from conductor_core.errors import (
     ProviderConnectionError,
+    ProviderContextLengthError,
     ProviderRequestError,
     ProviderTimeoutError,
     error_for_status,
@@ -172,6 +173,7 @@ def loop_gen(
     request_timeout: float | None = None,
     use_thinking: bool = False,
     effort: str | None = "low",
+    ollama_num_ctx: int | None = None,
     model_capabilities: dict | None = None,
 ):
     """Generate a MIDI loop using the specified Ollama model and prompt."""
@@ -197,6 +199,8 @@ def loop_gen(
     }
     if think is not None:
         chat_options["think"] = think
+    if ollama_num_ctx is not None:
+        chat_options.setdefault("options", {})["num_ctx"] = ollama_num_ctx
     try:
         completion = client.chat(**chat_options)
     except (
@@ -210,6 +214,17 @@ def loop_gen(
         _raise_ollama_error(exc, "request")
     message = getattr(completion, "message", None)
     content = getattr(message, "content", None)
+
+    if getattr(completion, "done_reason", None) == "length":
+        prompt_eval = getattr(completion, "prompt_eval_count", "unknown")
+        eval_count = getattr(completion, "eval_count", "unknown")
+        raise ProviderContextLengthError(
+            "Ollama",
+            f"Ollama model {model!r} ran out of context: the prompt ({prompt_eval} tokens) "
+            f"and response ({eval_count} tokens) filled the context window before the answer was complete. "
+            "Disable thinking, use a model or server with a larger context, or pass a larger num_ctx.",
+            operation="request",
+        )
     if not content:
         raise ValueError("Ollama response did not include generated content.")
 
@@ -230,6 +245,7 @@ def variations_gen(
     request_timeout: float | None = None,
     use_thinking: bool = False,
     effort: str | None = "low",
+    ollama_num_ctx: int | None = None,
     model_capabilities: dict | None = None,
 ):
     """Generate an ordered collection of loops in one Ollama response."""
@@ -255,6 +271,8 @@ def variations_gen(
     }
     if think is not None:
         chat_options["think"] = think
+    if ollama_num_ctx is not None:
+        chat_options.setdefault("options", {})["num_ctx"] = ollama_num_ctx
     try:
         completion = client.chat(**chat_options)
     except (
@@ -267,6 +285,17 @@ def variations_gen(
         _raise_ollama_error(exc, "request")
     message = getattr(completion, "message", None)
     content = getattr(message, "content", None)
+
+    if getattr(completion, "done_reason", None) == "length":
+        prompt_eval = getattr(completion, "prompt_eval_count", "unknown")
+        eval_count = getattr(completion, "eval_count", "unknown")
+        raise ProviderContextLengthError(
+            "Ollama",
+            f"Ollama model {model!r} ran out of context: the prompt ({prompt_eval} tokens) "
+            f"and response ({eval_count} tokens) filled the context window before the answer was complete. "
+            "Disable thinking, use a model or server with a larger context, or pass a larger num_ctx.",
+            operation="request",
+        )
     if not content:
         raise ValueError("Ollama response did not include generated content.")
     collection = VariationCollection.model_validate_json(content)
