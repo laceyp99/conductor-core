@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from conductor_core import models as objects
+from conductor_core import music
 from conductor_core.providers import anthropic as claude_api
 from conductor_core.providers import google as gemini_api
 from conductor_core.providers import ollama as ollama_api
@@ -612,6 +613,43 @@ def test_claude_thinking_off_disables_adaptive_thinking(
     assert "output_config" not in request
     assert request["tool_choice"] == {"type": "tool", "name": tool_name}
     assert request.get("temperature") == expected_temperature
+
+
+_ANTHROPIC_THINKING_OPTIONAL_MODELS = [
+    model
+    for model, model_config in music.get_model_info()["models"]["Anthropic"].items()
+    if not model_config.get("always_on_adaptive_thinking")
+]
+
+
+@pytest.mark.parametrize("generation", ["loop", "variations"])
+@pytest.mark.parametrize("model", _ANTHROPIC_THINKING_OPTIONAL_MODELS)
+def test_claude_thinking_off_always_forces_the_output_tool(
+    monkeypatch, model, generation
+):
+    calls = []
+
+    def fake_create(**kwargs):
+        calls.append(kwargs)
+        raise _RequestCaptured
+
+    fake_client = SimpleNamespace(messages=SimpleNamespace(create=fake_create))
+    monkeypatch.setattr(
+        claude_api, "initialize_anthropic_client", lambda api_key: fake_client
+    )
+    function = (
+        claude_api.loop_gen if generation == "loop" else claude_api.variations_gen
+    )
+
+    with pytest.raises(_RequestCaptured):
+        function("prompt", model, use_thinking=False)
+
+    request = calls[0]
+    assert request["tool_choice"] == {
+        "type": "tool",
+        "name": request["tools"][0]["name"],
+    }
+    assert request.get("thinking", {"type": "disabled"}) == {"type": "disabled"}
 
 
 @pytest.mark.parametrize("model", ["gpt-5.6-sol", "gpt-6-sol", "gpt-6-luna"])
