@@ -13,8 +13,9 @@ while its public API is still in initial development.
 - Variation history lookup and listing now return structured results with
   machine-readable diagnostics for malformed manifests and missing or invalid
   generation artifacts. Listings default to 20 batches, accept at most 100,
-  and order timestamp ties by batch ID. Consumers of the previous direct
-  record and list return values must read `.record` and `.records` instead.
+  cap returned diagnostics at 100 with an omitted count, and order timestamp
+  ties by batch ID. Consumers of the previous direct record and list return
+  values must read `.record` and `.records` instead.
 
 ## [0.6.1] - 2026-09-27
 

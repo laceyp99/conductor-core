@@ -19,6 +19,7 @@ import os
 import shutil
 import stat
 import tempfile
+from bisect import bisect_left
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -217,6 +218,7 @@ class VariationHistoryListResult(_VariationHistoryContract):
 
     records: tuple[VariationHistoryRecord, ...] = ()
     diagnostics: tuple[VariationHistoryDiagnostic, ...] = ()
+    omitted_diagnostic_count: NonnegativeInt = 0
     limit: Annotated[int, Field(strict=True, ge=1, le=100)] = 20
 
 
@@ -648,7 +650,10 @@ def _list_variation_history(
     if not variations_dir.is_dir():
         return VariationHistoryListResult(limit=limit)
     manifests = []
-    diagnostics = []
+    manifest_keys = []
+    malformed_diagnostics = []
+    malformed_keys = []
+    malformed_count = 0
     for item in variations_dir.iterdir():
         if not item.name.startswith("batch_") or item.suffix != ".json":
             continue
@@ -657,28 +662,44 @@ def _list_variation_history(
             artifact_root, batch_id
         )
         if manifest is not None:
-            manifests.append(manifest)
+            key = (-_variation_created_at_order(manifest), manifest.batch_id)
+            position = bisect_left(manifest_keys, key)
+            if position < limit:
+                manifest_keys.insert(position, key)
+                manifests.insert(position, manifest)
+                if len(manifests) > limit:
+                    manifest_keys.pop()
+                    manifests.pop()
         if diagnostic is not None:
-            diagnostics.append(diagnostic)
-    manifests.sort(key=lambda manifest: manifest.batch_id)
-    manifests.sort(key=_variation_created_at_order, reverse=True)
+            malformed_count += 1
+            position = bisect_left(malformed_keys, diagnostic.batch_id)
+            if position < 100:
+                malformed_keys.insert(position, diagnostic.batch_id)
+                malformed_diagnostics.insert(position, diagnostic)
+                if len(malformed_diagnostics) > 100:
+                    malformed_keys.pop()
+                    malformed_diagnostics.pop()
     results = [
-        _lookup_variation_manifest(artifact_root, manifest)
-        for manifest in manifests[:limit]
+        _lookup_variation_manifest(artifact_root, manifest) for manifest in manifests
     ]
     selected_records = tuple(result.record for result in results if result.record)
-    diagnostics.extend(
+    reference_diagnostics = [
         diagnostic for result in results for diagnostic in result.diagnostics
-    )
-    diagnostics.sort(
+    ]
+    reference_diagnostics.sort(
         key=lambda diagnostic: (
             diagnostic.batch_id,
             diagnostic.generation_id or "",
             diagnostic.code,
         )
     )
+    all_diagnostic_count = malformed_count + len(reference_diagnostics)
+    diagnostics = (reference_diagnostics + malformed_diagnostics)[:100]
     return VariationHistoryListResult(
-        records=selected_records, diagnostics=tuple(diagnostics), limit=limit
+        records=selected_records,
+        diagnostics=tuple(diagnostics),
+        omitted_diagnostic_count=all_diagnostic_count - len(diagnostics),
+        limit=limit,
     )
 
 

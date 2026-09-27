@@ -298,6 +298,7 @@ def test_listing_limit_tie_breaker_and_strict_validation(tmp_path):
     assert default.limit == 20
     assert len(default.records) == 20
     assert len(default.diagnostics) == 40
+    assert default.omitted_diagnostic_count == 0
     assert [item.manifest.batch_id for item in default.records] == [
         f"batch-{index:03d}" for index in range(20)
     ]
@@ -355,3 +356,31 @@ def test_listing_orders_extreme_and_timezone_aware_dates(tmp_path):
         "middle",
         "oldest",
     ]
+
+
+def test_listing_bounds_diagnostics_and_reports_omissions(tmp_path):
+    store = storage.FilesystemArtifactStore(tmp_path / "generations")
+    variations = tmp_path / "variations"
+    variations.mkdir()
+    valid = {
+        **_metadata("good"),
+        "schema_version": 1,
+        "created_at": "2026-09-27T12:00:00",
+        "generation_ids": ["missing-a", "missing-b"],
+    }
+    (variations / "batch_good.json").write_text(json.dumps(valid), encoding="utf-8")
+    for index in range(102):
+        (variations / f"batch_bad-{index:03d}.json").write_text(
+            "{broken", encoding="utf-8"
+        )
+
+    listing = store.list_variation_history()
+
+    assert [record.manifest.batch_id for record in listing.records] == ["good"]
+    assert len(listing.diagnostics) == 100
+    assert listing.omitted_diagnostic_count == 4
+    assert [item.code for item in listing.diagnostics[:2]] == [
+        "generation_missing",
+        "generation_missing",
+    ]
+    assert listing.diagnostics[-1].batch_id == "bad-097"

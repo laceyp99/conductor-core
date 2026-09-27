@@ -104,8 +104,9 @@ if lookup.record is not None:
 Listing defaults to 20 records and accepts an integer limit from 1 through
 100. Booleans, coercible values, and out-of-range values raise `ValueError`.
 Records are ordered by creation time, newest first, with batch ID ascending
-when timestamps tie. The listing includes diagnostics for malformed manifests
-and for missing or invalid generation references in the returned records; a
+when timestamps tie. The listing returns up to 100 diagnostics, prioritizing
+references in the returned records and then malformed manifests by batch ID.
+`omitted_diagnostic_count` reports further problems beyond that bound. A
 malformed manifest does not hide valid neighboring batches.
 
 A lookup has either a record or a `manifest_missing` or `manifest_invalid`
