@@ -612,7 +612,8 @@ def test_claude_thinking_off_disables_adaptive_thinking(
     assert request["thinking"] == {"type": "disabled"}
     assert "output_config" not in request
     assert request["tool_choice"] == {"type": "tool", "name": tool_name}
-    assert request.get("temperature") == expected_temperature
+    assert "temperature" not in request
+    assert request.get("extra_body", {}).get("temperature") == expected_temperature
 
 
 _ANTHROPIC_THINKING_OPTIONAL_MODELS = [

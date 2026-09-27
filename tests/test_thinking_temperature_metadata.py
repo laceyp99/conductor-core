@@ -55,6 +55,8 @@ def _sent_temperature(provider, model, generation, monkeypatch):
         )
 
     request = calls[0]
+    if provider == "Anthropic":
+        return request.get("extra_body", {}).get("temperature")
     if provider == "Google":
         return request["config"].get("temperature")
     return request.get("temperature")

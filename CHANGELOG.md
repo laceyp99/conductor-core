@@ -8,6 +8,12 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+### Fixed
+
+- Claude generation with Anthropic SDK 1.x now sends supported temperatures
+  through `extra_body`, including for models with thinking enabled. This also
+  works with supported 0.x SDK versions.
+
 ## [0.6.0] - 2026-09-24
 
 ### Added
