@@ -33,7 +33,7 @@ except ImportError:  # pragma: no cover - exercised only in minimal installs
 logger = logging.getLogger(__name__)
 
 ANTHROPIC_CACHE_CONTROL_MIN_CHARS = 4096
-# Anthropic requires this temperature whenever thinking is enabled.
+# Older Claude models require this temperature whenever thinking is enabled.
 ANTHROPIC_THINKING_TEMPERATURE = 1.0
 
 
@@ -68,9 +68,11 @@ def _apply_thinking_params(api_params, model_config, temp, use_thinking, effort)
     if thinking_enabled:
         api_params["tool_choice"] = {"type": "auto"}
     if model_config.get("temperature_supported", True):
-        api_params["temperature"] = (
-            ANTHROPIC_THINKING_TEMPERATURE if thinking_enabled else temp
-        )
+        # SDK 1.x removed the temperature keyword, but older models still
+        # accept it in the API request body. extra_body works in both SDK lines.
+        api_params["extra_body"] = {
+            "temperature": ANTHROPIC_THINKING_TEMPERATURE if thinking_enabled else temp
+        }
 
 
 def _raise_anthropic_error(exc: Exception, operation: str) -> None:

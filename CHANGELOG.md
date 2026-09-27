@@ -8,6 +8,14 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-09-27
+
+### Fixed
+
+- Claude generation with Anthropic SDK 1.x now sends supported temperatures
+  through `extra_body`, including for models with thinking enabled. This also
+  works with supported 0.x SDK versions.
+
 ## [0.6.0] - 2026-09-24
 
 ### Added
@@ -433,7 +441,8 @@ other Conductor repositories could build on a shared engine.
 - Deterministic tests and package-boundary checks suitable for reuse outside the
   original LoopGPT application.
 
-[Unreleased]: https://github.com/laceyp99/conductor-core/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/laceyp99/conductor-core/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/laceyp99/conductor-core/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/laceyp99/conductor-core/compare/v0.5.6...v0.6.0
 [0.5.1]: https://github.com/laceyp99/conductor-core/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/laceyp99/conductor-core/compare/v0.4.0...v0.5.0

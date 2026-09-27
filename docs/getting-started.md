@@ -10,13 +10,13 @@ helpers.
 === "uv"
 
     ```powershell
-    uv add "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.5.1"
+    uv add "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.6.1"
     ```
 
 === "pip"
 
     ```powershell
-    python -m pip install "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.5.1"
+    python -m pip install "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.6.1"
     ```
 
 Provider extras are `openai`, `anthropic`, `google`, and `ollama`. 
