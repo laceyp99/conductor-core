@@ -109,6 +109,11 @@ references in the returned records and then malformed manifests by batch ID.
 `omitted_diagnostic_count` reports further problems beyond that bound. A
 malformed manifest does not hide valid neighboring batches.
 
+New manifests store a UTC timestamp. Older manifests stored a local timestamp
+without its timezone; listings use those files' modification times to place
+them among UTC and offset-aware records. Copying or modifying a legacy file
+without preserving its file time can affect its listing position.
+
 A lookup has either a record or a `manifest_missing` or `manifest_invalid`
 diagnostic. A record resolves surviving ordinary generations in manifest order.
 Its `missing_generation_ids` identify generations whose directories are absent;

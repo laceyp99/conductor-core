@@ -21,7 +21,7 @@ import stat
 import tempfile
 from bisect import bisect_left
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated, Literal, Optional
 
@@ -511,7 +511,7 @@ def _save_variation_history(
     }
     manifest = VariationHistoryManifest(
         **{key: value for key, value in values.items() if key in allowed_fields},
-        created_at=datetime.now(),
+        created_at=datetime.now(timezone.utc),
         generation_ids=ordered_ids,
     )
     if len(ordered_ids) != manifest.requested_count:
@@ -606,15 +606,30 @@ def _lookup_variation_manifest(
 
 def _read_variation_manifest_for_listing(
     artifact_root: str | Path, batch_id: str
-) -> tuple[VariationHistoryManifest | None, VariationHistoryDiagnostic | None]:
+) -> tuple[
+    VariationHistoryManifest | None, int | None, VariationHistoryDiagnostic | None
+]:
     try:
-        return _load_variation_manifest(artifact_root, batch_id), None
+        manifest = _load_variation_manifest(artifact_root, batch_id)
+        if manifest.created_at.utcoffset() is None:
+            path = _get_variation_manifest_path(artifact_root, batch_id)
+            order = (
+                datetime(1970, 1, 1).toordinal() * 86400 * 1_000_000
+                + os.lstat(path).st_mtime_ns // 1_000
+            )
+        else:
+            order = _variation_created_at_order(manifest)
+        return manifest, order, None
     except Exception as exc:
         logger.error("Failed to load variation batch %s: %s", batch_id, exc)
-        return None, VariationHistoryDiagnostic(
-            code="manifest_invalid",
-            batch_id=batch_id,
-            message=f"Variation batch {batch_id!r} is invalid: {exc}",
+        return (
+            None,
+            None,
+            VariationHistoryDiagnostic(
+                code="manifest_invalid",
+                batch_id=batch_id,
+                message=f"Variation batch {batch_id!r} is invalid: {exc}",
+            ),
         )
 
 
@@ -658,11 +673,12 @@ def _list_variation_history(
         if not item.name.startswith("batch_") or item.suffix != ".json":
             continue
         batch_id = item.stem.removeprefix("batch_")
-        manifest, diagnostic = _read_variation_manifest_for_listing(
+        manifest, order, diagnostic = _read_variation_manifest_for_listing(
             artifact_root, batch_id
         )
         if manifest is not None:
-            key = (-_variation_created_at_order(manifest), manifest.batch_id)
+            assert order is not None
+            key = (-order, manifest.batch_id)
             position = bisect_left(manifest_keys, key)
             if position < limit:
                 manifest_keys.insert(position, key)

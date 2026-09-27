@@ -1,5 +1,6 @@
 import json
-from datetime import datetime, timedelta
+import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -49,6 +50,9 @@ def test_save_manifest_is_versioned_atomic_and_contains_only_batch_index(
     manifest_path = generation_root.parent / "variations" / "batch_batch-one.json"
     payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert payload["schema_version"] == 1
+    assert datetime.fromisoformat(
+        payload["created_at"].replace("Z", "+00:00")
+    ).utcoffset() == timedelta(0)
     assert payload["generation_ids"] == ["one", "two"]
     assert payload["messages"] == _metadata()["messages"]
     assert payload["usage"] == {
@@ -119,8 +123,10 @@ def test_manifest_lifecycle_never_deletes_generation_artifacts(tmp_path, monkeyp
     newer_path = tmp_path / "variations" / "batch_newer.json"
     older_payload = json.loads(older_path.read_text(encoding="utf-8"))
     newer_payload = json.loads(newer_path.read_text(encoding="utf-8"))
-    older_payload["created_at"] = (datetime.now() - timedelta(days=1)).isoformat()
-    newer_payload["created_at"] = datetime.now().isoformat()
+    older_payload["created_at"] = (
+        datetime.now(timezone.utc) - timedelta(days=1)
+    ).isoformat()
+    newer_payload["created_at"] = datetime.now(timezone.utc).isoformat()
     older_path.write_text(json.dumps(older_payload), encoding="utf-8")
     newer_path.write_text(json.dumps(newer_payload), encoding="utf-8")
 
@@ -285,7 +291,7 @@ def test_listing_limit_tie_breaker_and_strict_validation(tmp_path):
     manifest = {
         **_metadata(),
         "schema_version": 1,
-        "created_at": "2026-09-27T12:00:00",
+        "created_at": "2026-09-27T12:00:00+00:00",
         "generation_ids": ["missing-a", "missing-b"],
     }
     for index in range(101):
@@ -316,7 +322,7 @@ def test_clear_variation_history_reaches_past_default_listing_limit(tmp_path):
     manifest = {
         **_metadata(),
         "schema_version": 1,
-        "created_at": "2026-09-27T12:00:00",
+        "created_at": "2026-09-27T12:00:00+00:00",
         "generation_ids": ["missing-a", "missing-b"],
     }
     for index in range(21):
@@ -339,9 +345,9 @@ def test_listing_orders_extreme_and_timezone_aware_dates(tmp_path):
         "generation_ids": ["missing-a", "missing-b"],
     }
     dates = {
-        "oldest": "0001-01-01T00:00:00",
+        "oldest": "0001-01-01T00:00:00+00:00",
         "middle": "2026-09-27T12:00:00+02:00",
-        "newest": "9999-12-31T23:59:59",
+        "newest": "9999-12-31T23:59:59+00:00",
     }
     for batch_id, created_at in dates.items():
         (variations / f"batch_{batch_id}.json").write_text(
@@ -358,6 +364,45 @@ def test_listing_orders_extreme_and_timezone_aware_dates(tmp_path):
     ]
 
 
+def test_listing_uses_file_time_for_legacy_naive_manifest(tmp_path):
+    store = storage.FilesystemArtifactStore(tmp_path / "generations")
+    variations = tmp_path / "variations"
+    variations.mkdir()
+    manifest = {
+        **_metadata(),
+        "schema_version": 1,
+        "generation_ids": ["missing-a", "missing-b"],
+    }
+    legacy = variations / "batch_legacy.json"
+    legacy.write_text(
+        json.dumps(
+            {
+                **manifest,
+                "batch_id": "legacy",
+                "created_at": "2026-09-27T12:00:00",
+            }
+        ),
+        encoding="utf-8",
+    )
+    legacy_written_at = datetime(2026, 9, 27, 10, tzinfo=timezone.utc).timestamp()
+    os.utime(legacy, (legacy_written_at, legacy_written_at))
+    (variations / "batch_aware.json").write_text(
+        json.dumps(
+            {
+                **manifest,
+                "batch_id": "aware",
+                "created_at": "2026-09-27T11:00:00+00:00",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert [
+        record.manifest.batch_id for record in store.list_variation_history(1).records
+    ] == ["aware"]
+    assert legacy.stat().st_mtime_ns // 1_000_000_000 == int(legacy_written_at)
+
+
 def test_listing_bounds_diagnostics_and_reports_omissions(tmp_path):
     store = storage.FilesystemArtifactStore(tmp_path / "generations")
     variations = tmp_path / "variations"
@@ -365,7 +410,7 @@ def test_listing_bounds_diagnostics_and_reports_omissions(tmp_path):
     valid = {
         **_metadata("good"),
         "schema_version": 1,
-        "created_at": "2026-09-27T12:00:00",
+        "created_at": "2026-09-27T12:00:00+00:00",
         "generation_ids": ["missing-a", "missing-b"],
     }
     (variations / "batch_good.json").write_text(json.dumps(valid), encoding="utf-8")
