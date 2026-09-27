@@ -622,6 +622,23 @@ def _validate_variation_history_limit(limit: int) -> int:
     return limit
 
 
+def _variation_created_at_order(manifest: VariationHistoryManifest) -> int:
+    """Order the full supported datetime range without platform time conversion."""
+    created = manifest.created_at
+    microseconds = (
+        created.toordinal() * 86400
+        + created.hour * 3600
+        + created.minute * 60
+        + created.second
+    ) * 1_000_000 + created.microsecond
+    offset = created.utcoffset()
+    if offset is not None:
+        microseconds -= (
+            offset.days * 86400 + offset.seconds
+        ) * 1_000_000 + offset.microseconds
+    return microseconds
+
+
 def _list_variation_history(
     artifact_root: str | Path,
     limit: int = 20,
@@ -644,7 +661,7 @@ def _list_variation_history(
         if diagnostic is not None:
             diagnostics.append(diagnostic)
     manifests.sort(key=lambda manifest: manifest.batch_id)
-    manifests.sort(key=lambda manifest: manifest.created_at.timestamp(), reverse=True)
+    manifests.sort(key=_variation_created_at_order, reverse=True)
     results = [
         _lookup_variation_manifest(artifact_root, manifest)
         for manifest in manifests[:limit]

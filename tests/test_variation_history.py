@@ -326,3 +326,32 @@ def test_clear_variation_history_reaches_past_default_listing_limit(tmp_path):
 
     assert store.clear_variation_history() == 21
     assert store.list_variation_history().records == ()
+
+
+def test_listing_orders_extreme_and_timezone_aware_dates(tmp_path):
+    store = storage.FilesystemArtifactStore(tmp_path / "generations")
+    variations = tmp_path / "variations"
+    variations.mkdir()
+    manifest = {
+        **_metadata(),
+        "schema_version": 1,
+        "generation_ids": ["missing-a", "missing-b"],
+    }
+    dates = {
+        "oldest": "0001-01-01T00:00:00",
+        "middle": "2026-09-27T12:00:00+02:00",
+        "newest": "9999-12-31T23:59:59",
+    }
+    for batch_id, created_at in dates.items():
+        (variations / f"batch_{batch_id}.json").write_text(
+            json.dumps({**manifest, "batch_id": batch_id, "created_at": created_at}),
+            encoding="utf-8",
+        )
+
+    assert [
+        record.manifest.batch_id for record in store.list_variation_history().records
+    ] == [
+        "newest",
+        "middle",
+        "oldest",
+    ]
