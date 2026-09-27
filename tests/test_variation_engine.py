@@ -86,7 +86,7 @@ def test_generate_variations_persists_ordered_children_and_one_manifest(
     )
     assert len(list((tmp_path / "variations").glob("*.json"))) == 1
 
-    record = engine.store.get_variation_history(result.metadata.batch_id)
+    record = engine.store.get_variation_history(result.metadata.batch_id).record
     assert record is not None
     assert list(record.manifest.messages) == result.metadata.messages
     assert record.manifest.generation_ids == tuple(

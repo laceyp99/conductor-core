@@ -8,6 +8,18 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-09-27
+
+### Changed
+
+- Variation history lookup and listing now return structured results with
+  machine-readable diagnostics for malformed manifests and missing or invalid
+  generation artifacts. Listings default to 20 batches, accept at most 100,
+  cap returned diagnostics at 100 with an omitted count, and order timestamp
+  ties by batch ID. Consumers of the previous direct record and list return
+  values must read `.record` and `.records` instead. New manifests record UTC
+  timestamps; listings use file time for older offset-free manifests.
+
 ## [0.6.1] - 2026-09-27
 
 ### Fixed
@@ -441,7 +453,8 @@ other Conductor repositories could build on a shared engine.
 - Deterministic tests and package-boundary checks suitable for reuse outside the
   original LoopGPT application.
 
-[Unreleased]: https://github.com/laceyp99/conductor-core/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/laceyp99/conductor-core/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/laceyp99/conductor-core/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/laceyp99/conductor-core/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/laceyp99/conductor-core/compare/v0.5.6...v0.6.0
 [0.5.1]: https://github.com/laceyp99/conductor-core/compare/v0.5.0...v0.5.1

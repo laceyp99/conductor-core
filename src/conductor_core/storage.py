@@ -19,8 +19,9 @@ import os
 import shutil
 import stat
 import tempfile
+from bisect import bisect_left
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated, Literal, Optional
 
@@ -32,6 +33,9 @@ logger = logging.getLogger(__name__)
 
 # Default maximum number of generations retained by module-level helpers.
 MAX_GENERATIONS = 20
+DEFAULT_VARIATION_HISTORY_LIMIT = 20
+MAX_VARIATION_HISTORY_LIMIT = 100
+MAX_VARIATION_HISTORY_DIAGNOSTICS = 100
 
 _DEFAULT_MAX_GENERATIONS = object()
 
@@ -93,12 +97,12 @@ class FilesystemArtifactStore:
     ) -> "VariationHistoryRecord":
         return _save_variation_history(self.artifact_root, metadata, generation_ids)
 
-    def list_variation_history(self) -> list["VariationHistoryRecord"]:
-        return _list_variation_history(self.artifact_root)
+    def list_variation_history(
+        self, limit: int = DEFAULT_VARIATION_HISTORY_LIMIT
+    ) -> "VariationHistoryListResult":
+        return _list_variation_history(self.artifact_root, limit)
 
-    def get_variation_history(
-        self, batch_id: str
-    ) -> Optional["VariationHistoryRecord"]:
+    def get_variation_history(self, batch_id: str) -> "VariationHistoryLookupResult":
         return _get_variation_history(self.artifact_root, batch_id)
 
     def delete_variation_history(self, batch_id: str) -> bool:
@@ -187,6 +191,42 @@ class VariationHistoryRecord(_VariationHistoryContract):
     manifest: VariationHistoryManifest
     generations: tuple[GenerationMetadata, ...]
     missing_generation_ids: tuple[str, ...]
+    invalid_generation_ids: tuple[str, ...] = ()
+
+
+VariationHistoryDiagnosticCode = Literal[
+    "manifest_missing",
+    "manifest_invalid",
+    "generation_missing",
+    "generation_invalid",
+]
+
+
+class VariationHistoryDiagnostic(_VariationHistoryContract):
+    """A machine-readable problem found during a read-only history lookup."""
+
+    code: VariationHistoryDiagnosticCode
+    batch_id: str
+    generation_id: str | None = None
+    message: str
+
+
+class VariationHistoryLookupResult(_VariationHistoryContract):
+    """One batch record, or diagnostics explaining why it is unavailable."""
+
+    record: VariationHistoryRecord | None = None
+    diagnostics: tuple[VariationHistoryDiagnostic, ...] = ()
+
+
+class VariationHistoryListResult(_VariationHistoryContract):
+    """Newest valid batch records and diagnostics from the history directory."""
+
+    records: tuple[VariationHistoryRecord, ...] = ()
+    diagnostics: tuple[VariationHistoryDiagnostic, ...] = ()
+    omitted_diagnostic_count: NonnegativeInt = 0
+    limit: Annotated[int, Field(strict=True, ge=1, le=MAX_VARIATION_HISTORY_LIMIT)] = (
+        DEFAULT_VARIATION_HISTORY_LIMIT
+    )
 
 
 class GenerationWorkspace(BaseModel):
@@ -410,21 +450,46 @@ def _metadata_values(metadata: object) -> dict:
         ) from exc
 
 
+def _load_referenced_generation(
+    artifact_root: str | Path, generation_id: str
+) -> tuple[GenerationMetadata | None, Literal["missing", "invalid"] | None]:
+    try:
+        _validate_generation_id(generation_id)
+        return _load_generation_metadata(artifact_root, generation_id), None
+    except FileNotFoundError:
+        generation_dir = Path(_resolve_artifact_root(artifact_root)) / (
+            f"gen_{generation_id}"
+        )
+        if os.path.lexists(generation_dir):
+            return None, "invalid"
+        return None, "missing"
+    except Exception as exc:
+        logger.warning(
+            "Invalid generation %s in variation history: %s", generation_id, exc
+        )
+        return None, "invalid"
+
+
 def _resolve_variation_manifest(
     artifact_root: str | Path, manifest: VariationHistoryManifest
 ) -> VariationHistoryRecord:
     generations = []
     missing_ids = []
+    invalid_ids = []
     for generation_id in manifest.generation_ids:
-        generation = _get_generation(artifact_root, generation_id)
-        if generation is None:
+        generation, status = _load_referenced_generation(artifact_root, generation_id)
+        if status == "missing":
             missing_ids.append(generation_id)
+        elif status == "invalid":
+            invalid_ids.append(generation_id)
         else:
+            assert generation is not None
             generations.append(generation)
     return VariationHistoryRecord(
         manifest=manifest,
         generations=tuple(generations),
         missing_generation_ids=tuple(missing_ids),
+        invalid_generation_ids=tuple(invalid_ids),
     )
 
 
@@ -453,7 +518,7 @@ def _save_variation_history(
     }
     manifest = VariationHistoryManifest(
         **{key: value for key, value in values.items() if key in allowed_fields},
-        created_at=datetime.now(),
+        created_at=datetime.now(timezone.utc),
         generation_ids=ordered_ids,
     )
     if len(ordered_ids) != manifest.requested_count:
@@ -493,34 +558,181 @@ def _load_variation_manifest(
 
 def _get_variation_history(
     artifact_root: str | Path, batch_id: str
-) -> VariationHistoryRecord | None:
+) -> VariationHistoryLookupResult:
     _validate_batch_id(batch_id)
     try:
         manifest = _load_variation_manifest(artifact_root, batch_id)
     except FileNotFoundError:
-        return None
+        return VariationHistoryLookupResult(
+            diagnostics=(
+                VariationHistoryDiagnostic(
+                    code="manifest_missing",
+                    batch_id=batch_id,
+                    message=f"Variation batch {batch_id!r} does not exist.",
+                ),
+            )
+        )
     except Exception as exc:
         logger.error(f"Failed to load variation batch {batch_id}: {exc}")
-        return None
-    return _resolve_variation_manifest(artifact_root, manifest)
+        return VariationHistoryLookupResult(
+            diagnostics=(
+                VariationHistoryDiagnostic(
+                    code="manifest_invalid",
+                    batch_id=batch_id,
+                    message=f"Variation batch {batch_id!r} is invalid: {exc}",
+                ),
+            )
+        )
+    return _lookup_variation_manifest(artifact_root, manifest)
+
+
+def _lookup_variation_manifest(
+    artifact_root: str | Path, manifest: VariationHistoryManifest
+) -> VariationHistoryLookupResult:
+    batch_id = manifest.batch_id
+    record = _resolve_variation_manifest(artifact_root, manifest)
+    diagnostics = tuple(
+        VariationHistoryDiagnostic(
+            code="generation_missing",
+            batch_id=batch_id,
+            generation_id=generation_id,
+            message=f"Generation {generation_id!r} is missing from batch {batch_id!r}.",
+        )
+        for generation_id in record.missing_generation_ids
+    ) + tuple(
+        VariationHistoryDiagnostic(
+            code="generation_invalid",
+            batch_id=batch_id,
+            generation_id=generation_id,
+            message=f"Generation {generation_id!r} is invalid in batch {batch_id!r}.",
+        )
+        for generation_id in record.invalid_generation_ids
+    )
+    return VariationHistoryLookupResult(record=record, diagnostics=diagnostics)
+
+
+def _read_variation_manifest_for_listing(
+    artifact_root: str | Path, batch_id: str
+) -> tuple[
+    VariationHistoryManifest | None, int | None, VariationHistoryDiagnostic | None
+]:
+    try:
+        manifest = _load_variation_manifest(artifact_root, batch_id)
+        if manifest.created_at.utcoffset() is None:
+            path = _get_variation_manifest_path(artifact_root, batch_id)
+            order = (
+                datetime(1970, 1, 1).toordinal() * 86400 * 1_000_000
+                + os.lstat(path).st_mtime_ns // 1_000
+            )
+        else:
+            order = _variation_created_at_order(manifest)
+        return manifest, order, None
+    except Exception as exc:
+        logger.error("Failed to load variation batch %s: %s", batch_id, exc)
+        return (
+            None,
+            None,
+            VariationHistoryDiagnostic(
+                code="manifest_invalid",
+                batch_id=batch_id,
+                message=f"Variation batch {batch_id!r} is invalid: {exc}",
+            ),
+        )
+
+
+def _validate_variation_history_limit(limit: int) -> int:
+    if (
+        isinstance(limit, bool)
+        or not isinstance(limit, int)
+        or not 1 <= limit <= MAX_VARIATION_HISTORY_LIMIT
+    ):
+        raise ValueError(
+            "variation history limit must be an integer from 1 to "
+            f"{MAX_VARIATION_HISTORY_LIMIT}"
+        )
+    return limit
+
+
+def _variation_created_at_order(manifest: VariationHistoryManifest) -> int:
+    """Order the full supported datetime range without platform time conversion."""
+    created = manifest.created_at
+    microseconds = (
+        created.toordinal() * 86400
+        + created.hour * 3600
+        + created.minute * 60
+        + created.second
+    ) * 1_000_000 + created.microsecond
+    offset = created.utcoffset()
+    if offset is not None:
+        microseconds -= (
+            offset.days * 86400 + offset.seconds
+        ) * 1_000_000 + offset.microseconds
+    return microseconds
 
 
 def _list_variation_history(
     artifact_root: str | Path,
-) -> list[VariationHistoryRecord]:
+    limit: int = DEFAULT_VARIATION_HISTORY_LIMIT,
+) -> VariationHistoryListResult:
+    limit = _validate_variation_history_limit(limit)
     variations_dir = _get_variations_dir(artifact_root)
     if not variations_dir.is_dir():
-        return []
-    records = []
+        return VariationHistoryListResult(limit=limit)
+    manifests = []
+    manifest_keys = []
+    malformed_diagnostics = []
+    malformed_keys = []
+    malformed_count = 0
     for item in variations_dir.iterdir():
         if not item.name.startswith("batch_") or item.suffix != ".json":
             continue
         batch_id = item.stem.removeprefix("batch_")
-        record = _get_variation_history(artifact_root, batch_id)
-        if record is not None:
-            records.append(record)
-    records.sort(key=lambda record: record.manifest.created_at, reverse=True)
-    return records
+        manifest, order, diagnostic = _read_variation_manifest_for_listing(
+            artifact_root, batch_id
+        )
+        if manifest is not None:
+            assert order is not None
+            key = (-order, manifest.batch_id)
+            position = bisect_left(manifest_keys, key)
+            if position < limit:
+                manifest_keys.insert(position, key)
+                manifests.insert(position, manifest)
+                if len(manifests) > limit:
+                    manifest_keys.pop()
+                    manifests.pop()
+        if diagnostic is not None:
+            malformed_count += 1
+            position = bisect_left(malformed_keys, diagnostic.batch_id)
+            if position < MAX_VARIATION_HISTORY_DIAGNOSTICS:
+                malformed_keys.insert(position, diagnostic.batch_id)
+                malformed_diagnostics.insert(position, diagnostic)
+                if len(malformed_diagnostics) > MAX_VARIATION_HISTORY_DIAGNOSTICS:
+                    malformed_keys.pop()
+                    malformed_diagnostics.pop()
+    results = [
+        _lookup_variation_manifest(artifact_root, manifest) for manifest in manifests
+    ]
+    selected_records = tuple(result.record for result in results if result.record)
+    reference_diagnostics = [
+        diagnostic for result in results for diagnostic in result.diagnostics
+    ]
+    reference_diagnostics.sort(
+        key=lambda diagnostic: (
+            diagnostic.batch_id,
+            diagnostic.generation_id or "",
+            diagnostic.code,
+        )
+    )
+    all_diagnostic_count = malformed_count + len(reference_diagnostics)
+    diagnostics = (reference_diagnostics + malformed_diagnostics)[
+        :MAX_VARIATION_HISTORY_DIAGNOSTICS
+    ]
+    return VariationHistoryListResult(
+        records=selected_records,
+        diagnostics=tuple(diagnostics),
+        omitted_diagnostic_count=all_diagnostic_count - len(diagnostics),
+        limit=limit,
+    )
 
 
 def _delete_variation_history(artifact_root: str | Path, batch_id: str) -> bool:
@@ -536,10 +748,18 @@ def _delete_variation_history(artifact_root: str | Path, batch_id: str) -> bool:
 
 
 def _clear_variation_history(artifact_root: str | Path) -> int:
-    records = _list_variation_history(artifact_root)
+    variations_dir = _get_variations_dir(artifact_root)
+    if not variations_dir.is_dir():
+        return 0
+    batch_ids = (
+        item.stem.removeprefix("batch_")
+        for item in variations_dir.iterdir()
+        if item.name.startswith("batch_") and item.suffix == ".json"
+    )
     return sum(
-        _delete_variation_history(artifact_root, record.manifest.batch_id)
-        for record in records
+        _delete_variation_history(artifact_root, batch_id)
+        for batch_id in batch_ids
+        if _read_variation_manifest_for_listing(artifact_root, batch_id)[0] is not None
     )
 
 
@@ -1077,13 +1297,15 @@ def save_variation_history(
     return _save_variation_history(_resolve_artifact_root(), metadata, generation_ids)
 
 
-def list_variation_history() -> list[VariationHistoryRecord]:
-    """List variation records newest first, resolving surviving generations."""
-    return _list_variation_history(_resolve_artifact_root())
+def list_variation_history(
+    limit: int = DEFAULT_VARIATION_HISTORY_LIMIT,
+) -> VariationHistoryListResult:
+    """List recent variation records and diagnostics without changing history."""
+    return _list_variation_history(_resolve_artifact_root(), limit)
 
 
-def get_variation_history(batch_id: str) -> VariationHistoryRecord | None:
-    """Load a variation record, or return None when its manifest is absent."""
+def get_variation_history(batch_id: str) -> VariationHistoryLookupResult:
+    """Load a variation record or explain why its manifest is unavailable."""
     return _get_variation_history(_resolve_artifact_root(), batch_id)
 
 

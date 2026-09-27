@@ -29,6 +29,10 @@ from conductor_core.paths import (
 )
 from conductor_core.storage import (
     GenerationMetadata,
+    VariationHistoryDiagnostic,
+    VariationHistoryDiagnosticCode,
+    VariationHistoryListResult,
+    VariationHistoryLookupResult,
     VariationHistoryManifest,
     VariationHistoryRecord,
     VariationHistoryUsage,
@@ -73,6 +77,10 @@ __all__ = [
     "VariationBatchStatus",
     "VariationDiagnostic",
     "VariationGenerationRequest",
+    "VariationHistoryDiagnostic",
+    "VariationHistoryDiagnosticCode",
+    "VariationHistoryListResult",
+    "VariationHistoryLookupResult",
     "VariationHistoryManifest",
     "VariationHistoryRecord",
     "VariationHistoryUsage",
