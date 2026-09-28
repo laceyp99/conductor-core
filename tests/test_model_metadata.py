@@ -210,7 +210,12 @@ def test_models_have_documented_always_on_adaptive_thinking():
         if model_config.get("always_on_adaptive_thinking")
     }
 
-    assert always_on_models == {"claude-opus-5-5", "claude-fable-5", "claude-fable-5-1"}
+    assert always_on_models == {
+        "claude-opus-5-5",
+        "claude-fable-5",
+        "claude-fable-5-1",
+        "claude-sonnet-5-5",
+    }
 
 
 def test_model_metadata_rejects_non_boolean_always_on_adaptive_thinking():

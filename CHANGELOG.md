@@ -8,6 +8,11 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+### Added
+
+- Claude Sonnet 5.5 (`claude-sonnet-5-5`) model metadata and Anthropic request
+  compatibility for its `between_tools` lowest thinking mode.
+
 ## [0.6.2] - 2026-09-27
 
 ### Changed

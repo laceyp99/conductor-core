@@ -514,6 +514,26 @@
                     "RPD": null
                 }
             },
+            "claude-sonnet-5-5":{
+                "extended_thinking": true,
+                "thinking_off": "between_tools",
+                "temperature_supported": false,
+                "always_on_adaptive_thinking": true,
+                "effort_options": ["low", "medium", "high", "xhigh", "max"],
+                "max_tokens": 128000,
+                "cost": {
+                    "input": 2.00,
+                    "5m cache input": 2.50,
+                    "1h cache input": 4.00,
+                    "cache hits/refreshes": 0.20,
+                    "output": 10.00
+                },
+                "rate_limits": {
+                    "RPM": 1000,
+                    "TPM": 400000,
+                    "RPD": null
+                }
+            },
             "claude-opus-4-8":{
                 "extended_thinking": true,
                 "thinking_off": "disabled",

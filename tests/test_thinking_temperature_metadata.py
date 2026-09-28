@@ -92,6 +92,7 @@ def test_models_that_reject_temperature_are_marked_unsupported():
     models = music.get_model_info()["models"]
     anthropic_models = (
         "claude-opus-5-5",
+        "claude-sonnet-5-5",
         "claude-fable-5-1",
         "claude-fable-5",
         "claude-opus-5",
