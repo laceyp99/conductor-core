@@ -91,6 +91,9 @@ def test_thinking_off_metadata_matches_adapter_request(
     disabled = _reasoning_disabled(provider, model_config, request)
     if model_config["thinking_off"] == "disabled":
         assert disabled
+    elif model_config["thinking_off"] == "between_tools":
+        assert request["thinking"] == {"type": "between_tools"}
+        assert _lowest_effort(provider, model_config, request)
     else:
         assert not disabled
         assert _lowest_effort(provider, model_config, request)
