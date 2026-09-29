@@ -133,7 +133,7 @@ _model_info_cache = None
 
 # What ``use_thinking=False`` sends: the provider's official "no reasoning"
 # setting, or the model's lowest effort when reasoning cannot be turned off.
-THINKING_OFF_MODES = ("disabled", "lowest_effort", "between_tools")
+THINKING_OFF_MODES = ("disabled", "lowest_effort")
 
 VARIATION_PROMPT_VERSION = "variation_gen_v1"
 

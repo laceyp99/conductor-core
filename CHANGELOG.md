@@ -10,8 +10,8 @@ while its public API is still in initial development.
 
 ### Added
 
-- Claude Sonnet 5.5 (`claude-sonnet-5-5`) model metadata and Anthropic request
-  compatibility for its `between_tools` lowest thinking mode.
+- Claude Sonnet 5.5 (`claude-sonnet-5-5`) model metadata. With
+  `use_thinking=False`, Core turns its thinking off (`thinking_off: "disabled"`).
 
 ## [0.6.2] - 2026-09-27
 

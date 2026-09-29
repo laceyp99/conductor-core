@@ -418,7 +418,8 @@
         "Anthropic": {
             "claude-sonnet-5-5":{
                 "extended_thinking": true,
-                "thinking_off": "between_tools",
+                "thinking_off": "disabled",
+                "thinking_off_type": "between_tools",
                 "temperature_supported": false,
                 "always_on_adaptive_thinking": true,
                 "effort_options": ["low", "medium", "high", "xhigh", "max"],

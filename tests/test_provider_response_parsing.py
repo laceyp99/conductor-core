@@ -575,6 +575,30 @@ def test_claude_always_on_thinking_off_uses_lowest_effort(monkeypatch, model):
     assert captured["tool_choice"] == {"type": "auto"}
 
 
+def test_claude_sonnet_5_5_thinking_off_uses_between_tools(monkeypatch):
+    captured = {}
+    payload = json.dumps(_loop_payload())
+
+    def fake_create(**kwargs):
+        captured.update(kwargs)
+        return _anthropic_completion(payload)
+
+    fake_client = SimpleNamespace(messages=SimpleNamespace(create=fake_create))
+    monkeypatch.setattr(
+        claude_api, "initialize_anthropic_client", lambda api_key: fake_client
+    )
+    monkeypatch.setattr(claude_api.utils, "get_loop_prompt", lambda: "system prompt")
+
+    claude_api.loop_gen(
+        "write a loop", "claude-sonnet-5-5", use_thinking=False, effort="max"
+    )
+
+    assert captured["thinking"] == {"type": "between_tools"}
+    assert captured["output_config"] == {"effort": "low"}
+    assert captured["tool_choice"] == {"type": "auto"}
+    assert "extra_body" not in captured
+
+
 @pytest.mark.parametrize("generation", ["loop", "variations"])
 @pytest.mark.parametrize(
     ("model", "expected_temperature"),

@@ -47,8 +47,9 @@ def _apply_thinking_params(api_params, model_config, temp, use_thinking, effort)
     effort_options = model_config.get("effort_options") or []
     thinking_enabled = False
     if model_config.get("always_on_adaptive_thinking", False):
-        if not use_thinking and model_config.get("thinking_off") == "between_tools":
-            api_params["thinking"] = {"type": "between_tools"}
+        # Some always-on models turn thinking off with a model-specific type.
+        if not use_thinking and model_config.get("thinking_off_type"):
+            api_params["thinking"] = {"type": model_config["thinking_off_type"]}
         api_params["output_config"] = {
             "effort": effort if use_thinking else effort_options[0]
         }
