@@ -53,7 +53,10 @@ Example shape:
 
 Keep field names and nesting consistent with nearby entries. If a provider does not publish one of these values, do not fabricate it.
 Anthropic models that always apply adaptive thinking should set
-`always_on_adaptive_thinking` to `true`; omit the field otherwise.
+`always_on_adaptive_thinking` to `true`; omit the field otherwise. If such a
+model turns thinking off with its own `thinking` type rather than
+`{"type": "disabled"}`, set `thinking_off` to `"disabled"` and
+`thinking_off_type` to that type (for example, `"between_tools"`).
 Record reasoning and temperature behavior from the provider's documentation.
 Offline tests check these fields against the request each adapter builds
 (`tests/test_thinking_off_metadata.py` and

@@ -50,10 +50,11 @@ def _reasoning_disabled(provider, model_config, request):
     if provider == "OpenAI":
         return request["reasoning"]["effort"] == "none"
     if provider == "Anthropic":
-        return (
-            request.get("thinking", {"type": "disabled"}) == {"type": "disabled"}
-            and "output_config" not in request
-        )
+        thinking = request.get("thinking", {"type": "disabled"})
+        # Claude Sonnet 5.5 rejects "disabled"; "between_tools" is its off switch.
+        if thinking == {"type": "between_tools"}:
+            return model_config.get("thinking_off_type") == "between_tools"
+        return thinking == {"type": "disabled"} and "output_config" not in request
     thinking_config = request["config"]["thinking_config"]
     return thinking_config.thinking_budget == 0
 

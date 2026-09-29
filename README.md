@@ -27,7 +27,7 @@ all hosted and local model providers, a provider name such as `google` for one
 provider, and `playback` for audio helpers.
 
 ```powershell
-uv add "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.6.1"
+uv add "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.6.3"
 ```
 
 ## Generate a loop

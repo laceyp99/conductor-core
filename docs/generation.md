@@ -63,8 +63,9 @@ Every thinking-capable model reports `thinking_off`, which says what
 | `lowest_effort` | Reasoning cannot be turned off, so Core sends the lowest effort or thinking budget. | Models whose reasoning is always on. |
 
 Models without extended thinking omit the field. When Core turns thinking off,
-it sends no effort and uses the requested temperature where the model accepts
-one.
+it ignores the requested effort. It sends the model's lowest effort only where
+the provider's off setting takes one, such as Claude Sonnet 5.5, and uses the
+requested temperature where the model accepts one.
 
 With `use_thinking=True`, Core validates and sends the requested effort. Models
 using thinking budgets retain their provider-specific limits. Because `effort`
