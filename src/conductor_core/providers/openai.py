@@ -77,7 +77,9 @@ class _VariationParseKwargs(TypedDict):
     temperature: NotRequired[float]
 
 
-def _reasoning_params(effort: str) -> Reasoning:
+def _reasoning_params(effort: str, effort_options: list[str]) -> Reasoning:
+    if effort_options and effort not in effort_options:
+        raise ValueError(f"Unsupported OpenAI model reasoning effort: {effort}")
     if effort not in ("none", "minimal", "low", "medium", "high", "xhigh", "max"):
         raise ValueError(f"Unsupported OpenAI reasoning effort: {effort}")
     return {"effort": cast("ReasoningEffort", effort), "summary": "auto"}
@@ -201,7 +203,7 @@ def loop_gen(
     if effort_options and not use_thinking:
         effort = effort_options[0]
     if model_config.get("extended_thinking") and effort:
-        request_params["reasoning"] = _reasoning_params(effort)
+        request_params["reasoning"] = _reasoning_params(effort, effort_options)
     elif model_config.get("temperature_supported", True):
         request_params["temperature"] = temp
 
@@ -264,7 +266,7 @@ def variations_gen(
     if effort_options and not use_thinking:
         effort = effort_options[0]
     if model_config.get("extended_thinking") and effort:
-        request_params["reasoning"] = _reasoning_params(effort)
+        request_params["reasoning"] = _reasoning_params(effort, effort_options)
     elif model_config.get("temperature_supported", True):
         request_params["temperature"] = temp
     try:

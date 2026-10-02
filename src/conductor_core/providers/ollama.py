@@ -267,6 +267,8 @@ def _thinking_option(
     effort_options = model_capabilities.get("effort_options") or []
     validated_effort: Literal["low", "medium", "high"] | None = None
     if effort_options and effort is not None:
+        if effort not in effort_options:
+            raise ValueError(f"Unsupported Ollama reasoning effort for model: {effort}")
         if effort == "low":
             validated_effort = "low"
         elif effort == "medium":

@@ -16,6 +16,13 @@ def test_anthropic_rejects_unknown_reasoning_effort():
         anthropic._validated_effort("extreme")
 
 
+def test_anthropic_rejects_effort_not_advertised_by_model():
+    with pytest.raises(
+        ValueError, match="Unsupported Anthropic model reasoning effort"
+    ):
+        anthropic._validated_effort("high", ["low", "medium"])
+
+
 class _RequestCaptured(Exception):
     pass
 

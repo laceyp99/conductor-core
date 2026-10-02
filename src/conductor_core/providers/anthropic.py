@@ -78,7 +78,10 @@ class _AnthropicRequest(TypedDict):
 
 def _validated_effort(
     effort: str | None,
+    effort_options: list[str] | None = None,
 ) -> Literal["low", "medium", "high", "xhigh", "max"]:
+    if effort_options and effort not in effort_options:
+        raise ValueError(f"Unsupported Anthropic model reasoning effort: {effort}")
     if effort == "low":
         return "low"
     if effort == "medium":
@@ -117,12 +120,16 @@ def _apply_thinking_params(
         if not use_thinking and model_config.get("thinking_off_type"):
             api_params["thinking"] = {"type": model_config["thinking_off_type"]}
         api_params["output_config"] = {
-            "effort": _validated_effort(effort if use_thinking else effort_options[0])
+            "effort": _validated_effort(
+                effort if use_thinking else effort_options[0], effort_options
+            )
         }
         thinking_enabled = True
     elif use_thinking and effort_options:
         api_params["thinking"] = {"type": "adaptive"}
-        api_params["output_config"] = {"effort": _validated_effort(effort)}
+        api_params["output_config"] = {
+            "effort": _validated_effort(effort, effort_options)
+        }
         thinking_enabled = True
     elif use_thinking and model_config.get("extended_thinking"):
         api_params["thinking"] = {
