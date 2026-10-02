@@ -1,12 +1,14 @@
 """Provider routing for Conductor Core."""
 
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
 from conductor_core.config import ProviderCredentials
 from conductor_core.models import Loop
 from conductor_core.music import get_model_info
+from conductor_core.provider_types import ProviderId, ProviderMessage
 from conductor_core.providers import anthropic as claude_api
 from conductor_core.providers import google as gemini_api
 from conductor_core.providers import ollama as ollama_api
@@ -17,17 +19,32 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
+class LoopProviderResult:
+    """Normalized result of a single provider loop request."""
+
+    loop: Loop
+    messages: list[ProviderMessage]
+    cost: float | None
+    provider: ProviderId
+
+
+@dataclass(frozen=True)
 class VariationProviderResult:
     """Normalized result of a single provider variation request."""
 
     variations: tuple[Loop, ...]
-    provider: str
-    messages: list[dict[str, Any]]
+    provider: ProviderId
+    messages: list[ProviderMessage]
     usage: VariationUsage | None
     cost: float | None
 
 
-def _resolve_reasoning_effort(model_choice, model_config, use_thinking, effort):
+def _resolve_reasoning_effort(
+    model_choice: str,
+    model_config: Mapping[str, Any],
+    use_thinking: bool,
+    effort: str | None,
+) -> str | None:
     """Validate reasoning options and return the effective provider effort."""
     effort_options = model_config.get("effort_options") or []
     if effort_options and not use_thinking:
@@ -56,7 +73,11 @@ def _resolve_reasoning_effort(model_choice, model_config, use_thinking, effort):
     return effort
 
 
-def _warn_ignored_num_ctx(model_choice, model_info, ollama_num_ctx):
+def _warn_ignored_num_ctx(
+    model_choice: str,
+    model_info: Mapping[str, Any],
+    ollama_num_ctx: int | None,
+) -> None:
     """Log when an Ollama-only context size is set for a cloud model."""
     if ollama_num_ctx is None:
         return
@@ -69,25 +90,27 @@ def _warn_ignored_num_ctx(model_choice, model_info, ollama_num_ctx):
 
 
 def generate_midi(
-    model_choice,
-    prompt,
-    temp=0.0,
-    use_thinking=False,
-    effort="low",
+    model_choice: str,
+    prompt: str,
+    temp: float = 0.0,
+    use_thinking: bool = False,
+    effort: str | None = "low",
     provider_credentials: ProviderCredentials | None = None,
     request_timeout: float | None = None,
     system_prompt: str | None = None,
     ollama_num_ctx: int | None = None,
-):
+) -> LoopProviderResult:
     """Generate loop data by routing a prompt to the selected provider.
 
     Returns:
-        A tuple of ``(loop, messages, total_cost, provider)``, where ``provider``
-        is the name of the provider that handled the request.
+        A :class:`LoopProviderResult` with the generated loop, provider
+        messages, total cost, and the name of the provider that handled the
+        request.
     """
     credentials = provider_credentials or ProviderCredentials()
     model_info = get_model_info()
     _warn_ignored_num_ctx(model_choice, model_info, ollama_num_ctx)
+    provider: ProviderId
 
     if model_choice in model_info["models"]["OpenAI"]:
         effective_effort = _resolve_reasoning_effort(
@@ -195,39 +218,35 @@ def generate_midi(
         else:
             raise ValueError("Invalid Model Selected")
 
-    return loop, messages, loop_cost, provider
+    return LoopProviderResult(
+        loop=loop, messages=messages, cost=loop_cost, provider=provider
+    )
 
 
 def generate_variations(
-    model_choice,
-    prompt,
-    count,
-    temp=0.0,
-    use_thinking=False,
-    effort="low",
+    model_choice: str,
+    prompt: str,
+    count: int,
+    temp: float = 0.0,
+    use_thinking: bool = False,
+    effort: str | None = "low",
     provider_credentials: ProviderCredentials | None = None,
     request_timeout: float | None = None,
     system_prompt: str | None = None,
     ollama_num_ctx: int | None = None,
-):
+) -> VariationProviderResult:
     """Route one ordered variation collection request to a provider."""
     credentials = provider_credentials or ProviderCredentials()
     model_info = get_model_info()
     _warn_ignored_num_ctx(model_choice, model_info, ollama_num_ctx)
-    timeout = (
-        {"request_timeout": request_timeout} if request_timeout is not None else {}
-    )
-    common = {
-        "prompt": f"Requested variation count: {count}\n\n{prompt}",
-        "model": model_choice,
-        "temp": temp,
-        "system_prompt": system_prompt,
-        **timeout,
-    }
+    variation_prompt = f"Requested variation count: {count}\n\n{prompt}"
+    provider: ProviderId
     if model_choice in model_info["models"]["OpenAI"]:
         provider = "OpenAI"
-        adapter = openai_api
-        common.update(
+        collection, messages, cost, usage = openai_api.variations_gen(
+            prompt=variation_prompt,
+            model=model_choice,
+            temp=temp,
             use_thinking=use_thinking,
             effort=_resolve_reasoning_effort(
                 model_choice,
@@ -236,11 +255,19 @@ def generate_variations(
                 effort,
             ),
             api_key=credentials.openai_api_key,
+            system_prompt=system_prompt,
+            **(
+                {"request_timeout": request_timeout}
+                if request_timeout is not None
+                else {}
+            ),
         )
     elif model_choice in model_info["models"]["Google"]:
         provider = "Google"
-        adapter = gemini_api
-        common.update(
+        collection, messages, cost, usage = gemini_api.variations_gen(
+            prompt=variation_prompt,
+            model=model_choice,
+            temp=temp,
             use_thinking=use_thinking,
             effort=_resolve_reasoning_effort(
                 model_choice,
@@ -249,11 +276,19 @@ def generate_variations(
                 effort,
             ),
             api_key=credentials.google_api_key,
+            system_prompt=system_prompt,
+            **(
+                {"request_timeout": request_timeout}
+                if request_timeout is not None
+                else {}
+            ),
         )
     elif model_choice in model_info["models"]["Anthropic"]:
         provider = "Anthropic"
-        adapter = claude_api
-        common.update(
+        collection, messages, cost, usage = claude_api.variations_gen(
+            prompt=variation_prompt,
+            model=model_choice,
+            temp=temp,
             use_thinking=use_thinking,
             effort=_resolve_reasoning_effort(
                 model_choice,
@@ -262,10 +297,22 @@ def generate_variations(
                 effort,
             ),
             api_key=credentials.anthropic_api_key,
+            system_prompt=system_prompt,
+            **(
+                {"request_timeout": request_timeout}
+                if request_timeout is not None
+                else {}
+            ),
         )
     else:
         status = ollama_api.get_model_status(
-            model_choice, host_address=credentials.ollama_host, **timeout
+            model_choice,
+            host_address=credentials.ollama_host,
+            **(
+                {"request_timeout": request_timeout}
+                if request_timeout is not None
+                else {}
+            ),
         )
         if not status["installed"]:
             if not status["available"]:
@@ -278,17 +325,23 @@ def generate_variations(
             model_choice, model_capabilities, use_thinking, effort
         )
         provider = "Ollama"
-        adapter = ollama_api
-        common["host_address"] = credentials.ollama_host
-        common.update(
+        collection, messages, cost, usage = ollama_api.variations_gen(
+            prompt=variation_prompt,
+            model=model_choice,
+            temp=temp,
+            host_address=credentials.ollama_host,
+            system_prompt=system_prompt,
             use_thinking=use_thinking,
             effort=effective_effort,
             model_capabilities=model_capabilities,
+            **(
+                {"request_timeout": request_timeout}
+                if request_timeout is not None
+                else {}
+            ),
+            **({"num_ctx": ollama_num_ctx} if ollama_num_ctx is not None else {}),
         )
-        if ollama_num_ctx is not None:
-            common["num_ctx"] = ollama_num_ctx
 
-    collection, messages, cost, usage = adapter.variations_gen(**common)
     return VariationProviderResult(
         variations=tuple(collection.variations),
         provider=provider,
