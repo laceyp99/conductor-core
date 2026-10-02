@@ -12,6 +12,7 @@ from conductor_core.errors import (
     ProviderRequestError,
     ProviderTimeoutError,
 )
+from conductor_core.provider_types import ProviderMessage
 from conductor_core.providers._variations import VariationCollection
 from conductor_core.variations import VariationUsage
 
@@ -226,15 +227,15 @@ def process_streaming_response(completion):
 
 
 def loop_gen(
-    prompt,
-    model,
-    temp=0.0,
-    use_thinking=False,
-    effort="low",
+    prompt: str,
+    model: str,
+    temp: float = 0.0,
+    use_thinking: bool = False,
+    effort: str | None = "low",
     api_key: str | None = None,
     system_prompt: str | None = None,
     request_timeout: float | None = None,
-):
+) -> tuple[objects.Loop, list[ProviderMessage], float]:
     """Generate a MIDI loop using the specified Anthropic model and prompt."""
     client = initialize_anthropic_client(
         api_key=api_key,
@@ -292,7 +293,7 @@ def loop_gen(
         )
     loop = objects.Loop.model_validate_json(output["loop"])
 
-    messages = [
+    messages: list[ProviderMessage] = [
         {"role": "system", "content": loop_prompt},
         {"role": "user", "content": prompt},
     ]
@@ -304,15 +305,17 @@ def loop_gen(
 
 
 def variations_gen(
-    prompt,
-    model,
-    temp=0.0,
-    use_thinking=False,
-    effort="low",
+    prompt: str,
+    model: str,
+    temp: float = 0.0,
+    use_thinking: bool = False,
+    effort: str | None = "low",
     api_key: str | None = None,
     system_prompt: str | None = None,
     request_timeout: float | None = None,
-):
+) -> tuple[
+    VariationCollection, list[ProviderMessage], float | None, VariationUsage | None
+]:
     """Generate an ordered collection of loops in one Anthropic response."""
     client = initialize_anthropic_client(
         api_key=api_key,
@@ -359,7 +362,7 @@ def variations_gen(
     if not output["loop"]:
         raise ValueError(f"Model {model} did not call the build_MIDI_variations tool.")
     collection = VariationCollection.model_validate_json(output["loop"])
-    messages = [
+    messages: list[ProviderMessage] = [
         {"role": "system", "content": loop_prompt},
         {"role": "user", "content": prompt},
     ]

@@ -2,6 +2,8 @@
 
 import logging
 import os
+from collections.abc import Mapping
+from typing import Any
 
 from conductor_core import models as objects
 from conductor_core import music as utils
@@ -12,6 +14,7 @@ from conductor_core.errors import (
     ProviderTimeoutError,
     error_for_status,
 )
+from conductor_core.provider_types import ProviderMessage
 from conductor_core.providers._variations import VariationCollection
 from conductor_core.variations import VariationUsage
 
@@ -267,24 +270,24 @@ def _raise_if_out_of_context(completion, model, num_ctx):
 
 
 def loop_gen(
-    prompt,
-    model,
-    temp=0.0,
+    prompt: str,
+    model: str,
+    temp: float = 0.0,
     host_address: str | None = None,
     system_prompt: str | None = None,
     request_timeout: float | None = None,
     use_thinking: bool = False,
     effort: str | None = "low",
-    model_capabilities: dict | None = None,
+    model_capabilities: Mapping[str, Any] | None = None,
     num_ctx: int | None = None,
-):
+) -> tuple[objects.Loop, list[ProviderMessage], float]:
     """Generate a MIDI loop using the specified Ollama model and prompt."""
     client = initialize_ollama_client(
         host_address=host_address,
         **({"timeout": request_timeout} if request_timeout is not None else {}),
     )
     loop_prompt = system_prompt or utils.get_loop_prompt()
-    messages = [
+    messages: list[ProviderMessage] = [
         {"role": "system", "content": loop_prompt},
         {"role": "user", "content": prompt},
     ]
@@ -327,24 +330,24 @@ def loop_gen(
 
 
 def variations_gen(
-    prompt,
-    model,
-    temp=0.0,
+    prompt: str,
+    model: str,
+    temp: float = 0.0,
     host_address: str | None = None,
     system_prompt: str | None = None,
     request_timeout: float | None = None,
     use_thinking: bool = False,
     effort: str | None = "low",
-    model_capabilities: dict | None = None,
+    model_capabilities: Mapping[str, Any] | None = None,
     num_ctx: int | None = None,
-):
+) -> tuple[VariationCollection, list[ProviderMessage], float, VariationUsage | None]:
     """Generate an ordered collection of loops in one Ollama response."""
     client = initialize_ollama_client(
         host_address=host_address,
         **({"timeout": request_timeout} if request_timeout is not None else {}),
     )
     loop_prompt = system_prompt or utils.get_variation_prompt()
-    messages = [
+    messages: list[ProviderMessage] = [
         {"role": "system", "content": loop_prompt},
         {"role": "user", "content": prompt},
     ]
