@@ -22,10 +22,12 @@ from conductor_core.variations import (
     VariationBatchMetadata,
     VariationBatchResult,
     VariationDiagnostic,
+    VariationProgressStatus,
     VariationResult,
 )
 
-ProgressCallback = Callable[[ProgressEvent], None]
+# Synchronous progress listener. Core ignores whatever it returns.
+ProgressCallback = Callable[[ProgressEvent], object]
 
 
 class LoopGenerationEngine:
@@ -51,7 +53,7 @@ class LoopGenerationEngine:
         *,
         batch_id: str | None = None,
         variation_index: int | None = None,
-        status: str | None = None,
+        status: VariationProgressStatus | None = None,
     ) -> None:
         if progress_callback:
             progress_callback(

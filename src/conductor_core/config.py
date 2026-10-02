@@ -4,11 +4,12 @@ import os
 from dataclasses import dataclass, field
 from math import isfinite
 from pathlib import Path
-from typing import Any, get_args
+from typing import get_args
 
 from conductor_core.models import Loop
 from conductor_core.music import ENHARMONIC_NOTE_NAMES, SCALE_INTERVALS
 from conductor_core.paths import resolve_default_artifact_root
+from conductor_core.provider_types import ProviderMessage
 from conductor_core.storage import (
     MAX_GENERATIONS,
     GenerationMetadata,
@@ -261,7 +262,7 @@ class GenerationResult:
     loop: Loop
     midi_path: str
     audio_path: str | None
-    messages: list[dict[str, Any]]
+    messages: list[ProviderMessage]
     cost: float | None
     metadata: GenerationMetadata
     warnings: list[str] = field(default_factory=list)

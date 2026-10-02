@@ -11,7 +11,7 @@ from conductor_core.config import (
     VariationGenerationRequest,
     validate_variation_count,
 )
-from conductor_core.engine import LoopGenerationEngine
+from conductor_core.engine import LoopGenerationEngine, ProgressCallback
 from conductor_core.errors import (
     AudioRenderingError,
     ProviderAuthenticationError,
@@ -63,6 +63,7 @@ __all__ = [
     "GenerationRequest",
     "GenerationResult",
     "LoopGenerationEngine",
+    "ProgressCallback",
     "ProgressEvent",
     "ProviderAuthenticationError",
     "ProviderConnectionError",
