@@ -4,6 +4,7 @@ It supports converting a loop into MIDI (with proper absolute and delta timing) 
 """
 
 import logging
+from os import PathLike
 
 from mido import Message, MetaMessage, MidiFile, MidiTrack, merge_tracks
 
@@ -13,7 +14,7 @@ from conductor_core import music as utils
 logger = logging.getLogger(__name__)
 
 
-def _export_ticks_per_sixteenth(ticks_per_beat):
+def _export_ticks_per_sixteenth(ticks_per_beat: int) -> int:
     """Return an exact sixteenth-note tick size for a target MIDI file."""
     if ticks_per_beat <= 0 or ticks_per_beat % 4:
         raise ValueError(
@@ -23,7 +24,7 @@ def _export_ticks_per_sixteenth(ticks_per_beat):
     return ticks_per_beat // 4
 
 
-def _validate_import_ppq(ticks_per_beat):
+def _validate_import_ppq(ticks_per_beat: int) -> None:
     """Reject unsupported SMPTE or invalid MIDI time divisions."""
     if ticks_per_beat <= 0:
         raise ValueError(
@@ -32,7 +33,7 @@ def _validate_import_ppq(ticks_per_beat):
         )
 
 
-def loop_to_midi(midi, loop) -> list[str]:
+def loop_to_midi(midi: MidiFile, loop: objects.Loop) -> list[str]:
     """
     Converts a loop object into MIDI format.
 
@@ -53,6 +54,7 @@ def loop_to_midi(midi, loop) -> list[str]:
         raise ValueError(
             "One or more bars in the loop object are None. Ensure all bars are initialized."
         )
+    complete_bars: list[objects.Bar] = [bar for bar in bars if bar is not None]
 
     warnings = []
 
@@ -66,7 +68,7 @@ def loop_to_midi(midi, loop) -> list[str]:
     # Initialize a list to hold all note events (on and off).
     events = []
     # Iterate through each bar and its notes to schedule events.
-    for bar_index, bar in enumerate(bars):
+    for bar_index, bar in enumerate(complete_bars):
         bar_offset = bar_index * bar_length
         # Iterate through each note in the bar.
         for note in bar.notes:
@@ -165,7 +167,7 @@ def loop_to_midi(midi, loop) -> list[str]:
     return warnings
 
 
-def midi_to_loop(midi_filename):
+def midi_to_loop(midi_filename: str | PathLike[str]) -> objects.Loop:
     """
     Converts a MIDI file into a loop object.
 

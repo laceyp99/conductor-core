@@ -11,6 +11,13 @@ from conductor_core.providers import ollama
 from conductor_core.providers._variations import VariationCollection
 
 
+def test_ollama_rejects_unknown_reasoning_effort():
+    capabilities = {"extended_thinking": True, "effort_options": ["low", "medium"]}
+
+    with pytest.raises(ValueError, match="Unsupported Ollama reasoning effort"):
+        ollama._thinking_option(capabilities, True, "extreme")
+
+
 def _loop_payload():
     bar = {
         "num": 1,

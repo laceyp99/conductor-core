@@ -14,11 +14,17 @@ import logging
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import wave
 from contextlib import ExitStack, suppress
 from importlib import resources
 from threading import Lock
+
+if sys.version_info >= (3, 11):
+    from importlib.resources.abc import Traversable
+else:
+    from importlib.abc import Traversable
 
 from mido import MidiFile, merge_tracks, tick2second
 
@@ -132,14 +138,14 @@ def _soundfont_search_dirs() -> list[str]:
     return search_dirs
 
 
-def _packaged_soundfont_dir():
+def _packaged_soundfont_dir() -> Traversable | None:
     """Return the built-in SoundFont resource directory lazily."""
     if SOUNDFONT_DIR is not None:
         return None
     return resources.files("conductor_core.resources").joinpath("soundfonts")
 
 
-def _packaged_soundfont_files():
+def _packaged_soundfont_files() -> list[Traversable]:
     """Return built-in SoundFont resources without assuming filesystem paths."""
     try:
         soundfont_dir = _packaged_soundfont_dir()
@@ -154,7 +160,7 @@ def _packaged_soundfont_files():
         return []
 
 
-def _materialize_packaged_soundfont(resource) -> str:
+def _materialize_packaged_soundfont(resource: Traversable) -> str:
     """Materialize a packaged SoundFont and keep its path valid until exit."""
     with _PACKAGED_SOUNDFONT_LOCK:
         cached_path = _PACKAGED_SOUNDFONT_PATHS.get(resource.name)

@@ -37,7 +37,12 @@ DEFAULT_VARIATION_HISTORY_LIMIT = 20
 MAX_VARIATION_HISTORY_LIMIT = 100
 MAX_VARIATION_HISTORY_DIAGNOSTICS = 100
 
-_DEFAULT_MAX_GENERATIONS = object()
+
+class _DefaultMaxGenerations:
+    """Distinct sentinel type so retention values can be narrowed safely."""
+
+
+_DEFAULT_MAX_GENERATIONS = _DefaultMaxGenerations()
 
 
 @dataclass(frozen=True)
@@ -55,19 +60,43 @@ class FilesystemArtifactStore:
         self,
         artifact_root: str | Path | None = None,
         max_generations: int | None = MAX_GENERATIONS,
-    ):
-        self.artifact_root = _resolve_artifact_root(artifact_root)
-        self.max_generations = _validate_max_generations(max_generations)
+    ) -> None:
+        self.artifact_root: str = _resolve_artifact_root(artifact_root)
+        self.max_generations: int | None = _validate_max_generations(max_generations)
 
     def create_generation_workspace(self) -> "GenerationWorkspace":
         return _create_generation_workspace(self.artifact_root)
 
-    def finalize_generation(self, *args, **kwargs) -> "GenerationMetadata":
+    def finalize_generation(
+        self,
+        workspace: "GenerationWorkspace",
+        prompt: str,
+        key: str,
+        scale: str,
+        model: str,
+        provider: str,
+        temperature: float,
+        use_thinking: bool | None = None,
+        effort: str | None = None,
+        cost: float | None = None,
+        soundfont: str | None = None,
+        audio_render_succeeded: bool | None = None,
+    ) -> "GenerationMetadata":
         return _finalize_generation(
             self.artifact_root,
-            *args,
+            workspace=workspace,
+            prompt=prompt,
+            key=key,
+            scale=scale,
+            model=model,
+            provider=provider,
+            temperature=temperature,
+            use_thinking=use_thinking,
+            effort=effort,
+            cost=cost,
+            soundfont=soundfont,
+            audio_render_succeeded=audio_render_succeeded,
             max_generations=self.max_generations,
-            **kwargs,
         )
 
     def cleanup_generation_workspace(self, workspace: "GenerationWorkspace") -> bool:
@@ -425,7 +454,7 @@ def _write_metadata_file(path: str, metadata: GenerationMetadata) -> None:
             os.unlink(temporary_path)
 
 
-def _metadata_values(metadata: object) -> dict:
+def _metadata_values(metadata: object) -> dict[str, object]:
     """Convert batch metadata without importing the variation result module."""
     if isinstance(metadata, BaseModel):
         return metadata.model_dump(mode="json")
@@ -516,11 +545,13 @@ def _save_variation_history(
         "usage",
         "cost",
     }
-    manifest = VariationHistoryManifest(
-        **{key: value for key, value in values.items() if key in allowed_fields},
-        created_at=datetime.now(timezone.utc),
-        generation_ids=ordered_ids,
+    manifest_values = {
+        key: value for key, value in values.items() if key in allowed_fields
+    }
+    manifest_values.update(
+        created_at=datetime.now(timezone.utc), generation_ids=ordered_ids
     )
+    manifest = VariationHistoryManifest.model_validate(manifest_values)
     if len(ordered_ids) != manifest.requested_count:
         raise ValueError("generation ID count must match requested variation count")
 
@@ -1171,10 +1202,10 @@ def _delete_generation(artifact_root: str | Path, gen_id: str) -> bool:
 
 def _enforce_limit(
     artifact_root: str | Path | None = None,
-    max_generations: int | object | None = _DEFAULT_MAX_GENERATIONS,
+    max_generations: int | _DefaultMaxGenerations | None = _DEFAULT_MAX_GENERATIONS,
 ) -> None:
     """Delete oldest generations if over the limit."""
-    if max_generations is _DEFAULT_MAX_GENERATIONS:
+    if isinstance(max_generations, _DefaultMaxGenerations):
         max_generations = MAX_GENERATIONS
     max_generations = _validate_max_generations(max_generations)
     if max_generations is None:

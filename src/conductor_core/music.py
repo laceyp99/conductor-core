@@ -1,6 +1,62 @@
 import json
+from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from importlib import resources
+from os import PathLike
+from typing import cast
+
+from pydantic import JsonValue
+from typing_extensions import NotRequired, TypedDict
+
+from conductor_core.models import Note
+
+
+class DurationDefinition(TypedDict):
+    beats: float
+    sixteenths: int
+    display: str
+    aliases: list[str]
+
+
+ModelCost = TypedDict(
+    "ModelCost",
+    {
+        "input": float,
+        "output": float,
+        "cache": NotRequired[dict[str, float]],
+        "cached input": NotRequired[float],
+        "cache write": NotRequired[float],
+        "5m cache input": NotRequired[float],
+        "1h cache input": NotRequired[float],
+        "cache hits/refreshes": NotRequired[float],
+    },
+)
+
+
+class RateLimits(TypedDict):
+    RPM: int
+    TPM: int | None
+    RPD: int | None
+
+
+class ModelConfig(TypedDict):
+    extended_thinking: bool
+    max_tokens: int
+    cost: ModelCost
+    rate_limits: RateLimits
+    thinking_off: NotRequired[str | None]
+    temperature_supported: NotRequired[bool]
+    effort_options: NotRequired[list[str]]
+    max_thinking_budget: NotRequired[int | None]
+    min_thinking_budget: NotRequired[int | None]
+    thinking_fixed_temperature: NotRequired[float | None]
+    always_on_adaptive_thinking: NotRequired[bool]
+    thinking_off_type: NotRequired[str | None]
+
+
+class ModelInfo(TypedDict):
+    models: dict[str, dict[str, ModelConfig]]
+
 
 # Flat list of chromatic note names (pitch class 0-11, sharps only)
 NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
@@ -89,7 +145,7 @@ SCALE_INTERVALS = {
 }
 
 # Canonical duration definitions: name -> beats, sixteenths, display string, and aliases
-DURATION_MAP = {
+DURATION_MAP: dict[str, DurationDefinition] = {
     "sixteenth": {
         "beats": 0.25,
         "sixteenths": 1,
@@ -129,7 +185,7 @@ INTERVAL_NAMES = [
     "M7",
 ]
 
-_model_info_cache = None
+_model_info_cache: ModelInfo | None = None
 
 # What ``use_thinking=False`` sends: the provider's official "no reasoning"
 # setting, or the model's lowest effort when reasoning cannot be turned off.
@@ -174,6 +230,10 @@ def _validate_model_info(model_info):
                 raise ValueError(
                     f"{model_label} temperature_supported must be a boolean"
                 )
+            if "extended_thinking" in model_config and not isinstance(
+                model_config["extended_thinking"], bool
+            ):
+                raise ValueError(f"{model_label} extended_thinking must be a boolean")
             if fixed_temperature is not None and not temperature_supported:
                 raise ValueError(
                     f"{model_label} cannot set thinking_fixed_temperature when "
@@ -210,8 +270,54 @@ def _validate_model_info(model_info):
                         f"{model_label} {field} must be a positive integer or null"
                     )
 
+            # These fields form the public metadata contract consumed by routing
+            # and provider cost calculations.
+            if "extended_thinking" not in model_config:
+                raise ValueError(f"{model_label} extended_thinking must be a boolean")
+            max_tokens = model_config.get("max_tokens")
+            if (
+                isinstance(max_tokens, bool)
+                or not isinstance(max_tokens, int)
+                or max_tokens <= 0
+            ):
+                raise ValueError(f"{model_label} max_tokens must be a positive integer")
+            effort_options = model_config.get("effort_options", [])
+            if not isinstance(effort_options, list) or not all(
+                isinstance(effort, str) for effort in effort_options
+            ):
+                raise ValueError(
+                    f"{model_label} effort_options must be a list of strings"
+                )
+            for field in ("max_thinking_budget", "min_thinking_budget"):
+                value = model_config.get(field)
+                if value is not None and (
+                    isinstance(value, bool) or not isinstance(value, int)
+                ):
+                    raise ValueError(f"{model_label} {field} must be an integer")
+            thinking_off_type = model_config.get("thinking_off_type")
+            if thinking_off_type is not None and not isinstance(thinking_off_type, str):
+                raise ValueError(f"{model_label} thinking_off_type must be a string")
+            cost = model_config.get("cost")
+            if not isinstance(cost, dict) or not all(
+                isinstance(cost.get(field), (int, float))
+                and not isinstance(cost.get(field), bool)
+                for field in ("input", "output")
+            ):
+                raise ValueError(
+                    f"{model_label} cost must include numeric input and output"
+                )
+            for field, value in cost.items():
+                if field == "cache":
+                    if not isinstance(value, dict) or not all(
+                        isinstance(rate, (int, float)) and not isinstance(rate, bool)
+                        for rate in value.values()
+                    ):
+                        raise ValueError(f"{model_label} cache costs must be numeric")
+                elif not isinstance(value, (int, float)) or isinstance(value, bool):
+                    raise ValueError(f"{model_label} {field} cost must be numeric")
 
-def get_model_info():
+
+def get_model_info() -> ModelInfo:
     """Load, validate, and cache packaged model metadata."""
     global _model_info_cache
 
@@ -222,32 +328,36 @@ def get_model_info():
         with model_info_resource.open("r", encoding="utf-8") as model_file:
             model_info = json.load(model_file)
         _validate_model_info(model_info)
-        _model_info_cache = model_info
+        _model_info_cache = cast(ModelInfo, model_info)
 
     return deepcopy(_model_info_cache)
 
 
-def get_loop_prompt():
+def get_loop_prompt() -> str:
     """Load the packaged default loop generation prompt."""
-    prompt_resource = resources.files("conductor_core.resources").joinpath(
-        "prompts",
-        "loop_gen.txt",
+    prompt_resource = (
+        resources.files("conductor_core.resources")
+        .joinpath("prompts")
+        .joinpath("loop_gen.txt")
     )
     with prompt_resource.open("r", encoding="utf-8") as prompt_file:
         return prompt_file.read()
 
 
-def get_variation_prompt():
+def get_variation_prompt() -> str:
     """Load the packaged default variation generation prompt."""
-    prompt_resource = resources.files("conductor_core.resources").joinpath(
-        "prompts",
-        f"{VARIATION_PROMPT_VERSION}.txt",
+    prompt_resource = (
+        resources.files("conductor_core.resources")
+        .joinpath("prompts")
+        .joinpath(f"{VARIATION_PROMPT_VERSION}.txt")
     )
     with prompt_resource.open("r", encoding="utf-8") as prompt_file:
         return prompt_file.read()
 
 
-def split_reported_cache_tokens(total_tokens, cached_tokens):
+def split_reported_cache_tokens(
+    total_tokens: int | None, cached_tokens: int | None
+) -> tuple[int, int]:
     """Return uncached and cached token counts from provider-reported usage.
 
     Cache savings should come from actual provider usage fields, not estimated
@@ -259,7 +369,7 @@ def split_reported_cache_tokens(total_tokens, cached_tokens):
     return total - cached, cached
 
 
-def pitch_class_to_note(pc):
+def pitch_class_to_note(pc: int) -> str:
     """Convert a pitch class integer (0-11) to a note name.
 
     Args:
@@ -271,7 +381,7 @@ def pitch_class_to_note(pc):
     return NOTE_NAMES[pc % 12]
 
 
-def note_name_to_pitch_class(name):
+def note_name_to_pitch_class(name: str) -> int:
     """Convert a note name to its pitch class using base_midi_numbers.
 
     Supports ASCII and unicode sharps/flats, double sharps, etc.
@@ -291,7 +401,7 @@ def note_name_to_pitch_class(name):
     return pc % 12
 
 
-def pitch_class_to_interval(pc, root_pc):
+def pitch_class_to_interval(pc: int, root_pc: int) -> str:
     """Convert a pitch class to an interval name relative to a root.
 
     Args:
@@ -305,7 +415,7 @@ def pitch_class_to_interval(pc, root_pc):
     return INTERVAL_NAMES[semitones]
 
 
-def beats_to_duration_name(beats):
+def beats_to_duration_name(beats: float) -> str:
     """Convert a beat ratio to a human-readable duration name.
 
     Args:
@@ -321,7 +431,7 @@ def beats_to_duration_name(beats):
     return f"{beats} beats"
 
 
-def scale(scale_letter, scale_mode):
+def scale(scale_letter: str, scale_mode: str) -> list[str]:
     """Returns all the possible notes of a scale given the scale letter and mode.
 
     Args:
@@ -353,7 +463,7 @@ def scale(scale_letter, scale_mode):
     ]
 
 
-def calculate_midi_number(note):
+def calculate_midi_number(note: Note) -> int:
     """Calculates the MIDI number for a given note.
 
     Args:
@@ -376,7 +486,7 @@ def calculate_midi_number(note):
     return base_number + ((note.octave + 1) * 12)
 
 
-def midi_number_to_name_and_octave(midi_number):
+def midi_number_to_name_and_octave(midi_number: int) -> tuple[str, int]:
     """Converts a MIDI number to a note name and octave.
 
     Args:
@@ -390,7 +500,7 @@ def midi_number_to_name_and_octave(midi_number):
     return pitch_class_to_note(midi_number), octave
 
 
-def midi_to_note_name(midi_numbers):
+def midi_to_note_name(midi_numbers: list[int]) -> list[str]:
     """Converts a list of MIDI numbers to a list of note names.
 
     Args:
@@ -402,7 +512,9 @@ def midi_to_note_name(midi_numbers):
     return [f"{pitch_class_to_note(n)}{n // 12 - 1}" for n in midi_numbers]
 
 
-def save_messages_to_json(messages, filename):
+def save_messages_to_json(
+    messages: Sequence[Mapping[str, JsonValue]], filename: str | PathLike[str]
+) -> None:
     """Save messages to a JSON file.
 
     Args:

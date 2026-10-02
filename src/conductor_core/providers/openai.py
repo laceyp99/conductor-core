@@ -1,7 +1,17 @@
 """OpenAI provider adapter for Conductor Core."""
 
+from __future__ import annotations
+
 import logging
 import os
+from typing import TYPE_CHECKING, NoReturn, cast
+
+from typing_extensions import NotRequired, TypedDict
+
+if TYPE_CHECKING:
+    from openai import OpenAI as OpenAIClient
+    from openai.types.shared.reasoning_effort import ReasoningEffort
+    from openai.types.shared_params.reasoning import Reasoning
 
 from conductor_core import models as objects
 from conductor_core import music as utils
@@ -26,15 +36,54 @@ try:
         RateLimitError,
     )
 except ImportError:  # pragma: no cover - exercised only in minimal installs
-    APIConnectionError = APIError = APITimeoutError = AuthenticationError = (
-        RateLimitError
-    ) = ()
+    # Keep exception names as classes so handlers remain valid in minimal installs.
+    class APIError(Exception):
+        pass
+
+    class APIConnectionError(APIError):
+        pass
+
+    class APITimeoutError(APIError):
+        pass
+
+    class AuthenticationError(APIError):
+        pass
+
+    class RateLimitError(APIError):
+        pass
+
     OpenAI = None
 
 logger = logging.getLogger(__name__)
 
 
-def _raise_openai_error(exc: Exception, operation: str) -> None:
+class _LoopParseKwargs(TypedDict):
+    model: str
+    instructions: str
+    input: str
+    text_format: type[objects.Loop]
+    store: bool
+    reasoning: NotRequired[Reasoning]
+    temperature: NotRequired[float]
+
+
+class _VariationParseKwargs(TypedDict):
+    model: str
+    instructions: str
+    input: str
+    text_format: type[VariationCollection]
+    store: bool
+    reasoning: NotRequired[Reasoning]
+    temperature: NotRequired[float]
+
+
+def _reasoning_params(effort: str) -> Reasoning:
+    if effort not in ("none", "minimal", "low", "medium", "high", "xhigh", "max"):
+        raise ValueError(f"Unsupported OpenAI reasoning effort: {effort}")
+    return {"effort": cast("ReasoningEffort", effort), "summary": "auto"}
+
+
+def _raise_openai_error(exc: Exception, operation: str) -> NoReturn:
     if isinstance(exc, AuthenticationError):
         error = ProviderAuthenticationError("OpenAI", str(exc), operation=operation)
     elif isinstance(exc, RateLimitError):
@@ -48,7 +97,9 @@ def _raise_openai_error(exc: Exception, operation: str) -> None:
     raise error from exc
 
 
-def initialize_openai_client(api_key: str | None = None, timeout: float | None = None):
+def initialize_openai_client(
+    api_key: str | None = None, timeout: float | None = None
+) -> OpenAIClient:
     """Initialize and return an OpenAI client."""
     if OpenAI is None:
         raise ImportError("Install conductor-core[openai] to use OpenAI models.")
@@ -60,11 +111,10 @@ def initialize_openai_client(api_key: str | None = None, timeout: float | None =
             "OPENAI_API_KEY is not set and no usable api_key was provided",
             operation="client initialization",
         )
-    client_args = {"api_key": resolved_api_key}
-    if timeout is not None:
-        client_args["timeout"] = timeout
     try:
-        return OpenAI(**client_args)
+        if timeout is None:
+            return OpenAI(api_key=resolved_api_key)
+        return OpenAI(api_key=resolved_api_key, timeout=timeout)
     except (
         AuthenticationError,
         RateLimitError,
@@ -75,7 +125,7 @@ def initialize_openai_client(api_key: str | None = None, timeout: float | None =
         _raise_openai_error(exc, "client initialization")
 
 
-def calc_price(model, response):
+def calc_price(model, response) -> float:
     """Calculate the cost for a given response based on token usage."""
     model_info = utils.get_model_info()
     usage = response.usage
@@ -105,7 +155,7 @@ def calc_price(model, response):
     )
 
 
-def extract_reasoning(response):
+def extract_reasoning(response) -> str:
     reasoning = ""
     for item in getattr(response, "output", []):
         if getattr(item, "type", None) == "reasoning":
@@ -138,7 +188,7 @@ def loop_gen(
     ]
 
     model_info = utils.get_model_info()
-    request_params = {
+    request_params: _LoopParseKwargs = {
         "model": model,
         "instructions": loop_prompt,
         "input": prompt,
@@ -151,7 +201,7 @@ def loop_gen(
     if effort_options and not use_thinking:
         effort = effort_options[0]
     if model_config.get("extended_thinking") and effort:
-        request_params["reasoning"] = {"effort": effort, "summary": "auto"}
+        request_params["reasoning"] = _reasoning_params(effort)
     elif model_config.get("temperature_supported", True):
         request_params["temperature"] = temp
 
@@ -202,7 +252,7 @@ def variations_gen(
         {"role": "system", "content": loop_prompt},
         {"role": "user", "content": prompt},
     ]
-    request_params = {
+    request_params: _VariationParseKwargs = {
         "model": model,
         "instructions": loop_prompt,
         "input": prompt,
@@ -214,7 +264,7 @@ def variations_gen(
     if effort_options and not use_thinking:
         effort = effort_options[0]
     if model_config.get("extended_thinking") and effort:
-        request_params["reasoning"] = {"effort": effort, "summary": "auto"}
+        request_params["reasoning"] = _reasoning_params(effort)
     elif model_config.get("temperature_supported", True):
         request_params["temperature"] = temp
     try:

@@ -1,7 +1,14 @@
 """Google Gemini provider adapter for Conductor Core."""
 
+from __future__ import annotations
+
 import logging
 import os
+from typing import TYPE_CHECKING, NoReturn, cast
+
+if TYPE_CHECKING:
+    from google.genai import Client as GeminiClient
+    from google.genai.types import GenerateContentConfigDict, ThinkingConfigDict
 
 from conductor_core import models as objects
 from conductor_core import music as utils
@@ -29,7 +36,8 @@ except ImportError:  # pragma: no cover - exercised only in minimal installs
 logger = logging.getLogger(__name__)
 
 
-def _raise_google_error(exc: Exception, operation: str) -> None:
+def _raise_google_error(exc: Exception, operation: str) -> NoReturn:
+    assert httpx is not None
     if isinstance(exc, httpx.TimeoutException):
         error = ProviderTimeoutError("Google", str(exc), operation=operation)
     elif isinstance(exc, httpx.NetworkError):
@@ -44,10 +52,15 @@ def _raise_google_error(exc: Exception, operation: str) -> None:
     raise error from exc
 
 
-def initialize_gemini_client(api_key: str | None = None, timeout: float | None = None):
+def initialize_gemini_client(
+    api_key: str | None = None, timeout: float | None = None
+) -> GeminiClient:
     """Initialize and return a Gemini client."""
     if genai is None:
         raise ImportError("Install conductor-core[google] to use Google models.")
+    assert types is not None
+    assert genai_errors is not None
+    assert httpx is not None
 
     resolved_api_key = api_key or os.getenv("GEMINI_API_KEY")
     if not resolved_api_key or not resolved_api_key.strip():
@@ -57,18 +70,18 @@ def initialize_gemini_client(api_key: str | None = None, timeout: float | None =
             operation="client initialization",
         )
 
-    client_args = {"api_key": resolved_api_key}
-    if timeout is not None:
-        client_args["http_options"] = types.HttpOptions(
-            timeout=max(1, round(timeout * 1000))
-        )
     try:
-        return genai.Client(**client_args)
+        if timeout is None:
+            return genai.Client(api_key=resolved_api_key)
+        return genai.Client(
+            api_key=resolved_api_key,
+            http_options=types.HttpOptions(timeout=max(1, round(timeout * 1000))),
+        )
     except (genai_errors.APIError, httpx.TimeoutException, httpx.NetworkError) as exc:
         _raise_google_error(exc, "client initialization")
 
 
-def calc_cost(model, usage):
+def calc_cost(model, usage) -> float:
     """Calculate the cost for a Gemini completion based on token usage."""
     model_info = utils.get_model_info()
     model_cost = model_info["models"]["Google"][model]["cost"]
@@ -93,7 +106,7 @@ def calc_cost(model, usage):
     )
 
 
-def process_output(response):
+def process_output(response) -> tuple[str, str]:
     final_result = ""
     thinking_content = ""
     candidates = getattr(response, "candidates", None) or []
@@ -133,11 +146,14 @@ def loop_gen(
         api_key=api_key,
         **({"timeout": request_timeout} if request_timeout is not None else {}),
     )
+    assert types is not None
+    assert genai_errors is not None
+    assert httpx is not None
     loop_prompt = system_prompt or utils.get_loop_prompt()
 
     model_info = utils.get_model_info()
     model_config = model_info["models"]["Google"][model]
-    config = {
+    config: GenerateContentConfigDict = {
         "system_instruction": loop_prompt,
         "response_mime_type": "application/json",
         "response_json_schema": objects.Loop.model_json_schema(),
@@ -151,13 +167,10 @@ def loop_gen(
 
     if effort_options:
         if effort in effort_options:
-            config.update(
-                {
-                    "thinking_config": types.ThinkingConfig(
-                        thinking_level=effort,
-                        include_thoughts=True,
-                    )
-                }
+            # The SDK accepts model instances at runtime, though its dict type omits them.
+            config["thinking_config"] = cast(
+                "ThinkingConfigDict",
+                types.ThinkingConfig(thinking_level=effort, include_thoughts=True),
             )
         else:
             logger.warning(
@@ -166,22 +179,20 @@ def loop_gen(
                 model,
             )
     elif model_with_thinking and use_thinking:
-        config.update(
-            {
-                "thinking_config": types.ThinkingConfig(
-                    thinking_budget=model_config["max_thinking_budget"],
-                    include_thoughts=True,
-                )
-            }
+        config["thinking_config"] = cast(
+            "ThinkingConfigDict",
+            types.ThinkingConfig(
+                thinking_budget=model_config["max_thinking_budget"],
+                include_thoughts=True,
+            ),
         )
     elif model_with_thinking and not use_thinking:
-        config.update(
-            {
-                "thinking_config": types.ThinkingConfig(
-                    thinking_budget=model_config["min_thinking_budget"],
-                    include_thoughts=True,
-                )
-            }
+        config["thinking_config"] = cast(
+            "ThinkingConfigDict",
+            types.ThinkingConfig(
+                thinking_budget=model_config["min_thinking_budget"],
+                include_thoughts=True,
+            ),
         )
 
     try:
@@ -224,9 +235,12 @@ def variations_gen(
         api_key=api_key,
         **({"timeout": request_timeout} if request_timeout is not None else {}),
     )
+    assert types is not None
+    assert genai_errors is not None
+    assert httpx is not None
     loop_prompt = system_prompt or utils.get_variation_prompt()
     model_config = utils.get_model_info()["models"]["Google"][model]
-    config = {
+    config: GenerateContentConfigDict = {
         "system_instruction": loop_prompt,
         "response_mime_type": "application/json",
         "response_json_schema": VariationCollection.model_json_schema(),
@@ -237,21 +251,27 @@ def variations_gen(
     if effort_options and not use_thinking:
         effort = effort_options[0]
     if effort_options and effort in effort_options:
-        config["thinking_config"] = types.ThinkingConfig(
-            thinking_level=effort, include_thoughts=True
+        config["thinking_config"] = cast(
+            "ThinkingConfigDict",
+            types.ThinkingConfig(thinking_level=effort, include_thoughts=True),
         )
     elif model_config.get("extended_thinking"):
-        config["thinking_config"] = types.ThinkingConfig(
-            thinking_budget=(
-                model_config["max_thinking_budget"]
-                if use_thinking
-                else model_config["min_thinking_budget"]
+        config["thinking_config"] = cast(
+            "ThinkingConfigDict",
+            types.ThinkingConfig(
+                thinking_budget=(
+                    model_config["max_thinking_budget"]
+                    if use_thinking
+                    else model_config["min_thinking_budget"]
+                ),
+                include_thoughts=True,
             ),
-            include_thoughts=True,
         )
     try:
         response = client.models.generate_content(
-            model=model, contents=prompt, config=config
+            model=model,
+            contents=prompt,
+            config=config,
         )
     except (genai_errors.APIError, httpx.TimeoutException, httpx.NetworkError) as exc:
         _raise_google_error(exc, "request")

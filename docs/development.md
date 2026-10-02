@@ -23,12 +23,30 @@ change, run the complete project checks:
 ```powershell
 uv run --locked --all-extras ruff format --check .
 uv run --locked --all-extras ruff check .
+uv run --locked --all-extras ty check
 uv run --locked --all-extras pytest -q
 uv build
+uv run --locked --all-extras python scripts/check_wheel_typing.py dist/conductor_core-0.7.1-py3-none-any.whl
 ```
 
 The test suite is deterministic. It does not make live provider calls or
 require FluidSynth or FFmpeg.
+
+Ty is a development-only dependency, with its exact version resolved in `uv.lock`.
+The [Ty configuration](https://docs.astral.sh/ty/reference/configuration/) targets
+Python 3.10 and checks `src/`; tests and examples are not part of the required
+source baseline. Errors fail the command. Warnings remain visible but do not
+fail it. Do not use blanket or file-wide suppressions: an unavoidable suppression
+must name its specific rule and include a comment explaining why it is safe.
+
+After building, use the wheel filename for the current project version in the
+consumer command above. This creates a temporary bare-wheel installation outside
+the checkout and checks `tests/typing/consumer.py` with the locked Ty executable.
+It verifies existing and variation APIs, named routing results, progress callbacks,
+artifact storage, and the packaged `py.typed` marker, and confirms that an invalid
+request is rejected by the checker. It does not call a provider or render audio.
+The dedicated pull-request Ty gate is a separate follow-up; this change does not
+add a CI requirement.
 
 When intentionally updating dependencies, run `uv lock --upgrade`, review the
 lockfile diff, and rerun the checks. Never edit `uv.lock` by hand.

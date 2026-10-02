@@ -1,7 +1,23 @@
 """Anthropic provider adapter for Conductor Core."""
 
+from __future__ import annotations
+
 import logging
 import os
+from typing import TYPE_CHECKING, Literal, NoReturn
+
+from typing_extensions import NotRequired, TypedDict
+
+if TYPE_CHECKING:
+    from anthropic import Anthropic as AnthropicClient
+    from anthropic.types import (
+        MessageParam,
+        OutputConfigParam,
+        TextBlockParam,
+        ThinkingConfigParam,
+        ToolChoiceParam,
+        ToolUnionParam,
+    )
 
 from conductor_core import models as objects
 from conductor_core import music as utils
@@ -26,19 +42,68 @@ try:
         RateLimitError,
     )
 except ImportError:  # pragma: no cover - exercised only in minimal installs
-    APIConnectionError = APIError = APITimeoutError = AuthenticationError = (
-        RateLimitError
-    ) = ()
+    # Keep exception names as classes so handlers remain valid in minimal installs.
+    class APIError(Exception):
+        pass
+
+    class APIConnectionError(APIError):
+        pass
+
+    class APITimeoutError(APIError):
+        pass
+
+    class AuthenticationError(APIError):
+        pass
+
+    class RateLimitError(APIError):
+        pass
+
     Anthropic = None
 
 logger = logging.getLogger(__name__)
+
+
+class _AnthropicRequest(TypedDict):
+    model: str
+    max_tokens: int
+    system: list[TextBlockParam]
+    messages: list[MessageParam]
+    tools: list[ToolUnionParam]
+    tool_choice: ToolChoiceParam
+    stream: Literal[True]
+    thinking: NotRequired[ThinkingConfigParam]
+    output_config: NotRequired[OutputConfigParam]
+    extra_body: NotRequired[dict[str, float]]
+
+
+def _validated_effort(
+    effort: str | None,
+) -> Literal["low", "medium", "high", "xhigh", "max"]:
+    if effort == "low":
+        return "low"
+    if effort == "medium":
+        return "medium"
+    if effort == "high":
+        return "high"
+    if effort == "xhigh":
+        return "xhigh"
+    if effort == "max":
+        return "max"
+    raise ValueError(f"Unsupported Anthropic reasoning effort: {effort}")
+
 
 ANTHROPIC_CACHE_CONTROL_MIN_CHARS = 4096
 # Older Claude models require this temperature whenever thinking is enabled.
 ANTHROPIC_THINKING_TEMPERATURE = 1.0
 
 
-def _apply_thinking_params(api_params, model_config, temp, use_thinking, effort):
+def _apply_thinking_params(
+    api_params: _AnthropicRequest,
+    model_config,
+    temp: float,
+    use_thinking: bool,
+    effort: str | None,
+) -> None:
     """Add thinking, effort, tool-choice, and temperature settings to a request.
 
     Thinking is only enabled when requested, except on models whose thinking
@@ -52,12 +117,12 @@ def _apply_thinking_params(api_params, model_config, temp, use_thinking, effort)
         if not use_thinking and model_config.get("thinking_off_type"):
             api_params["thinking"] = {"type": model_config["thinking_off_type"]}
         api_params["output_config"] = {
-            "effort": effort if use_thinking else effort_options[0]
+            "effort": _validated_effort(effort if use_thinking else effort_options[0])
         }
         thinking_enabled = True
     elif use_thinking and effort_options:
         api_params["thinking"] = {"type": "adaptive"}
-        api_params["output_config"] = {"effort": effort}
+        api_params["output_config"] = {"effort": _validated_effort(effort)}
         thinking_enabled = True
     elif use_thinking and model_config.get("extended_thinking"):
         api_params["thinking"] = {
@@ -79,7 +144,7 @@ def _apply_thinking_params(api_params, model_config, temp, use_thinking, effort)
         }
 
 
-def _raise_anthropic_error(exc: Exception, operation: str) -> None:
+def _raise_anthropic_error(exc: Exception, operation: str) -> NoReturn:
     if isinstance(exc, AuthenticationError):
         error = ProviderAuthenticationError("Anthropic", str(exc), operation=operation)
     elif isinstance(exc, RateLimitError):
@@ -95,7 +160,7 @@ def _raise_anthropic_error(exc: Exception, operation: str) -> None:
 
 def initialize_anthropic_client(
     api_key: str | None = None, timeout: float | None = None
-):
+) -> AnthropicClient:
     """Initialize and return an Anthropic client."""
     if Anthropic is None:
         raise ImportError("Install conductor-core[anthropic] to use Anthropic models.")
@@ -107,11 +172,10 @@ def initialize_anthropic_client(
             "ANTHROPIC_API_KEY is not set and no usable api_key was provided",
             operation="client initialization",
         )
-    client_args = {"api_key": resolved_api_key}
-    if timeout is not None:
-        client_args["timeout"] = timeout
     try:
-        return Anthropic(**client_args)
+        if timeout is None:
+            return Anthropic(api_key=resolved_api_key)
+        return Anthropic(api_key=resolved_api_key, timeout=timeout)
     except (
         AuthenticationError,
         RateLimitError,
@@ -122,7 +186,7 @@ def initialize_anthropic_client(
         _raise_anthropic_error(exc, "client initialization")
 
 
-def calc_price(model, output):
+def calc_price(model, output) -> float | None:
     """Calculate the cost for a completion based on token usage."""
     model_info = utils.get_model_info()
     anthropic_models = model_info["models"]["Anthropic"]
@@ -235,14 +299,14 @@ def loop_gen(
     api_key: str | None = None,
     system_prompt: str | None = None,
     request_timeout: float | None = None,
-) -> tuple[objects.Loop, list[ProviderMessage], float]:
+) -> tuple[objects.Loop, list[ProviderMessage], float | None]:
     """Generate a MIDI loop using the specified Anthropic model and prompt."""
     client = initialize_anthropic_client(
         api_key=api_key,
         **({"timeout": request_timeout} if request_timeout is not None else {}),
     )
     loop_prompt = system_prompt or utils.get_loop_prompt()
-    tools = [
+    tools: list[ToolUnionParam] = [
         {
             "name": "build_MIDI_loop",
             "description": "builds a music loop in MIDI format",
@@ -252,7 +316,7 @@ def loop_gen(
 
     model_info = utils.get_model_info()
     model_config = model_info["models"]["Anthropic"][model]
-    api_params = {
+    api_params: _AnthropicRequest = {
         "model": model,
         "max_tokens": model_config["max_tokens"],
         "system": [build_system_prompt_block(loop_prompt)],
@@ -323,7 +387,7 @@ def variations_gen(
     )
     loop_prompt = system_prompt or utils.get_variation_prompt()
     model_config = utils.get_model_info()["models"]["Anthropic"][model]
-    api_params = {
+    api_params: _AnthropicRequest = {
         "model": model,
         "max_tokens": model_config["max_tokens"],
         "system": [build_system_prompt_block(loop_prompt)],

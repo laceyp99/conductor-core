@@ -10,11 +10,18 @@ while its public API is still in initial development.
 
 ### Added
 
+- A development-only Ty source baseline targeting Python 3.10, plus an installed
+  wheel typing smoke check for generation, variations, callbacks, and storage.
+  Core's public storage finalization and music/MIDI helper signatures now expose
+  their argument and result types to consumers.
 - `ProgressCallback` is exported from `conductor_core` for annotating progress
   callbacks. Callbacks may now return any value; Core ignores it.
 
 ### Changed
 
+- Packaged model metadata is validated before exposing its typed fields, and
+  direct OpenAI, Anthropic, and Ollama adapter calls reject unknown reasoning
+  effort values before sending a request.
 - `conductor_core.routing.generate_midi()` returns a frozen
   `LoopProviderResult` instead of a `(loop, messages, cost, provider)` tuple.
   Callers that unpacked the tuple must read `.loop`, `.messages`, `.cost`, and

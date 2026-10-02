@@ -11,6 +11,11 @@ from conductor_core import music
 from conductor_core.providers import anthropic
 
 
+def test_anthropic_rejects_unknown_reasoning_effort():
+    with pytest.raises(ValueError, match="Unsupported Anthropic reasoning effort"):
+        anthropic._validated_effort("extreme")
+
+
 class _RequestCaptured(Exception):
     pass
 
