@@ -22,10 +22,12 @@ from conductor_core.variations import (
     VariationBatchMetadata,
     VariationBatchResult,
     VariationDiagnostic,
+    VariationProgressStatus,
     VariationResult,
 )
 
-ProgressCallback = Callable[[ProgressEvent], None]
+# Synchronous progress listener. Core ignores whatever it returns.
+ProgressCallback = Callable[[ProgressEvent], object]
 
 
 class LoopGenerationEngine:
@@ -51,7 +53,7 @@ class LoopGenerationEngine:
         *,
         batch_id: str | None = None,
         variation_index: int | None = None,
-        status: str | None = None,
+        status: VariationProgressStatus | None = None,
     ) -> None:
         if progress_callback:
             progress_callback(
@@ -83,7 +85,7 @@ class LoopGenerationEngine:
 
         try:
             self._emit(progress_callback, "provider_call", "Generating MIDI...")
-            loop, messages, total_cost, provider = routing.generate_midi(
+            provider_result = routing.generate_midi(
                 model_choice=request.model,
                 prompt=prompt,
                 temp=request.temperature,
@@ -101,7 +103,7 @@ class LoopGenerationEngine:
             warnings.extend(
                 loop_to_midi(
                     midi,
-                    loop,
+                    provider_result.loop,
                 )
             )
             midi.save(workspace.midi_path)
@@ -148,7 +150,7 @@ class LoopGenerationEngine:
                     warnings.append(warning)
 
             with open(workspace.messages_path, "w", encoding="utf-8") as messages_file:
-                json.dump(messages, messages_file, indent=2)
+                json.dump(provider_result.messages, messages_file, indent=2)
 
             metadata = self.store.finalize_generation(
                 workspace=workspace,
@@ -156,11 +158,11 @@ class LoopGenerationEngine:
                 key=request.key,
                 scale=request.scale,
                 model=request.model,
-                provider=provider,
+                provider=provider_result.provider,
                 temperature=request.temperature,
                 use_thinking=request.use_thinking,
                 effort=request.effort,
-                cost=total_cost,
+                cost=provider_result.cost,
                 soundfont=os.path.basename(resolved_soundfont)
                 if audio_path and resolved_soundfont
                 else None,
@@ -169,11 +171,11 @@ class LoopGenerationEngine:
             finalized = True
             return GenerationResult(
                 generation_id=metadata.id,
-                loop=loop,
+                loop=provider_result.loop,
                 midi_path=metadata.midi_path,
                 audio_path=metadata.audio_path,
-                messages=messages,
-                cost=total_cost,
+                messages=provider_result.messages,
+                cost=provider_result.cost,
                 metadata=metadata,
                 warnings=warnings,
             )

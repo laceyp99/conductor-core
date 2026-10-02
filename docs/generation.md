@@ -117,7 +117,9 @@ engine override, which takes precedence over the packaged prompt.
 Pass a callback to `generate(..., progress_callback=...)` to adapt synchronous
 work to logs, progress bars, queues, or asynchronous UI wrappers. Current stages
 cover provider generation, MIDI processing, and audio rendering. Reporting does
-not cancel an in-flight provider request.
+not cancel an in-flight provider request. Annotate your callback with
+`conductor_core.ProgressCallback`; it receives one `ProgressEvent`, and Core
+ignores any value it returns.
 
 ## Errors
 

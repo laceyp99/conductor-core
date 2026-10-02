@@ -12,6 +12,7 @@ from conductor_core.errors import (
     ProviderRequestError,
     ProviderTimeoutError,
 )
+from conductor_core.provider_types import ProviderMessage
 from conductor_core.providers._variations import VariationCollection
 from conductor_core.variations import VariationUsage
 
@@ -116,22 +117,22 @@ def extract_reasoning(response):
 
 
 def loop_gen(
-    prompt,
-    model,
-    temp=0.0,
-    use_thinking=False,
-    effort=None,
+    prompt: str,
+    model: str,
+    temp: float = 0.0,
+    use_thinking: bool = False,
+    effort: str | None = None,
     api_key: str | None = None,
     system_prompt: str | None = None,
     request_timeout: float | None = None,
-):
+) -> tuple[objects.Loop, list[ProviderMessage], float]:
     """Generate a MIDI loop using the specified OpenAI model and prompt."""
     client = initialize_openai_client(
         api_key=api_key,
         **({"timeout": request_timeout} if request_timeout is not None else {}),
     )
     loop_prompt = system_prompt or utils.get_loop_prompt()
-    messages = [
+    messages: list[ProviderMessage] = [
         {"role": "system", "content": loop_prompt},
         {"role": "user", "content": prompt},
     ]
@@ -180,22 +181,24 @@ def loop_gen(
 
 
 def variations_gen(
-    prompt,
-    model,
-    temp=0.0,
-    use_thinking=False,
-    effort=None,
+    prompt: str,
+    model: str,
+    temp: float = 0.0,
+    use_thinking: bool = False,
+    effort: str | None = None,
     api_key: str | None = None,
     system_prompt: str | None = None,
     request_timeout: float | None = None,
-):
+) -> tuple[
+    VariationCollection, list[ProviderMessage], float | None, VariationUsage | None
+]:
     """Generate an ordered collection of loops in one OpenAI response."""
     client = initialize_openai_client(
         api_key=api_key,
         **({"timeout": request_timeout} if request_timeout is not None else {}),
     )
     loop_prompt = system_prompt or utils.get_variation_prompt()
-    messages = [
+    messages: list[ProviderMessage] = [
         {"role": "system", "content": loop_prompt},
         {"role": "user", "content": prompt},
     ]

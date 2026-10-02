@@ -2,9 +2,10 @@
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from conductor_core.models import Loop
+from conductor_core.provider_types import ProviderMessage
 from conductor_core.storage import GenerationMetadata
 
 VariationBatchStatus = Literal["complete", "failed"]
@@ -43,7 +44,7 @@ class VariationBatchMetadata(_VariationContract):
     prompt_version: NonblankString = "variation_gen_v1"
     requested_count: VariationCount = 4
     received_count: NonnegativeInt
-    messages: list[dict[str, JsonValue]] = Field(default_factory=list)
+    messages: list[ProviderMessage] = Field(default_factory=list)
     usage: VariationUsage | None = None
     cost: Annotated[float, Field(strict=True, ge=0, allow_inf_nan=False)] | None = None
 

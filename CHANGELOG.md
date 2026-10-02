@@ -10,6 +10,23 @@ while its public API is still in initial development.
 
 ### Added
 
+- `ProgressCallback` is exported from `conductor_core` for annotating progress
+  callbacks. Callbacks may now return any value; Core ignores it.
+
+### Changed
+
+- `conductor_core.routing.generate_midi()` returns a frozen
+  `LoopProviderResult` instead of a `(loop, messages, cost, provider)` tuple.
+  Callers that unpacked the tuple must read `.loop`, `.messages`, `.cost`, and
+  `.provider` instead.
+- Generated provider messages are typed as `role`/`content` records with a
+  `system`, `user`, or `assistant` role. `VariationBatchMetadata` now rejects
+  messages that do not match this shape. Messages loaded from saved history
+  are unchanged.
+- `typing-extensions` is now a declared runtime dependency.
+
+### Added
+
 - Claude Sonnet 5.5 (`claude-sonnet-5-5`) model metadata. With
   `use_thinking=False`, Core turns its thinking off (`thinking_off: "disabled"`).
 

@@ -1,5 +1,7 @@
 """Public exceptions raised by Conductor Core."""
 
+from conductor_core.provider_types import ProviderId
+
 
 class AudioRenderingError(RuntimeError):
     """Core could not render a MIDI file to audio."""
@@ -9,12 +11,13 @@ class ProviderError(RuntimeError):
     """Base error raised when a provider SDK fails.
 
     Attributes:
-        provider: Display name of the provider that failed.
+        provider: Display name of the provider that failed, such as
+            ``"OpenAI"`` or ``"Ollama"``.
         operation: Provider operation that failed, when known.
     """
 
     def __init__(
-        self, provider: str, message: str, *, operation: str | None = None
+        self, provider: ProviderId, message: str, *, operation: str | None = None
     ) -> None:
         self.provider = provider
         self.operation = operation
@@ -54,7 +57,7 @@ class ProviderContextLengthError(ProviderRequestError):
 
     def __init__(
         self,
-        provider: str,
+        provider: ProviderId,
         model: str,
         *,
         prompt_tokens: int | None = None,
@@ -88,7 +91,7 @@ class ProviderContextLengthError(ProviderRequestError):
 
 
 def error_for_status(
-    provider: str,
+    provider: ProviderId,
     message: str,
     status_code: int | None,
     *,

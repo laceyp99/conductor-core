@@ -11,6 +11,7 @@ from conductor_core.errors import (
     ProviderTimeoutError,
     error_for_status,
 )
+from conductor_core.provider_types import ProviderMessage
 from conductor_core.providers._variations import VariationCollection
 from conductor_core.variations import VariationUsage
 
@@ -118,15 +119,15 @@ def process_output(response):
 
 
 def loop_gen(
-    prompt,
-    model,
-    temp=0.0,
-    use_thinking=None,
-    effort=None,
+    prompt: str,
+    model: str,
+    temp: float = 0.0,
+    use_thinking: bool | None = None,
+    effort: str | None = None,
     api_key: str | None = None,
     system_prompt: str | None = None,
     request_timeout: float | None = None,
-):
+) -> tuple[objects.Loop, list[ProviderMessage], float]:
     """Generate a MIDI loop using the specified Gemini model and prompt."""
     client = initialize_gemini_client(
         api_key=api_key,
@@ -195,7 +196,7 @@ def loop_gen(
     content, thinking_content = process_output(response)
     midi_loop = objects.Loop.model_validate_json(content)
 
-    messages = [
+    messages: list[ProviderMessage] = [
         {"role": "system", "content": loop_prompt},
         {"role": "user", "content": prompt},
         {"role": "assistant", "content": content},
@@ -207,15 +208,17 @@ def loop_gen(
 
 
 def variations_gen(
-    prompt,
-    model,
-    temp=0.0,
-    use_thinking=None,
-    effort=None,
+    prompt: str,
+    model: str,
+    temp: float = 0.0,
+    use_thinking: bool | None = None,
+    effort: str | None = None,
     api_key: str | None = None,
     system_prompt: str | None = None,
     request_timeout: float | None = None,
-):
+) -> tuple[
+    VariationCollection, list[ProviderMessage], float | None, VariationUsage | None
+]:
     """Generate an ordered collection of loops in one Gemini response."""
     client = initialize_gemini_client(
         api_key=api_key,
@@ -254,7 +257,7 @@ def variations_gen(
         _raise_google_error(exc, "request")
     content, thinking_content = process_output(response)
     collection = VariationCollection.model_validate_json(content)
-    messages = [
+    messages: list[ProviderMessage] = [
         {"role": "system", "content": loop_prompt},
         {"role": "user", "content": prompt},
     ]

@@ -366,11 +366,12 @@ wheels = [
 
 [[package]]
 name = "conductor-core"
-version = "0.6.3"
+version = "0.7.0"
 source = { editable = "." }
 dependencies = [
     { name = "mido" },
     { name = "pydantic" },
+    { name = "typing-extensions" },
 ]
 
 [package.optional-dependencies]
@@ -419,6 +420,7 @@ requires-dist = [
     { name = "openai", marker = "extra == 'providers'", specifier = ">=1.79.0" },
     { name = "pydantic", specifier = ">=2.11.4,<3" },
     { name = "pydub", marker = "extra == 'playback'", specifier = ">=0.25.1,<1" },
+    { name = "typing-extensions", specifier = ">=4.14.1" },
 ]
 provides-extras = ["openai", "anthropic", "google", "ollama", "playback", "providers"]
 

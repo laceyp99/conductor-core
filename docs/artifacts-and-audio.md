@@ -70,7 +70,7 @@ unlimited_store = FilesystemArtifactStore("my-output", max_generations=None)
 | `loop` | Validated provider-independent loop object. |
 | `midi_path` | Persisted MIDI path. |
 | `audio_path` | Persisted MP3 path when rendering succeeds. |
-| `messages` | Provider conversation or response messages. |
+| `messages` | Provider conversation messages, each a dict with a `role` (`system`, `user`, or `assistant`) and string `content`. |
 | `cost` | Provider-reported estimated cost when available. |
 | `metadata` | Persisted generation metadata. |
 | `warnings` | Non-fatal issues such as skipped audio. |
@@ -104,7 +104,9 @@ Related modules include:
 
 - `conductor_core.models` for loop, bar, note, and timing models;
 - `conductor_core.music` for model metadata, prompts, scales, and durations;
-- `conductor_core.routing` for lower-level routing;
+- `conductor_core.routing` for lower-level routing, where `generate_midi()`
+  returns a `LoopProviderResult` with `loop`, `messages`, `cost`, and
+  `provider` fields;
 - `conductor_core.storage` for artifacts and history; and
 - `conductor_core.playback` for optional audio operations.
 
