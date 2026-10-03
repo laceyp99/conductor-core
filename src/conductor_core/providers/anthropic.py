@@ -82,17 +82,9 @@ def _validated_effort(
 ) -> Literal["low", "medium", "high", "xhigh", "max"]:
     if effort_options and effort not in effort_options:
         raise ValueError(f"Unsupported Anthropic model reasoning effort: {effort}")
-    if effort == "low":
-        return "low"
-    if effort == "medium":
-        return "medium"
-    if effort == "high":
-        return "high"
-    if effort == "xhigh":
-        return "xhigh"
-    if effort == "max":
-        return "max"
-    raise ValueError(f"Unsupported Anthropic reasoning effort: {effort}")
+    if effort not in ("low", "medium", "high", "xhigh", "max"):
+        raise ValueError(f"Unsupported Anthropic reasoning effort: {effort}")
+    return effort
 
 
 ANTHROPIC_CACHE_CONTROL_MIN_CHARS = 4096
