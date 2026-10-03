@@ -25,7 +25,7 @@ uv run --locked --all-extras ruff format --check .
 uv run --locked --all-extras ruff check .
 uv run --locked --all-extras ty check
 uv run --locked --all-extras pytest -q
-uv build
+uv build --clear
 uv run --locked --all-extras python scripts/check_wheel_typing.py
 ```
 
