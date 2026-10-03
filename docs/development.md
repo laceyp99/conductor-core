@@ -45,8 +45,8 @@ bare-wheel installation outside the checkout and checks `tests/typing/consumer.p
 It verifies existing and variation APIs, named routing results, progress callbacks,
 artifact storage, and the packaged `py.typed` marker, and confirms that an invalid
 request is rejected by the checker. It does not call a provider or render audio.
-The dedicated pull-request Ty gate is a separate follow-up; this change does not
-add a CI requirement.
+The CI quality/build job runs both the Ty source baseline and the installed-wheel
+typing check on pull requests and pushes to `main`.
 
 When intentionally updating dependencies, run `uv lock --upgrade`, review the
 lockfile diff, and rerun the checks. Never edit `uv.lock` by hand.

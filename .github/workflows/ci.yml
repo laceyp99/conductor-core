@@ -41,10 +41,14 @@ jobs:
         run: uv run --locked --all-extras --python 3.12 ruff format --check .
       - name: Ruff lint
         run: uv run --locked --all-extras --python 3.12 ruff check .
+      - name: Ty source baseline
+        run: uv run --locked --all-extras --python 3.12 ty check
       - name: Test
         run: uv run --locked --all-extras --python 3.12 pytest -q
       - name: Build
-        run: uv build
+        run: uv build --clear
+      - name: Check installed-wheel typing
+        run: uv run --locked --all-extras --python 3.12 python scripts/check_wheel_typing.py
       - name: Test built wheel as a pip consumer
         run: |
           uv venv --seed --python 3.12 .venv-consumer
