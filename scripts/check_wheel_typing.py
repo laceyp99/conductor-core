@@ -1,11 +1,13 @@
 """Check a consumer against the built wheel without editable-source resolution.
 
-Run with the locked development environment after ``uv build``. The temporary
-consumer environment installs the bare wheel, not provider or typing extras.
-No generation functions or live services are called.
+Run with the locked development environment after ``uv build``. Without a wheel
+argument, the wheel for the current project version is read from ``dist/``. The
+temporary consumer environment installs the bare wheel, not provider or typing
+extras. No generation functions or live services are called.
 """
 
 import argparse
+import importlib.metadata
 import shutil
 import subprocess
 import sys
@@ -13,12 +15,21 @@ import tempfile
 from pathlib import Path
 
 
+def default_wheel(repo: Path) -> Path:
+    """Return the built wheel matching the installed project version."""
+    version = importlib.metadata.version("conductor-core")
+    wheel = repo / "dist" / f"conductor_core-{version}-py3-none-any.whl"
+    if not wheel.is_file():
+        raise SystemExit(f"{wheel} not found; run uv build or pass a wheel path")
+    return wheel
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("wheel", type=Path)
+    parser.add_argument("wheel", type=Path, nargs="?")
     args = parser.parse_args()
-    wheel = args.wheel.resolve(strict=True)
     repo = Path(__file__).resolve().parents[1]
+    wheel = (args.wheel or default_wheel(repo)).resolve(strict=True)
     ty = shutil.which("ty")
     if ty is None:
         raise SystemExit("Run through uv run --locked --all-extras to provide Ty")

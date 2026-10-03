@@ -26,7 +26,7 @@ uv run --locked --all-extras ruff check .
 uv run --locked --all-extras ty check
 uv run --locked --all-extras pytest -q
 uv build
-uv run --locked --all-extras python scripts/check_wheel_typing.py dist/conductor_core-0.7.1-py3-none-any.whl
+uv run --locked --all-extras python scripts/check_wheel_typing.py
 ```
 
 The test suite is deterministic. It does not make live provider calls or
@@ -39,9 +39,9 @@ source baseline. Errors fail the command. Warnings remain visible but do not
 fail it. Do not use blanket or file-wide suppressions: an unavoidable suppression
 must name its specific rule and include a comment explaining why it is safe.
 
-After building, use the wheel filename for the current project version in the
-consumer command above. This creates a temporary bare-wheel installation outside
-the checkout and checks `tests/typing/consumer.py` with the locked Ty executable.
+The consumer command checks the wheel in `dist/` that matches the current project
+version; pass a wheel path to check a different build. It creates a temporary
+bare-wheel installation outside the checkout and checks `tests/typing/consumer.py` with the locked Ty executable.
 It verifies existing and variation APIs, named routing results, progress callbacks,
 artifact storage, and the packaged `py.typed` marker, and confirms that an invalid
 request is rejected by the checker. It does not call a provider or render audio.
