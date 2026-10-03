@@ -76,7 +76,7 @@ class VariationBatchResult(_VariationContract):
 
     @model_validator(mode="before")
     @classmethod
-    def derive_status(cls, value):
+    def derive_status(cls, value: object) -> object:
         if isinstance(value, dict):
             value = dict(value)
             items = value.get("items", ())
@@ -89,7 +89,7 @@ class VariationBatchResult(_VariationContract):
         return value
 
     @model_validator(mode="after")
-    def validate_outcome(self):
+    def validate_outcome(self) -> "VariationBatchResult":
         exact_count = self.received_count == self.requested_count
         if not exact_count:
             if self.items:

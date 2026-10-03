@@ -191,6 +191,8 @@ def generate_midi(
 
         if ollama_status["installed"]:
             model_capabilities = ollama_status["model_capabilities"]
+            # Installed-model status always includes the inspected capabilities.
+            assert model_capabilities is not None
             effective_effort = _resolve_reasoning_effort(
                 model_choice, model_capabilities, use_thinking, effort
             )
@@ -321,6 +323,7 @@ def generate_variations(
                 )
             raise ValueError("Invalid Model Selected")
         model_capabilities = status["model_capabilities"]
+        assert model_capabilities is not None
         effective_effort = _resolve_reasoning_effort(
             model_choice, model_capabilities, use_thinking, effort
         )

@@ -39,6 +39,7 @@ If the user does not provide a provider or URL, search the web first and prefer 
 3. Update the model registry.
    - Edit `src/conductor_core/resources/model_list.json` under the existing provider key.
    - Preserve the current schema and nearby provider conventions.
+   - Treat `music._validate_model_info` as the schema authority: required fields and reasoning settings must pass validation; do not weaken validation to admit a new entry.
    - Add `extended_thinking`, `always_on_adaptive_thinking`, `effort_options` when applicable, `max_tokens`, `cost`, and `rate_limits` only from supported evidence.
 
 4. Verify the provider module.
@@ -47,6 +48,7 @@ If the user does not provide a provider or URL, search the web first and prefer 
    - Keep changes local to the provider unless a real compatibility constraint forces a nearby adjustment.
 
 6. Validate immediately after the first substantive edit.
+   - Run `uv run --locked --all-extras pytest -q tests/test_model_metadata.py tests/test_thinking_off_metadata.py tests/test_thinking_temperature_metadata.py`, then the matching provider tests and `uv run --locked --all-extras ty check`.
    - Prefer a focused syntax, import, or error check for the touched files.
    - If there is no narrow executable check, use the most local validation available and report what remains manual.
    - Do not run the long evaluation scripts for this workflow.

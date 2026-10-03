@@ -16,6 +16,40 @@ class _RequestCaptured(Exception):
     """Stop an adapter after it has built its provider request."""
 
 
+@pytest.mark.parametrize("generate_name", ["loop_gen", "variations_gen"])
+@pytest.mark.parametrize("provider", [openai_api, claude_api])
+def test_direct_cloud_adapter_rejects_effort_not_supported_by_model(
+    monkeypatch, provider, generate_name
+):
+    provider_name = "OpenAI" if provider is openai_api else "Anthropic"
+    initialize = (
+        "initialize_openai_client"
+        if provider is openai_api
+        else "initialize_anthropic_client"
+    )
+    monkeypatch.setattr(provider, initialize, lambda **kwargs: SimpleNamespace())
+    monkeypatch.setattr(
+        music,
+        "get_model_info",
+        lambda: {
+            "models": {
+                provider_name: {
+                    "test-model": {
+                        "extended_thinking": True,
+                        "effort_options": ["low", "medium"],
+                        "max_tokens": 1024,
+                    }
+                }
+            }
+        },
+    )
+    # 'high' is valid in the SDK vocabulary, but not for this selected model.
+    with pytest.raises(ValueError, match=r"Unsupported .* model reasoning effort"):
+        getattr(provider, generate_name)(
+            prompt="melody", model="test-model", use_thinking=True, effort="high"
+        )
+
+
 def _loop_payload():
     bar = {
         "num": 1,

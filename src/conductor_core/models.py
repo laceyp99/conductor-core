@@ -64,7 +64,7 @@ class TimeInformation(BaseModel):
 
 
 # Note Objects
-def _validate_midi_pitch(note):
+def _validate_midi_pitch(note: "Note") -> "Note":
     """Ensure a pitch and octave identify an encodable MIDI note."""
     from conductor_core.music import calculate_midi_number
 
@@ -102,7 +102,7 @@ class Note(BaseModel):
     time: TimeInformation
 
     @model_validator(mode="after")
-    def validate_midi_pitch(self):
+    def validate_midi_pitch(self) -> "Note":
         return _validate_midi_pitch(self)
 
 
@@ -113,7 +113,7 @@ class Bar(BaseModel):
 
 
 # Loop Objects
-def _validate_loop_note_boundaries(loop: "Loop"):
+def _validate_loop_note_boundaries(loop: "Loop") -> "Loop":
     """Reject notes whose sustain would extend beyond the four-bar loop."""
     for bar_index in range(BARS_PER_LOOP):
         bar = getattr(loop, f"Bar_{bar_index + 1}")
@@ -138,5 +138,5 @@ class Loop(BaseModel):
     Bar_4: Bar = Field(..., description="The fourth bar of the four bar loop")
 
     @model_validator(mode="after")
-    def validate_note_boundaries(self):
+    def validate_note_boundaries(self) -> "Loop":
         return _validate_loop_note_boundaries(self)

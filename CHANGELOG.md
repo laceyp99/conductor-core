@@ -10,11 +10,20 @@ while its public API is still in initial development.
 
 ### Added
 
+- A development-only Ty source baseline targeting Python 3.10, plus an installed
+  wheel typing smoke check for generation, variations, callbacks, and storage.
+  Core's public storage finalization and music/MIDI helper signatures now expose
+  their argument and result types to consumers.
 - `ProgressCallback` is exported from `conductor_core` for annotating progress
   callbacks. Callbacks may now return any value; Core ignores it.
+- Claude Sonnet 5.5 (`claude-sonnet-5-5`) model metadata. With
+  `use_thinking=False`, Core turns its thinking off (`thinking_off: "disabled"`).
 
 ### Changed
 
+- Packaged model metadata is validated before exposing its typed fields, and
+  direct OpenAI, Anthropic, and Ollama adapter calls reject unknown reasoning
+  effort values before sending a request.
 - `conductor_core.routing.generate_midi()` returns a frozen
   `LoopProviderResult` instead of a `(loop, messages, cost, provider)` tuple.
   Callers that unpacked the tuple must read `.loop`, `.messages`, `.cost`, and
@@ -24,16 +33,6 @@ while its public API is still in initial development.
   messages that do not match this shape. Messages loaded from saved history
   are unchanged.
 - `typing-extensions` is now a declared runtime dependency.
-
-### Added
-
-- Claude Sonnet 5.5 (`claude-sonnet-5-5`) model metadata. With
-  `use_thinking=False`, Core turns its thinking off (`thinking_off: "disabled"`).
-
-## [0.6.2] - 2026-09-27
-
-### Changed
-
 - Variation history lookup and listing now return structured results with
   machine-readable diagnostics for malformed manifests and missing or invalid
   generation artifacts. Listings default to 20 batches, accept at most 100,
@@ -42,15 +41,13 @@ while its public API is still in initial development.
   values must read `.record` and `.records` instead. New manifests record UTC
   timestamps; listings use file time for older offset-free manifests.
 
-## [0.6.1] - 2026-09-27
-
 ### Fixed
 
 - Claude generation with Anthropic SDK 1.x now sends supported temperatures
   through `extra_body`, including for models with thinking enabled. This also
   works with supported 0.x SDK versions.
 
-## [0.6.0] - 2026-09-24
+## [0.6.0] - 2026-09-25
 
 ### Added
 
@@ -158,7 +155,7 @@ while its public API is still in initial development.
 - GPT-6 Astra and Gemini 3.8 Flash model metadata, including current pricing,
   reasoning controls, output limits, and rate limits.
 
-## [0.5.0] - 2026-09-02
+## [0.5.0] - 2026-09-03
 
 Version 0.5.0 strengthens public request and result contracts, standardizes
 generated loop data, and makes audio, history, model discovery, and provider
@@ -475,10 +472,12 @@ other Conductor repositories could build on a shared engine.
 - Deterministic tests and package-boundary checks suitable for reuse outside the
   original LoopGPT application.
 
-[Unreleased]: https://github.com/laceyp99/conductor-core/compare/v0.6.2...HEAD
-[0.6.2]: https://github.com/laceyp99/conductor-core/compare/v0.6.1...v0.6.2
-[0.6.1]: https://github.com/laceyp99/conductor-core/compare/v0.6.0...v0.6.1
+[Unreleased]: https://github.com/laceyp99/conductor-core/compare/v0.6.0...HEAD
 [0.6.0]: https://github.com/laceyp99/conductor-core/compare/v0.5.6...v0.6.0
+[0.5.6]: https://github.com/laceyp99/conductor-core/compare/v0.5.5...v0.5.6
+[0.5.5]: https://github.com/laceyp99/conductor-core/compare/v0.5.3...v0.5.5
+[0.5.3]: https://github.com/laceyp99/conductor-core/compare/v0.5.2...v0.5.3
+[0.5.2]: https://github.com/laceyp99/conductor-core/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/laceyp99/conductor-core/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/laceyp99/conductor-core/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/laceyp99/conductor-core/compare/v0.3.0...v0.4.0

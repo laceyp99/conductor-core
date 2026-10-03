@@ -37,9 +37,9 @@ class LoopGenerationEngine:
         self,
         config: EngineConfig | None = None,
         store: FilesystemArtifactStore | None = None,
-    ):
-        self.config = config or EngineConfig.from_defaults()
-        self.store = store or FilesystemArtifactStore(
+    ) -> None:
+        self.config: EngineConfig = config or EngineConfig.from_defaults()
+        self.store: FilesystemArtifactStore = store or FilesystemArtifactStore(
             self.config.artifact_root,
             max_generations=self.config.max_generations,
         )

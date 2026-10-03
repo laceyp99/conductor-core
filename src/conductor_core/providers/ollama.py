@@ -1,9 +1,16 @@
 """Ollama provider adapter for Conductor Core."""
 
+from __future__ import annotations
+
 import logging
 import os
 from collections.abc import Mapping
-from typing import Any
+from typing import TYPE_CHECKING, Any, Literal, NoReturn
+
+from typing_extensions import TypedDict
+
+if TYPE_CHECKING:
+    from ollama import Client as OllamaClient
 
 from conductor_core import models as objects
 from conductor_core import music as utils
@@ -26,6 +33,22 @@ except ImportError:  # pragma: no cover - exercised only in minimal installs
     ollama = None
 
 logger = logging.getLogger(__name__)
+
+
+class OllamaStatus(TypedDict):
+    available: bool
+    models: list[str | None]
+    model_capabilities: dict[str | None, dict[str, object]]
+    host: str
+    error: str | None
+
+
+class OllamaModelStatus(TypedDict):
+    available: bool
+    installed: bool
+    model_capabilities: dict[str, object] | None
+    host: str
+    error: str | None
 
 
 def _get_thinking_metadata(client, model_name, model_info):
@@ -100,7 +123,9 @@ def _resolve_host(host_address: str | None = None) -> str:
     )
 
 
-def _raise_ollama_error(exc: Exception, operation: str) -> None:
+def _raise_ollama_error(exc: Exception, operation: str) -> NoReturn:
+    assert httpx is not None
+    assert ollama is not None
     if isinstance(exc, httpx.TimeoutException):
         error = ProviderTimeoutError("Ollama", str(exc), operation=operation)
     elif isinstance(exc, (httpx.NetworkError, ConnectionError)):
@@ -119,10 +144,11 @@ def _raise_ollama_error(exc: Exception, operation: str) -> None:
 
 def initialize_ollama_client(
     host_address: str | None = None, timeout: float | None = None
-):
+) -> OllamaClient:
     """Initialize and return an Ollama client."""
     if ollama is None:
         raise ImportError("Install conductor-core[ollama] to use Ollama models.")
+    assert httpx is not None
 
     client_args = {"host": _resolve_host(host_address)}
     if timeout is not None:
@@ -142,10 +168,10 @@ def initialize_ollama_client(
 def get_ollama_status(
     host_address: str | None = None,
     request_timeout: float | None = None,
-):
+) -> OllamaStatus:
     """Get the current Ollama availability and discovered models."""
     host = _resolve_host(host_address)
-    status = {
+    status: OllamaStatus = {
         "available": False,
         "models": [],
         "model_capabilities": {},
@@ -179,7 +205,7 @@ def get_model_status(
     model_name: str,
     host_address: str | None = None,
     request_timeout: float | None = None,
-):
+) -> OllamaModelStatus:
     """Check whether one model is installed and inspect only that model.
 
     Unlike :func:`get_ollama_status`, this lists installed models and then
@@ -187,7 +213,7 @@ def get_model_status(
     inspecting every installed model.
     """
     host = _resolve_host(host_address)
-    status = {
+    status: OllamaModelStatus = {
         "available": False,
         "installed": False,
         "model_capabilities": None,
@@ -217,7 +243,7 @@ def get_model_status(
     return status
 
 
-def get_model_list(host_address: str | None = None):
+def get_model_list(host_address: str | None = None) -> list[str | None]:
     """Get the available Ollama model names without inspecting each model."""
     if ollama is None:
         return []
@@ -230,13 +256,24 @@ def get_model_list(host_address: str | None = None):
         return []
 
 
-def _thinking_option(model_capabilities, use_thinking, effort):
+def _thinking_option(
+    model_capabilities: Mapping[str, Any] | None,
+    use_thinking: bool,
+    effort: str | None,
+) -> bool | Literal["low", "medium", "high"] | None:
     """Return the Ollama ``think`` value, or None when unsupported/unknown."""
     if not model_capabilities or not model_capabilities.get("extended_thinking"):
         return None
     effort_options = model_capabilities.get("effort_options") or []
+    validated_effort: Literal["low", "medium", "high"] | None = None
+    if effort_options and effort is not None:
+        if effort not in effort_options:
+            raise ValueError(f"Unsupported Ollama reasoning effort for model: {effort}")
+        if effort not in ("low", "medium", "high"):
+            raise ValueError(f"Unsupported Ollama reasoning effort: {effort}")
+        validated_effort = effort
     if use_thinking:
-        return effort if effort_options else True
+        return validated_effort if effort_options else True
     thinking_off = model_capabilities.get(
         "thinking_off", "lowest_effort" if effort_options else "disabled"
     )
@@ -244,7 +281,7 @@ def _thinking_option(model_capabilities, use_thinking, effort):
         return False
     # Reasoning cannot be turned off: send the lowest level, or leave the
     # model's default when it has no levels.
-    return effort if effort_options else None
+    return validated_effort if effort_options else None
 
 
 def _chat_options(temp, num_ctx):
@@ -286,6 +323,8 @@ def loop_gen(
         host_address=host_address,
         **({"timeout": request_timeout} if request_timeout is not None else {}),
     )
+    assert httpx is not None
+    assert ollama is not None
     loop_prompt = system_prompt or utils.get_loop_prompt()
     messages: list[ProviderMessage] = [
         {"role": "system", "content": loop_prompt},
@@ -296,16 +335,14 @@ def loop_gen(
             client, model, _resolve_host(host_address)
         )
     think = _thinking_option(model_capabilities, use_thinking, effort)
-    chat_options = {
-        "model": model,
-        "messages": messages,
-        "format": objects.Loop.model_json_schema(),
-        "options": _chat_options(temp, num_ctx),
-    }
-    if think is not None:
-        chat_options["think"] = think
     try:
-        completion = client.chat(**chat_options)
+        completion = client.chat(
+            model=model,
+            messages=messages,
+            format=objects.Loop.model_json_schema(),
+            options=_chat_options(temp, num_ctx),
+            **({"think": think} if think is not None else {}),
+        )
     except (
         httpx.TimeoutException,
         httpx.NetworkError,
@@ -346,6 +383,8 @@ def variations_gen(
         host_address=host_address,
         **({"timeout": request_timeout} if request_timeout is not None else {}),
     )
+    assert httpx is not None
+    assert ollama is not None
     loop_prompt = system_prompt or utils.get_variation_prompt()
     messages: list[ProviderMessage] = [
         {"role": "system", "content": loop_prompt},
@@ -356,16 +395,14 @@ def variations_gen(
             client, model, _resolve_host(host_address)
         )
     think = _thinking_option(model_capabilities, use_thinking, effort)
-    chat_options = {
-        "model": model,
-        "messages": messages,
-        "format": VariationCollection.model_json_schema(),
-        "options": _chat_options(temp, num_ctx),
-    }
-    if think is not None:
-        chat_options["think"] = think
     try:
-        completion = client.chat(**chat_options)
+        completion = client.chat(
+            model=model,
+            messages=messages,
+            format=VariationCollection.model_json_schema(),
+            options=_chat_options(temp, num_ctx),
+            **({"think": think} if think is not None else {}),
+        )
     except (
         httpx.TimeoutException,
         httpx.NetworkError,

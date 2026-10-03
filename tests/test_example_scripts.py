@@ -25,6 +25,7 @@ def load_script(name):
         "midi_loop_roundtrip",
         "inspect_models",
         "check_copied_history",
+        "check_wheel_typing",
     ],
 )
 def test_example_script_imports_without_running_main(name, monkeypatch):
@@ -219,3 +220,25 @@ def test_model_discovery_formats_packaged_metadata_without_provider_calls(capsys
     assert "extended thinking: True" in output
     assert "effort options: low, medium" in output
     assert "cost" not in output
+
+
+def test_check_wheel_typing_defaults_to_current_version_wheel(tmp_path, monkeypatch):
+    script = load_script("check_wheel_typing")
+    monkeypatch.setattr(script.importlib.metadata, "version", lambda name: "9.8.7")
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "conductor_core-9.8.6-py3-none-any.whl").touch()
+    wheel = dist / "conductor_core-9.8.7-py3-none-any.whl"
+    wheel.touch()
+
+    assert script.default_wheel(tmp_path) == wheel
+
+
+def test_check_wheel_typing_reports_missing_current_version_wheel(
+    tmp_path, monkeypatch
+):
+    script = load_script("check_wheel_typing")
+    monkeypatch.setattr(script.importlib.metadata, "version", lambda name: "9.8.7")
+
+    with pytest.raises(SystemExit, match="run uv build or pass a wheel path"):
+        script.default_wheel(tmp_path)

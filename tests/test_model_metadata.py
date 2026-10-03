@@ -260,3 +260,25 @@ def test_model_metadata_validation_rejects_invalid_rate_limits(rate_limits, mess
 
     with pytest.raises(ValueError, match=message):
         music._validate_model_info(model_info)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("extended_thinking", "yes", "extended_thinking"),
+        ("max_tokens", True, "max_tokens"),
+        ("effort_options", ["low", 3], "effort_options"),
+        ("cost", {"input": 1.0, "output": "free"}, "cost"),
+    ],
+)
+def test_model_metadata_rejects_invalid_public_fields(field, value, message):
+    model_config = {
+        "extended_thinking": False,
+        "max_tokens": 1024,
+        "cost": {"input": 1.0, "output": 2.0},
+        "rate_limits": {"RPM": 1, "TPM": None, "RPD": None},
+    }
+    model_config[field] = value
+
+    with pytest.raises(ValueError, match=message):
+        music._validate_model_info({"models": {"Cloud": {"model": model_config}}})
