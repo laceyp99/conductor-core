@@ -32,6 +32,7 @@ Example shape:
     "OpenAI": {
       "model-id": {
         "extended_thinking": true,
+        "thinking_off": "lowest_effort",
         "always_on_adaptive_thinking": false,
         "effort_options": ["low", "medium", "high"],
         "max_tokens": 128000,
@@ -43,7 +44,7 @@ Example shape:
         "rate_limits": {
           "TPM": 2000000,
           "RPM": 10000,
-          "TPD": 200000000
+          "RPD": null
         }
       }
     }
