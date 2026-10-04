@@ -426,3 +426,22 @@ def test_model_list_does_not_inspect_models(monkeypatch):
 
     assert ollama.get_model_list() == ["a", "b"]
     assert shown == []
+
+
+def test_model_list_passes_request_timeout_without_inspection(monkeypatch):
+    shown = []
+    client = _counting_client(["a", "b"], shown)
+    calls = []
+
+    def initialize(**kwargs):
+        calls.append(kwargs)
+        return client
+
+    monkeypatch.setattr(ollama, "initialize_ollama_client", initialize)
+
+    assert ollama.get_model_list("http://ollama.test", request_timeout=1.25) == [
+        "a",
+        "b",
+    ]
+    assert calls == [{"host_address": "http://ollama.test", "timeout": 1.25}]
+    assert shown == []

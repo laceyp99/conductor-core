@@ -8,6 +8,11 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+### Added
+
+- Ollama `get_model_list()` accepts an optional `request_timeout` so consumers
+  can bound discovery without inspecting every installed model.
+
 ## [0.6.0] - 2026-09-24
 
 ### Added

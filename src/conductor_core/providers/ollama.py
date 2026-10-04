@@ -214,13 +214,18 @@ def get_model_status(
     return status
 
 
-def get_model_list(host_address: str | None = None):
-    """Get the available Ollama model names without inspecting each model."""
+def get_model_list(
+    host_address: str | None = None, request_timeout: float | None = None
+):
+    """List names without inspection, optionally bounding the discovery request."""
     if ollama is None:
         return []
     host = _resolve_host(host_address)
     try:
-        client = initialize_ollama_client(host_address=host)
+        client = initialize_ollama_client(
+            host_address=host,
+            **({"timeout": request_timeout} if request_timeout is not None else {}),
+        )
         return [model.model for model in client.list().models]
     except Exception as exc:
         logger.warning("Ollama unavailable at %s: %s", host, exc)
