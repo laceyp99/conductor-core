@@ -135,10 +135,6 @@ Generation deletion and retention never rewrite a manifest, and deleting a
 manifest never deletes a generation. `clear_variation_history()` considers all
 valid manifests.
 
-Consumers of the previous bounded listing API must remove the `limit` argument
-from calls. `VariationHistoryListResult` no longer includes `limit` or
-`omitted_diagnostic_count`; the returned records and diagnostics are complete.
-
 Variation manifests are retained indefinitely and can accumulate. They include
 provider messages, so applications should apply their own privacy and lifecycle
 policy and explicitly delete or clear them when no longer needed.
