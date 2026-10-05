@@ -90,7 +90,8 @@ return structured results:
 ```python
 from conductor_core import get_variation_history, list_variation_history
 
-listing = list_variation_history(limit=20)
+# Fetch all batches and diagnostics so the application can present a full list.
+listing = list_variation_history(limit=None)
 for record in listing.records:
     print(record.manifest.batch_id, record.manifest.generation_ids)
 for diagnostic in listing.diagnostics:
@@ -102,13 +103,28 @@ if lookup.record is not None:
 ```
 
 Listing defaults to 20 records and accepts an integer limit from 1 through
-100. Booleans, coercible values, and out-of-range values raise `ValueError`.
+100, or `None` for all valid batches and all diagnostics. The unlimited option
+works with both the top-level helper and `FilesystemArtifactStore` method;
+its result has `limit=None` and `omitted_diagnostic_count=0`. Booleans, coercible
+values, and out-of-range integers raise `ValueError`.
 Variation manifests store UTC creation timestamps. Records are ordered newest
-first, with batch ID ascending when timestamps tie. The listing returns up to
-100 diagnostics, prioritizing references in the returned records and then
-malformed manifests by batch ID.
+first, with batch ID ascending when timestamps tie. Listings use file modification
+time for legacy manifests with offset-free timestamps. With a numeric limit,
+the listing returns up to 100 diagnostics, prioritizing references in the
+returned records and then malformed manifests by batch ID.
 `omitted_diagnostic_count` reports further problems beyond that bound. A
-malformed manifest does not hide valid neighboring batches.
+malformed or unreadable manifest is skipped and diagnosed without hiding valid
+neighboring batches. In either mode, reference diagnostics are ordered by batch
+ID, generation ID, and code, followed by malformed-manifest diagnostics by batch
+ID.
+
+Fetching all history gives an application the complete list in one call without
+scroll-triggered requests. Loading time and memory use grow with the number and
+size of manifests, including provider messages and resolved generation metadata.
+Each call reads current history; call again to refresh after saving or deleting
+a batch. Concurrent filesystem changes do not produce a guaranteed frozen
+snapshot. Directory-level access failures can still raise rather than returning
+a partial listing.
 
 A lookup has either a record or a `manifest_missing` or `manifest_invalid`
 diagnostic. A record resolves surviving ordinary generations in manifest order.
@@ -117,6 +133,8 @@ Its `missing_generation_ids` identify generations whose directories are absent;
 required artifacts. Read results also report these as `generation_missing` and
 `generation_invalid` diagnostics. Every diagnostic has a stable `code`, a
 `batch_id`, an optional `generation_id`, and a readable `message`.
+Valid manifests remain in listings even when their generations are missing or
+invalid. Retrieving their history does not restore deleted MIDI or audio files.
 
 History reads do not create directories, rewrite manifests, or repair artifacts.
 Generation deletion and retention never rewrite a manifest, and deleting a

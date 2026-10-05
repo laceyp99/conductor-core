@@ -10,6 +10,10 @@ while its public API is still in initial development.
 
 ### Added
 
+- `list_variation_history(limit=None)` retrieves all valid variation batches and
+  every diagnostic in one read-only call, through both the top-level helper and
+  `FilesystemArtifactStore`. Default and numeric limits retain their existing
+  record and diagnostic caps.
 - A development-only Ty source baseline targeting Python 3.10, plus an installed
   wheel typing smoke check for generation, variations, callbacks, and storage.
   Core's public storage finalization and music/MIDI helper signatures now expose
