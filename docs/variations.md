@@ -91,7 +91,7 @@ return structured results:
 from conductor_core import get_variation_history, list_variation_history
 
 # Fetch all batches and diagnostics so the application can present a full list.
-listing = list_variation_history(limit=None)
+listing = list_variation_history()
 for record in listing.records:
     print(record.manifest.batch_id, record.manifest.generation_ids)
 for diagnostic in listing.diagnostics:
@@ -102,21 +102,15 @@ if lookup.record is not None:
     print(lookup.record.generations)
 ```
 
-Listing defaults to 20 records and accepts an integer limit from 1 through
-100, or `None` for all valid batches and all diagnostics. The unlimited option
-works with both the top-level helper and `FilesystemArtifactStore` method;
-its result has `limit=None` and `omitted_diagnostic_count=0`. Booleans, coercible
-values, and out-of-range integers raise `ValueError`.
+Listing returns all valid batches and all diagnostics in one call. Both the
+top-level helper and `FilesystemArtifactStore` method take no arguments; the
+result contains `records` and `diagnostics`, with no record or diagnostic caps.
 Variation manifests store UTC creation timestamps. Records are ordered newest
 first, with batch ID ascending when timestamps tie. Listings use file modification
-time for legacy manifests with offset-free timestamps. With a numeric limit,
-the listing returns up to 100 diagnostics, prioritizing references in the
-returned records and then malformed manifests by batch ID.
-`omitted_diagnostic_count` reports further problems beyond that bound. A
-malformed or unreadable manifest is skipped and diagnosed without hiding valid
-neighboring batches. In either mode, reference diagnostics are ordered by batch
-ID, generation ID, and code, followed by malformed-manifest diagnostics by batch
-ID.
+time for legacy manifests with offset-free timestamps. A malformed or unreadable
+manifest is skipped and diagnosed without hiding valid neighboring batches.
+Reference diagnostics are ordered by batch ID, generation ID, and code,
+followed by malformed-manifest diagnostics by batch ID.
 
 Fetching all history gives an application the complete list in one call without
 scroll-triggered requests. Loading time and memory use grow with the number and
@@ -139,7 +133,11 @@ invalid. Retrieving their history does not restore deleted MIDI or audio files.
 History reads do not create directories, rewrite manifests, or repair artifacts.
 Generation deletion and retention never rewrite a manifest, and deleting a
 manifest never deletes a generation. `clear_variation_history()` considers all
-valid manifests even though listings have a default limit.
+valid manifests.
+
+Consumers of the previous bounded listing API must remove the `limit` argument
+from calls. `VariationHistoryListResult` no longer includes `limit` or
+`omitted_diagnostic_count`; the returned records and diagnostics are complete.
 
 Variation manifests are retained indefinitely and can accumulate. They include
 provider messages, so applications should apply their own privacy and lifecycle

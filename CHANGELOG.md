@@ -10,10 +10,6 @@ while its public API is still in initial development.
 
 ### Added
 
-- `list_variation_history(limit=None)` retrieves all valid variation batches and
-  every diagnostic in one read-only call, through both the top-level helper and
-  `FilesystemArtifactStore`. Default and numeric limits retain their existing
-  record and diagnostic caps.
 - A development-only Ty source baseline targeting Python 3.10, plus an installed
   wheel typing smoke check for generation, variations, callbacks, and storage.
   Core's public storage finalization and music/MIDI helper signatures now expose
@@ -39,10 +35,12 @@ while its public API is still in initial development.
 - `typing-extensions` is now a declared runtime dependency.
 - Variation history lookup and listing now return structured results with
   machine-readable diagnostics for malformed manifests and missing or invalid
-  generation artifacts. Listings default to 20 batches, accept at most 100,
-  cap returned diagnostics at 100 with an omitted count, and order timestamp
-  ties by batch ID. Consumers of the previous direct record and list return
-  values must read `.record` and `.records` instead. New manifests record UTC
+  generation artifacts. `list_variation_history()` returns all valid batches and
+  every diagnostic in one read-only call, through both the top-level helper and
+  `FilesystemArtifactStore`, and orders timestamp ties by batch ID. The `limit`
+  argument and result fields `limit` and `omitted_diagnostic_count` are removed;
+  callers must remove them. Consumers of the previous direct record and list
+  return values must read `.record` and `.records` instead. New manifests record UTC
   timestamps; listings use file time for older offset-free manifests.
 
 ### Fixed
