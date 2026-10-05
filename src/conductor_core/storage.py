@@ -127,8 +127,9 @@ class FilesystemArtifactStore:
         return _save_variation_history(self.artifact_root, metadata, generation_ids)
 
     def list_variation_history(
-        self, limit: int = DEFAULT_VARIATION_HISTORY_LIMIT
+        self, limit: int | None = DEFAULT_VARIATION_HISTORY_LIMIT
     ) -> "VariationHistoryListResult":
+        """List history read-only; None returns all records and diagnostics."""
         return _list_variation_history(self.artifact_root, limit)
 
     def get_variation_history(self, batch_id: str) -> "VariationHistoryLookupResult":
@@ -248,14 +249,14 @@ class VariationHistoryLookupResult(_VariationHistoryContract):
 
 
 class VariationHistoryListResult(_VariationHistoryContract):
-    """Newest valid batch records and diagnostics from the history directory."""
+    """Valid batch records and diagnostics; a None limit means unlimited."""
 
     records: tuple[VariationHistoryRecord, ...] = ()
     diagnostics: tuple[VariationHistoryDiagnostic, ...] = ()
     omitted_diagnostic_count: NonnegativeInt = 0
-    limit: Annotated[int, Field(strict=True, ge=1, le=MAX_VARIATION_HISTORY_LIMIT)] = (
-        DEFAULT_VARIATION_HISTORY_LIMIT
-    )
+    limit: (
+        Annotated[int, Field(strict=True, ge=1, le=MAX_VARIATION_HISTORY_LIMIT)] | None
+    ) = DEFAULT_VARIATION_HISTORY_LIMIT
 
 
 class GenerationWorkspace(BaseModel):
@@ -671,7 +672,9 @@ def _read_variation_manifest_for_listing(
         )
 
 
-def _validate_variation_history_limit(limit: int) -> int:
+def _validate_variation_history_limit(limit: int | None) -> int | None:
+    if limit is None:
+        return None
     if (
         isinstance(limit, bool)
         or not isinstance(limit, int)
@@ -679,7 +682,7 @@ def _validate_variation_history_limit(limit: int) -> int:
     ):
         raise ValueError(
             "variation history limit must be an integer from 1 to "
-            f"{MAX_VARIATION_HISTORY_LIMIT}"
+            f"{MAX_VARIATION_HISTORY_LIMIT}, or None for unlimited history"
         )
     return limit
 
@@ -703,7 +706,7 @@ def _variation_created_at_order(manifest: VariationHistoryManifest) -> int:
 
 def _list_variation_history(
     artifact_root: str | Path,
-    limit: int = DEFAULT_VARIATION_HISTORY_LIMIT,
+    limit: int | None = DEFAULT_VARIATION_HISTORY_LIMIT,
 ) -> VariationHistoryListResult:
     limit = _validate_variation_history_limit(limit)
     variations_dir = _get_variations_dir(artifact_root)
@@ -724,22 +727,35 @@ def _list_variation_history(
         if manifest is not None:
             assert order is not None
             key = (-order, manifest.batch_id)
-            position = bisect_left(manifest_keys, key)
-            if position < limit:
-                manifest_keys.insert(position, key)
-                manifests.insert(position, manifest)
-                if len(manifests) > limit:
-                    manifest_keys.pop()
-                    manifests.pop()
+            if limit is None:
+                manifest_keys.append(key)
+                manifests.append(manifest)
+            else:
+                position = bisect_left(manifest_keys, key)
+                if position < limit:
+                    manifest_keys.insert(position, key)
+                    manifests.insert(position, manifest)
+                    if len(manifests) > limit:
+                        manifest_keys.pop()
+                        manifests.pop()
         if diagnostic is not None:
             malformed_count += 1
-            position = bisect_left(malformed_keys, diagnostic.batch_id)
-            if position < MAX_VARIATION_HISTORY_DIAGNOSTICS:
-                malformed_keys.insert(position, diagnostic.batch_id)
-                malformed_diagnostics.insert(position, diagnostic)
-                if len(malformed_diagnostics) > MAX_VARIATION_HISTORY_DIAGNOSTICS:
-                    malformed_keys.pop()
-                    malformed_diagnostics.pop()
+            if limit is None:
+                malformed_diagnostics.append(diagnostic)
+            else:
+                position = bisect_left(malformed_keys, diagnostic.batch_id)
+                if position < MAX_VARIATION_HISTORY_DIAGNOSTICS:
+                    malformed_keys.insert(position, diagnostic.batch_id)
+                    malformed_diagnostics.insert(position, diagnostic)
+                    if len(malformed_diagnostics) > MAX_VARIATION_HISTORY_DIAGNOSTICS:
+                        malformed_keys.pop()
+                        malformed_diagnostics.pop()
+    if limit is None:
+        manifests = [
+            manifest
+            for _, manifest in sorted(zip(manifest_keys, manifests, strict=True))
+        ]
+        malformed_diagnostics.sort(key=lambda diagnostic: diagnostic.batch_id)
     results = [
         _lookup_variation_manifest(artifact_root, manifest) for manifest in manifests
     ]
@@ -755,9 +771,9 @@ def _list_variation_history(
         )
     )
     all_diagnostic_count = malformed_count + len(reference_diagnostics)
-    diagnostics = (reference_diagnostics + malformed_diagnostics)[
-        :MAX_VARIATION_HISTORY_DIAGNOSTICS
-    ]
+    diagnostics = reference_diagnostics + malformed_diagnostics
+    if limit is not None:
+        diagnostics = diagnostics[:MAX_VARIATION_HISTORY_DIAGNOSTICS]
     return VariationHistoryListResult(
         records=selected_records,
         diagnostics=tuple(diagnostics),
@@ -1329,9 +1345,9 @@ def save_variation_history(
 
 
 def list_variation_history(
-    limit: int = DEFAULT_VARIATION_HISTORY_LIMIT,
+    limit: int | None = DEFAULT_VARIATION_HISTORY_LIMIT,
 ) -> VariationHistoryListResult:
-    """List recent variation records and diagnostics without changing history."""
+    """List history read-only; None returns all records and diagnostics."""
     return _list_variation_history(_resolve_artifact_root(), limit)
 
 

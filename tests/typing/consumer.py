@@ -14,7 +14,9 @@ from conductor_core import (
     ProgressEvent,
     VariationBatchResult,
     VariationGenerationRequest,
+    VariationHistoryListResult,
     VariationHistoryLookupResult,
+    list_variation_history,
 )
 from conductor_core.models import Loop
 from conductor_core.music import get_loop_prompt, get_model_info
@@ -50,6 +52,8 @@ def consume(root: Path) -> None:
         store.get_variation_history(variations.metadata.batch_id),
         VariationHistoryLookupResult,
     )
+    assert_type(store.list_variation_history(limit=None), VariationHistoryListResult)
+    assert_type(store.list_variation_history(limit=None).limit, int | None)
     workspace = store.create_generation_workspace()
     metadata = store.finalize_generation(
         workspace, "A melody", "C", "major", "gpt-6-sol", "OpenAI", 0.0
@@ -67,3 +71,5 @@ assert resources.files("conductor_core").joinpath("py.typed").is_file()
 assert_type(get_loop_prompt(), str)
 assert_type(get_model_info()["models"]["OpenAI"]["gpt-6-sol"]["max_tokens"], int)
 assert_type(get_model_info()["models"]["OpenAI"]["gpt-6-sol"]["cost"]["input"], float)
+assert_type(list_variation_history(limit=None), VariationHistoryListResult)
+assert_type(list_variation_history(limit=None).limit, int | None)
