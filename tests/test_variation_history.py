@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from conductor_core import storage
+from conductor_core import list_variation_history, storage
 
 
 def _finalize(store: storage.FilesystemArtifactStore, gen_id: str, monkeypatch):
@@ -284,7 +284,10 @@ def test_listing_keeps_valid_neighbors_and_reports_invalid_references(
     }
 
 
-def test_listing_limit_tie_breaker_and_strict_validation(tmp_path):
+def test_listing_returns_all_batches_and_diagnostics_in_deterministic_order(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("CONDUCTOR_CORE_DATA_DIR", str(tmp_path))
     store = storage.FilesystemArtifactStore(tmp_path / "generations")
     variations = tmp_path / "variations"
     variations.mkdir()
@@ -300,22 +303,27 @@ def test_listing_limit_tie_breaker_and_strict_validation(tmp_path):
             json.dumps({**manifest, "batch_id": batch_id}), encoding="utf-8"
         )
 
-    default = store.list_variation_history()
-    assert default.limit == 20
-    assert len(default.records) == 20
-    assert len(default.diagnostics) == 40
-    assert default.omitted_diagnostic_count == 0
-    assert [item.manifest.batch_id for item in default.records] == [
-        f"batch-{index:03d}" for index in range(20)
+    listing = store.list_variation_history()
+    assert len(listing.records) == 101
+    assert len(listing.diagnostics) == 202
+    assert list_variation_history() == listing
+    assert [item.manifest.batch_id for item in listing.records] == [
+        f"batch-{index:03d}" for index in range(101)
     ]
-    assert len(store.list_variation_history(100).records) == 100
-    assert len(store.list_variation_history(1).records) == 1
-    for invalid in (True, False, 0, -1, 101, 1.0, "2", None):
-        with pytest.raises(ValueError, match="integer from 1 to 100"):
-            store.list_variation_history(invalid)
+    assert [
+        (item.code, item.batch_id, item.generation_id) for item in listing.diagnostics
+    ] == [
+        ("generation_missing", f"batch-{index:03d}", generation_id)
+        for index in range(101)
+        for generation_id in ("missing-a", "missing-b")
+    ]
+    with pytest.raises(TypeError):
+        store.list_variation_history(limit=1)
+    with pytest.raises(TypeError):
+        list_variation_history(limit=1)
 
 
-def test_clear_variation_history_reaches_past_default_listing_limit(tmp_path):
+def test_clear_variation_history_reaches_all_batches(tmp_path):
     store = storage.FilesystemArtifactStore(tmp_path / "generations")
     variations = tmp_path / "variations"
     variations.mkdir()
@@ -398,12 +406,12 @@ def test_listing_uses_file_time_for_legacy_naive_manifest(tmp_path):
     )
 
     assert [
-        record.manifest.batch_id for record in store.list_variation_history(1).records
-    ] == ["aware"]
+        record.manifest.batch_id for record in store.list_variation_history().records
+    ] == ["aware", "legacy"]
     assert legacy.stat().st_mtime_ns // 1_000_000_000 == int(legacy_written_at)
 
 
-def test_listing_bounds_diagnostics_and_reports_omissions(tmp_path):
+def test_listing_returns_all_malformed_and_reference_diagnostics(tmp_path):
     store = storage.FilesystemArtifactStore(tmp_path / "generations")
     variations = tmp_path / "variations"
     variations.mkdir()
@@ -422,10 +430,92 @@ def test_listing_bounds_diagnostics_and_reports_omissions(tmp_path):
     listing = store.list_variation_history()
 
     assert [record.manifest.batch_id for record in listing.records] == ["good"]
-    assert len(listing.diagnostics) == 100
-    assert listing.omitted_diagnostic_count == 4
-    assert [item.code for item in listing.diagnostics[:2]] == [
-        "generation_missing",
-        "generation_missing",
+    assert len(listing.diagnostics) == 104
+    assert [
+        (item.code, item.batch_id, item.generation_id)
+        for item in listing.diagnostics[:2]
+    ] == [
+        ("generation_missing", "good", "missing-a"),
+        ("generation_missing", "good", "missing-b"),
     ]
-    assert listing.diagnostics[-1].batch_id == "bad-097"
+    assert [item.batch_id for item in listing.diagnostics[2:]] == [
+        f"bad-{index:03d}" for index in range(102)
+    ]
+
+
+def test_listing_skips_unreadable_neighbor_and_is_read_only(tmp_path, monkeypatch):
+    store = storage.FilesystemArtifactStore(tmp_path / "generations")
+    variations = tmp_path / "variations"
+    variations.mkdir()
+    manifest = {
+        **_metadata(),
+        "schema_version": 1,
+        "created_at": "2026-09-27T12:00:00+00:00",
+        "generation_ids": ["missing"],
+    }
+    (variations / "batch_good.json").write_text(
+        json.dumps({**manifest, "batch_id": "good"}), encoding="utf-8"
+    )
+    (variations / "batch_blocked.json").write_text(
+        json.dumps({**manifest, "batch_id": "blocked"}), encoding="utf-8"
+    )
+    before = {
+        path.relative_to(tmp_path): (path.read_bytes(), path.stat().st_mtime_ns)
+        for path in tmp_path.rglob("*")
+        if path.is_file()
+    }
+    original = storage._load_variation_manifest
+
+    def fail_one(artifact_root, batch_id):
+        if batch_id == "blocked":
+            raise PermissionError("test unreadable manifest")
+        return original(artifact_root, batch_id)
+
+    monkeypatch.setattr(storage, "_load_variation_manifest", fail_one)
+    listing = store.list_variation_history()
+
+    assert [record.manifest.batch_id for record in listing.records] == ["good"]
+    assert [(item.code, item.batch_id) for item in listing.diagnostics] == [
+        ("generation_missing", "good"),
+        ("manifest_invalid", "blocked"),
+    ]
+    after = {
+        path.relative_to(tmp_path): (path.read_bytes(), path.stat().st_mtime_ns)
+        for path in tmp_path.rglob("*")
+        if path.is_file()
+    }
+    assert after == before
+
+
+def test_listing_refreshes_and_matches_top_level_helper(tmp_path, monkeypatch):
+    monkeypatch.setenv("CONDUCTOR_CORE_DATA_DIR", str(tmp_path))
+    variations = tmp_path / "variations"
+    variations.mkdir()
+    manifest = {
+        **_metadata("first"),
+        "schema_version": 1,
+        "created_at": "2026-09-27T12:00:00+00:00",
+        "generation_ids": ["missing"],
+    }
+    (variations / "batch_first.json").write_text(json.dumps(manifest), encoding="utf-8")
+    store = storage.FilesystemArtifactStore(tmp_path / "generations")
+    first = store.list_variation_history()
+    assert [record.manifest.batch_id for record in first.records] == ["first"]
+
+    (variations / "batch_second.json").write_text(
+        json.dumps(
+            {
+                **manifest,
+                "batch_id": "second",
+                "created_at": "2026-09-27T13:00:00+00:00",
+            }
+        ),
+        encoding="utf-8",
+    )
+    refreshed = store.list_variation_history()
+    top_level = list_variation_history()
+    assert [record.manifest.batch_id for record in refreshed.records] == [
+        "second",
+        "first",
+    ]
+    assert top_level == refreshed
