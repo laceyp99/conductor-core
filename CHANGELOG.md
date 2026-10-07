@@ -45,6 +45,9 @@ while its public API is still in initial development.
 
 ### Fixed
 
+- Concurrent first-use generation requests can now initialize the same artifact
+  root without failing after a completed provider response. Generation workspace
+  allocation remains exclusive, and invalid roots or permission errors still fail.
 - Claude generation with Anthropic SDK 1.x now sends supported temperatures
   through `extra_body`, including for models with thinking enabled. This also
   works with supported 0.x SDK versions.

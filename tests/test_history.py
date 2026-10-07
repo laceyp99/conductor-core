@@ -1,8 +1,10 @@
 import json
 import os
 import shutil
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from pathlib import Path
+from threading import Barrier, current_thread
 
 import pytest
 
@@ -76,6 +78,75 @@ def test_create_generation_workspace_allocates_canonical_paths(
     assert workspace.messages_path == str(gen_dir / "messages.json")
     assert workspace.metadata_path == str(gen_dir / "metadata.json")
     assert gen_dir.exists()
+
+
+def test_concurrent_first_use_allocates_distinct_workspaces(tmp_path, monkeypatch):
+    root = tmp_path / "generations"
+    store = history.FilesystemArtifactStore(root)
+    root_creation = Barrier(2, timeout=5)
+    real_makedirs = os.makedirs
+
+    def synchronized_makedirs(name, mode=0o777, exist_ok=False):
+        # Both callers reach root creation before either creates it on disk.
+        if Path(name) == root:
+            root_creation.wait()
+        return real_makedirs(name, mode=mode, exist_ok=exist_ok)
+
+    monkeypatch.setattr(history.os, "makedirs", synchronized_makedirs)
+    monkeypatch.setattr(history, "_generate_id", lambda: current_thread().name)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(store.create_generation_workspace) for _ in range(2)]
+        workspaces = [future.result(timeout=10) for future in futures]
+
+    assert workspaces[0].id != workspaces[1].id
+    assert workspaces[0].directory != workspaces[1].directory
+    assert all(Path(workspace.directory).is_dir() for workspace in workspaces)
+
+
+def test_create_generation_workspace_retries_child_collision(tmp_path, monkeypatch):
+    root = tmp_path / "generations"
+    existing = root / "gen_existing"
+    existing.mkdir(parents=True)
+    marker = existing / "keep.txt"
+    marker.write_text("existing generation", encoding="utf-8")
+    ids = iter(["existing", "new"])
+    monkeypatch.setattr(history, "_generate_id", lambda: next(ids))
+
+    workspace = history.FilesystemArtifactStore(root).create_generation_workspace()
+
+    assert workspace.directory == str(root / "gen_new")
+    assert Path(workspace.directory).is_dir()
+    assert marker.read_text(encoding="utf-8") == "existing generation"
+
+
+def test_create_generation_workspace_rejects_file_at_root(tmp_path):
+    root = tmp_path / "generations"
+    root.write_text("not a directory", encoding="utf-8")
+
+    with pytest.raises(FileExistsError):
+        history.FilesystemArtifactStore(root).create_generation_workspace()
+
+    assert root.read_text(encoding="utf-8") == "not a directory"
+
+
+def test_create_generation_workspace_propagates_root_permission_error(
+    tmp_path, monkeypatch
+):
+    root = tmp_path / "generations"
+    real_makedirs = os.makedirs
+
+    def denied_makedirs(name, mode=0o777, exist_ok=False):
+        if Path(name) == root:
+            raise PermissionError("root creation denied")
+        return real_makedirs(name, mode=mode, exist_ok=exist_ok)
+
+    monkeypatch.setattr(history.os, "makedirs", denied_makedirs)
+
+    with pytest.raises(PermissionError, match="root creation denied"):
+        history.FilesystemArtifactStore(root).create_generation_workspace()
+
+    assert not root.exists()
 
 
 def test_generation_metadata_distinguishes_unrecorded_and_explicit_reasoning_settings():
