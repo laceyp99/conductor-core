@@ -273,11 +273,10 @@ def _resolve_artifact_root(artifact_root: str | Path | None = None) -> str:
 
 
 def _ensure_generations_dir(artifact_root: str | Path | None = None) -> None:
-    """Create the generations directory if it doesn't exist."""
+    """Ensure the shared generations directory exists, including concurrent use."""
     root = _resolve_artifact_root(artifact_root)
-    if not os.path.exists(root):
-        os.makedirs(root)
-        logger.info(f"Created generations directory: {root}")
+    os.makedirs(root, exist_ok=True)
+    logger.debug("Ensured generations directory: %s", root)
 
 
 def _generate_id() -> str:
