@@ -62,6 +62,15 @@ config = EngineConfig.from_defaults(max_generations=100)
 unlimited_store = FilesystemArtifactStore("my-output", max_generations=None)
 ```
 
+The limit counts saved generations, not provider requests or disk bytes. Each
+variation in a batch counts separately, so a request for four variations needs
+`max_generations >= 4` or `None` for unlimited retention. Core rejects a batch
+that exceeds the actual store's finite limit before provider work begins.
+Otherwise, as new generations are saved, Core prunes the oldest generations
+to stay within the limit. Later requests can therefore prune artifacts from a
+previously returned batch. Variation manifests have a separate lifetime and
+are not removed by generation retention; see [Variation history](variations.md#variation-history).
+
 ## Generation results
 
 | Attribute | Contents |

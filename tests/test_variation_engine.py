@@ -1,4 +1,7 @@
+from datetime import datetime, timedelta
+from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 from pydantic import ValidationError
@@ -8,6 +11,7 @@ from conductor_core import (
     LoopGenerationEngine,
     VariationGenerationRequest,
     VariationUsage,
+    storage,
 )
 from conductor_core import engine as engine_module
 
@@ -34,6 +38,95 @@ def provider_result(variations, **overrides):
     }
     values.update(overrides)
     return SimpleNamespace(**values)
+
+
+@pytest.mark.parametrize(("count", "limit"), [(2, 1), (4, 2)])
+@pytest.mark.parametrize("inject_store", [False, True])
+def test_oversized_batch_is_rejected_before_provider_or_storage(
+    monkeypatch, tmp_path, count, limit, inject_store
+):
+    events = []
+    root = tmp_path / "generations"
+    engine = LoopGenerationEngine(
+        EngineConfig(artifact_root=root, max_generations=20 if inject_store else limit),
+        store=storage.FilesystemArtifactStore(root, max_generations=limit)
+        if inject_store
+        else None,
+    )
+    provider = Mock()
+    allocate = Mock()
+    save_manifest = Mock()
+    monkeypatch.setattr(engine_module.routing, "generate_variations", provider)
+    monkeypatch.setattr(engine.store, "create_generation_workspace", allocate)
+    monkeypatch.setattr(engine.store, "save_variation_history", save_manifest)
+
+    with pytest.raises(ValueError, match=f"Requested {count} variations") as error:
+        engine.generate_variations(
+            request(count=count), progress_callback=events.append
+        )
+
+    assert str(error.value) == (
+        f"Requested {count} variations, but this store retains at most {limit} "
+        f"generations. Set max_generations >= {count} or None."
+    )
+    provider.assert_not_called()
+    allocate.assert_not_called()
+    save_manifest.assert_not_called()
+    assert not root.exists()
+    assert not (tmp_path / "variations").exists()
+    assert [event.status for event in events] == ["started", "failed"]
+    assert events[0].batch_id is not None
+    assert events[0].batch_id == events[1].batch_id
+    assert all(event.variation_index is None for event in events)
+
+
+@pytest.mark.parametrize("limit", [2, 3, None])
+def test_allowed_batch_survives_retention_of_older_generations(
+    monkeypatch, tmp_path, sample_loop, limit
+):
+    timestamps = iter(
+        datetime(2026, 1, 1) + timedelta(seconds=index) for index in range(10)
+    )
+
+    class SteppingDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            timestamp = next(timestamps)
+            return timestamp.astimezone(tz) if tz is not None else timestamp
+
+    monkeypatch.setattr(storage, "datetime", SteppingDatetime)
+    provider = Mock(return_value=provider_result((sample_loop, sample_loop)))
+    monkeypatch.setattr(engine_module.routing, "generate_variations", provider)
+    store = storage.FilesystemArtifactStore(
+        tmp_path / "generations", max_generations=limit
+    )
+    engine = LoopGenerationEngine(
+        EngineConfig(artifact_root=tmp_path / "unused-config-root", max_generations=1),
+        store=store,
+    )
+    older = engine.generate_variations(request())
+
+    result = engine.generate_variations(request())
+
+    assert provider.call_count == 2
+    assert result.status == "complete"
+    assert len(result.items) == 2
+    assert all(Path(item.generation.midi_path).is_file() for item in result.items)
+    lookup = store.get_variation_history(result.metadata.batch_id)
+    assert lookup.record is not None
+    assert lookup.diagnostics == ()
+    assert lookup.record.manifest.generation_ids == tuple(
+        item.generation.id for item in result.items
+    )
+    assert lookup.record.missing_generation_ids == ()
+    assert lookup.record.invalid_generation_ids == ()
+
+    expected_older = 2 if limit is None else limit - 2
+    assert [Path(item.generation.midi_path).exists() for item in older.items] == (
+        [False] * (2 - expected_older) + [True] * expected_older
+    )
+    assert len(store.load_history()) == 2 + expected_older
+    assert not (tmp_path / "unused-config-root").exists()
 
 
 def test_generate_variations_persists_ordered_children_and_one_manifest(

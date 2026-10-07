@@ -211,6 +211,13 @@ class LoopGenerationEngine:
         prompt = f"{request.key} {request.scale} {request.description}."
 
         try:
+            max_generations = self.store.max_generations
+            if max_generations is not None and request.count > max_generations:
+                raise ValueError(
+                    f"Requested {request.count} variations, but this store retains "
+                    f"at most {max_generations} generations. Set "
+                    f"max_generations >= {request.count} or None."
+                )
             provider_result = routing.generate_variations(
                 model_choice=request.model,
                 prompt=prompt,

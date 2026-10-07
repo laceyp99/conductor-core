@@ -36,6 +36,30 @@ Anthropic, Google, or Ollama adapter. The provider returns one internal JSON
 object with an ordered `variations` array, allowing later items to follow the
 earlier output context. Provider SDK objects never enter the public result.
 
+## Retention capacity
+
+Each variation is one saved generation. If the actual artifact store has a
+finite `max_generations` below `count`, `generate_variations()` raises
+`ValueError` before contacting the provider or creating a generation workspace.
+For example, four variations require `max_generations >= 4` or `None` for
+unlimited retention:
+
+```python
+from conductor_core import EngineConfig, LoopGenerationEngine
+
+config = EngineConfig.from_defaults(max_generations=4)
+engine = LoopGenerationEngine(config=config)
+```
+
+An injected `FilesystemArtifactStore` supplies the effective limit even when
+`EngineConfig.max_generations` differs. A limit equal to or above the requested
+count permits the batch. On rejection, the progress callback receives batch
+`started` and `failed` events, with no item events.
+
+The check covers sequential generation at return time. Later requests can
+prune previously returned generations. Callers needing protection from
+concurrent retention must serialize requests sharing an artifact root.
+
 ## All-or-nothing validation
 
 The complete collection is parsed as typed `Loop` data before any artifact is

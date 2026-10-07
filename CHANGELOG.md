@@ -45,6 +45,9 @@ while its public API is still in initial development.
 
 ### Fixed
 
+- Variation requests exceeding the artifact store's finite retention limit now
+  raise `ValueError` before a provider call, preventing successful batches from
+  immediately referring to generations deleted by retention.
 - Concurrent first-use generation requests can now initialize the same artifact
   root without failing after a completed provider response. Generation workspace
   allocation remains exclusive, and invalid roots or permission errors still fail.
