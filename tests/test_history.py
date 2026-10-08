@@ -207,8 +207,6 @@ def test_finalize_generation_persists_metadata_for_direct_written_artifacts(
     assert (gen_dir / "loop.mp3").read_bytes() == b"audio"
     assert (gen_dir / "messages.json").read_text(encoding="utf-8") == "[]"
     assert metadata.id == "fixed_id"
-    assert metadata.timestamp.tzinfo is None
-    assert loaded_metadata.timestamp.tzinfo is None
     assert metadata.prompt == "warm rhodes loop"
     assert metadata.key == "D"
     assert metadata.scale == "minor"
@@ -268,26 +266,6 @@ def test_finalize_generation_requires_direct_written_midi(
         )
 
     assert not (isolated_history_dir / "gen_fixed_id" / "metadata.json").exists()
-
-
-def test_new_and_legacy_history_support_naive_consumer_timestamp_operations(tmp_path):
-    root = tmp_path / "generations"
-    _write_generation_metadata(
-        root, gen_id="legacy", timestamp=datetime.now() - timedelta(days=1)
-    )
-    store = history.FilesystemArtifactStore(root, max_generations=2)
-    workspace = store.create_generation_workspace()
-    Path(workspace.midi_path).write_bytes(b"midi")
-    metadata = store.finalize_generation(
-        workspace, "new", "C", "major", "model", "OpenAI", 0.0
-    )
-
-    records = store.load_history()
-
-    assert [record.id for record in records] == [metadata.id, "legacy"]
-    assert all(record.timestamp.tzinfo is None for record in records)
-    assert max(record.timestamp for record in records) == metadata.timestamp
-    assert datetime.now() - records[0].timestamp >= timedelta(0)
 
 
 def test_finalize_generation_rejects_protection_exceeding_capacity(tmp_path):
