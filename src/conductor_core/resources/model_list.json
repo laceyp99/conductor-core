@@ -416,6 +416,25 @@
             }
         },
         "Anthropic": {
+            "claude-haiku-5-5":{
+                "extended_thinking": true,
+                "thinking_off": "disabled",
+                "temperature_supported": false,
+                "effort_options": ["low", "medium", "high", "xhigh", "max"],
+                "max_tokens": 128000,
+                "cost": {
+                    "input": 0.10,
+                    "5m cache input": 0.125,
+                    "1h cache input": 0.20,
+                    "cache hits/refreshes": 0.01,
+                    "output": 0.50
+                },
+                "rate_limits": {
+                    "RPM": 1000,
+                    "TPM": 400000,
+                    "RPD": null
+                }
+            },
             "claude-sonnet-5-5":{
                 "extended_thinking": true,
                 "thinking_off": "disabled",
