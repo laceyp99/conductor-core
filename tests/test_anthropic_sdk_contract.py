@@ -23,6 +23,26 @@ def test_anthropic_rejects_effort_not_advertised_by_model():
         anthropic._validated_effort("high", ["low", "medium"])
 
 
+@pytest.mark.parametrize("use_thinking", [False, True])
+@pytest.mark.parametrize("effort", ["low", "medium", "high", "xhigh", "max"])
+def test_haiku_5_5_thinking_controls(use_thinking, effort):
+    config = music.get_model_info()["models"]["Anthropic"]["claude-haiku-5-5"]
+    request = {"tool_choice": {"type": "tool", "name": "build_MIDI_loop"}}
+
+    anthropic._apply_thinking_params(request, config, 0.4, use_thinking, effort)
+
+    assert "extra_body" not in request
+    if use_thinking:
+        assert request["thinking"] == {"type": "adaptive"}
+        assert request["output_config"] == {"effort": effort}
+        assert request["tool_choice"] == {"type": "auto"}
+    else:
+        assert request["thinking"] == {"type": "disabled"}
+        # Omit effort so disabled thinking uses the API's valid medium default.
+        assert "output_config" not in request
+        assert request["tool_choice"]["type"] == "tool"
+
+
 class _RequestCaptured(Exception):
     pass
 

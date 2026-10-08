@@ -10,6 +10,9 @@ while its public API is still in initial development.
 
 ### Added
 
+- Claude Haiku 5.5 (`claude-haiku-5-5`) with adaptive thinking, five effort
+  levels, disabled temperature controls, and standard token and cache pricing.
+  Thinking can be turned off with `use_thinking=False`.
 - A development-only Ty source baseline targeting Python 3.10, plus an installed
   wheel typing smoke check for generation, variations, callbacks, and storage.
   Core's public storage finalization and music/MIDI helper signatures now expose
