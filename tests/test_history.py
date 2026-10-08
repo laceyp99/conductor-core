@@ -2,7 +2,7 @@ import json
 import os
 import shutil
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from threading import Barrier, current_thread
 
@@ -207,6 +207,8 @@ def test_finalize_generation_persists_metadata_for_direct_written_artifacts(
     assert (gen_dir / "loop.mp3").read_bytes() == b"audio"
     assert (gen_dir / "messages.json").read_text(encoding="utf-8") == "[]"
     assert metadata.id == "fixed_id"
+    assert metadata.timestamp.utcoffset() == timedelta(0)
+    assert loaded_metadata.timestamp.utcoffset() == timedelta(0)
     assert metadata.prompt == "warm rhodes loop"
     assert metadata.key == "D"
     assert metadata.scale == "minor"
@@ -266,6 +268,46 @@ def test_finalize_generation_requires_direct_written_midi(
         )
 
     assert not (isolated_history_dir / "gen_fixed_id" / "metadata.json").exists()
+
+
+def test_generation_ids_use_utc(monkeypatch):
+    utc_time = datetime(2026, 10, 8, 3, 4, 5, 123456, tzinfo=timezone.utc)
+
+    class FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            assert tz is timezone.utc
+            return utc_time
+
+    monkeypatch.setattr(history, "datetime", FixedDatetime)
+    assert history._generate_id() == "20261008_030405_123456"
+
+
+def test_history_and_retention_order_mixed_timestamp_formats_without_rewriting(
+    tmp_path,
+):
+    root = tmp_path / "generations"
+    legacy_instant = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    timestamps = {
+        "legacy": legacy_instant.astimezone().replace(tzinfo=None),
+        "utc": legacy_instant + timedelta(hours=1),
+        "offset": (legacy_instant - timedelta(hours=1)).astimezone(
+            timezone(timedelta(hours=5))
+        ),
+    }
+    for gen_id, timestamp in timestamps.items():
+        _write_generation_metadata(root, gen_id=gen_id, timestamp=timestamp)
+    legacy_path = root / "gen_legacy" / "metadata.json"
+    legacy_bytes = legacy_path.read_bytes()
+    store = history.FilesystemArtifactStore(root, max_generations=2)
+
+    assert [item.id for item in store.load_history()] == ["utc", "legacy", "offset"]
+    history._enforce_limit(root, max_generations=2)
+
+    assert [item.id for item in store.load_history()] == ["utc", "legacy"]
+    assert not (root / "gen_offset").exists()
+    assert store.get_generation("legacy").timestamp.tzinfo is None
+    assert legacy_path.read_bytes() == legacy_bytes
 
 
 def test_finalize_generation_rejects_protection_exceeding_capacity(tmp_path):

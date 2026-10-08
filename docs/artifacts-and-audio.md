@@ -50,6 +50,15 @@ resources.
 
 ## Retention
 
+New generation metadata uses timezone-aware UTC timestamps, and new
+timestamp-based generation IDs use UTC. Batch manifests already use UTC.
+History and retention compare timestamps as instants rather than local clock
+text. Existing timestamps without an offset remain readable and are interpreted
+as local time in the current system timezone, matching their previous retention
+behavior; reading history does not rewrite them. Their original timezone and
+repeated daylight saving hour cannot be recovered from those legacy records.
+Consumers displaying new timestamps can convert them to their preferred timezone.
+
 Core retains the newest 20 generations by default. MIDI, JSON, and especially
 MP3 files can still consume substantial space. Configure retention on the
 engine or store; use `None` only when the calling application owns disk policy.
