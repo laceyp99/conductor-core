@@ -50,15 +50,6 @@ resources.
 
 ## Retention
 
-New generation metadata uses timezone-aware UTC timestamps, and new
-timestamp-based generation IDs use UTC. Batch manifests already use UTC.
-History and retention compare timestamps as instants rather than local clock
-text. Existing timestamps without an offset remain readable and are interpreted
-as local time in the current system timezone, matching their previous retention
-behavior; reading history does not rewrite them. Their original timezone and
-repeated daylight saving hour cannot be recovered from those legacy records.
-Consumers displaying new timestamps can convert them to their preferred timezone.
-
 Core retains the newest 20 generations by default. MIDI, JSON, and especially
 MP3 files can still consume substantial space. Configure retention on the
 engine or store; use `None` only when the calling application owns disk policy.
@@ -78,9 +69,10 @@ that exceeds the actual store's finite limit before provider work begins.
 An allowed variation batch takes priority during its own retention passes;
 Core fills remaining capacity with the newest prior history, even if a clock
 change makes older work appear newer than the current batch. Ordinary retention
-passes keep the newest generations by timestamp. Later requests can prune artifacts from a
-previously returned batch. Variation manifests have a separate lifetime and
-are not removed by generation retention; see [Variation history](variations.md#variation-history).
+passes keep the newest generations by timestamp. Later requests can prune
+artifacts from a previously returned batch. Variation manifests have a separate
+lifetime and are not removed by generation retention; see
+[Variation history](variations.md#variation-history).
 
 ## Generation results
 

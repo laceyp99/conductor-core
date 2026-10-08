@@ -24,9 +24,6 @@ while its public API is still in initial development.
 
 ### Changed
 
-- New generation metadata records timezone-aware UTC creation timestamps, and
-  new generation IDs use UTC. History listing and retention support mixed UTC,
-  offset-aware, and legacy local timestamps without rewriting existing history.
 - Packaged model metadata is validated before exposing its typed fields, and
   direct OpenAI, Anthropic, and Ollama adapter calls reject unknown reasoning
   effort values before sending a request.

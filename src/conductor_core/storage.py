@@ -145,7 +145,7 @@ class GenerationMetadata(BaseModel):
 
     Attributes:
         id: Unique identifier (timestamp-based).
-        timestamp: UTC creation time for new generations; legacy records may be local.
+        timestamp: When the generation was created.
         prompt: User's description/prompt.
         key: Musical key (C, D, etc.).
         scale: Major or minor.
@@ -284,12 +284,12 @@ def _ensure_generations_dir(artifact_root: str | Path | None = None) -> None:
 
 
 def _generate_id() -> str:
-    """Generate a unique ID for a generation based on its UTC timestamp.
+    """Generate a unique ID for a generation based on timestamp.
 
     Returns:
         str: A unique identifier string.
     """
-    return datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
+    return datetime.now().strftime("%Y%m%d_%H%M%S_%f")
 
 
 def _get_generation_dir(gen_id: str, artifact_root: str | Path | None = None) -> str:
@@ -951,7 +951,7 @@ def _finalize_generation(
 
     metadata = GenerationMetadata(
         id=workspace.id,
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(),
         prompt=prompt,
         key=key,
         scale=scale,
@@ -1106,8 +1106,7 @@ def _load_history(artifact_root: str | Path) -> list[GenerationMetadata]:
             continue
 
     # Sort by timestamp, newest first
-    # Match retention ordering for aware timestamps and legacy local timestamps.
-    generations.sort(key=lambda g: g.timestamp.timestamp(), reverse=True)
+    generations.sort(key=lambda g: g.timestamp, reverse=True)
 
     return generations
 
