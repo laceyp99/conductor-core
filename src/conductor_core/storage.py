@@ -77,7 +77,10 @@ class FilesystemArtifactStore:
         cost: float | None = None,
         soundfont: str | None = None,
         audio_render_succeeded: bool | None = None,
+        *,
+        protected_generation_ids: tuple[str, ...] = (),
     ) -> "GenerationMetadata":
+        """Finalize with optional generation IDs protected from this retention pass."""
         return _finalize_generation(
             self.artifact_root,
             workspace=workspace,
@@ -93,6 +96,7 @@ class FilesystemArtifactStore:
             soundfont=soundfont,
             audio_render_succeeded=audio_render_succeeded,
             max_generations=self.max_generations,
+            protected_generation_ids=protected_generation_ids,
         )
 
     def cleanup_generation_workspace(self, workspace: "GenerationWorkspace") -> bool:
@@ -906,9 +910,16 @@ def _finalize_generation(
     soundfont: str | None = None,
     audio_render_succeeded: bool | None = None,
     max_generations: int | None = MAX_GENERATIONS,
+    *,
+    protected_generation_ids: tuple[str, ...] = (),
 ) -> GenerationMetadata:
     """Finalize a generation using an explicit artifact root."""
     max_generations = _validate_max_generations(max_generations)
+    if (
+        max_generations is not None
+        and len(set(protected_generation_ids)) > max_generations
+    ):
+        raise ValueError("protected generation count exceeds max_generations")
     workspace = _validate_workspace(artifact_root, workspace)
 
     try:
@@ -959,7 +970,11 @@ def _finalize_generation(
     _write_metadata_file(workspace.metadata_path, metadata)
 
     logger.info(f"Finalized generation {workspace.id} in history")
-    _enforce_limit(artifact_root, max_generations=max_generations)
+    _enforce_limit(
+        artifact_root,
+        max_generations=max_generations,
+        protected_generation_ids=protected_generation_ids,
+    )
 
     return metadata
 
@@ -1159,8 +1174,10 @@ def _delete_generation(artifact_root: str | Path, gen_id: str) -> bool:
 def _enforce_limit(
     artifact_root: str | Path | None = None,
     max_generations: int | _DefaultMaxGenerations | None = _DEFAULT_MAX_GENERATIONS,
+    *,
+    protected_generation_ids: tuple[str, ...] = (),
 ) -> None:
-    """Delete oldest generations if over the limit."""
+    """Retain protected generations first, then newest remaining history."""
     if isinstance(max_generations, _DefaultMaxGenerations):
         max_generations = MAX_GENERATIONS
     max_generations = _validate_max_generations(max_generations)
@@ -1173,7 +1190,11 @@ def _enforce_limit(
     if len(generations) <= max_generations:
         return
 
-    # Delete oldest generations (they're at the end since list is sorted newest first)
+    # Preserve timestamp order within each group; protection lasts for this pass.
+    protected = set(protected_generation_ids)
+    generations.sort(
+        key=lambda generation: generation.gen_id in protected, reverse=True
+    )
     generations_to_delete = generations[max_generations:]
 
     for gen in generations_to_delete:
