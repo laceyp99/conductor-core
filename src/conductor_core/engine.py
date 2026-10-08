@@ -273,7 +273,14 @@ class LoopGenerationEngine:
                     variation_index=index,
                     status="persisting",
                 )
-                generation, warnings = self._persist_variation(loop, request, metadata)
+                generation, warnings = self._persist_variation(
+                    loop,
+                    request,
+                    metadata,
+                    protected_generation_ids=tuple(
+                        item.generation.id for item in items
+                    ),
+                )
                 items.append(
                     VariationResult(
                         index=index,
@@ -319,6 +326,8 @@ class LoopGenerationEngine:
         loop,
         request: VariationGenerationRequest,
         metadata: VariationBatchMetadata,
+        *,
+        protected_generation_ids: tuple[str, ...] = (),
     ):
         """Persist one already-validated variation in an ordinary workspace."""
         workspace = None
@@ -384,6 +393,7 @@ class LoopGenerationEngine:
                 if audio_path and resolved_soundfont
                 else None,
                 audio_render_succeeded=audio_path is not None,
+                protected_generation_ids=(*protected_generation_ids, workspace.id),
             )
             finalized = True
             return generation, tuple(warnings)

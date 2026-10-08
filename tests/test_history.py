@@ -268,6 +268,27 @@ def test_finalize_generation_requires_direct_written_midi(
     assert not (isolated_history_dir / "gen_fixed_id" / "metadata.json").exists()
 
 
+def test_finalize_generation_rejects_protection_exceeding_capacity(tmp_path):
+    store = history.FilesystemArtifactStore(tmp_path / "generations", max_generations=1)
+    workspace = store.create_generation_workspace()
+    Path(workspace.midi_path).write_bytes(b"midi")
+
+    with pytest.raises(ValueError, match="protected generation count exceeds"):
+        store.finalize_generation(
+            workspace,
+            "prompt",
+            "C",
+            "major",
+            "model",
+            "OpenAI",
+            0.0,
+            protected_generation_ids=(workspace.id, "other"),
+        )
+
+    assert not Path(workspace.metadata_path).exists()
+    assert Path(workspace.midi_path).is_file()
+
+
 def test_finalize_generation_replaces_hard_linked_metadata_without_overwriting_target(
     tmp_path, monkeypatch
 ):

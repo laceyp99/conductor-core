@@ -56,9 +56,13 @@ An injected `FilesystemArtifactStore` supplies the effective limit even when
 count permits the batch. On rejection, the progress callback receives batch
 `started` and `failed` events, with no item events.
 
-The check covers sequential generation at return time. Later requests can
-prune previously returned generations. Callers needing protection from
-concurrent retention must serialize requests sharing an artifact root.
+For an allowed sequential batch, retention protects the current batch's saved
+generations while pruning prior history. The batch takes priority even if prior
+history has later timestamps, for example after a clock change. Within the
+remaining capacity, prior history is retained in the usual timestamp order.
+Protection is limited to the current operation; later requests can prune
+previously returned generations. Callers needing protection from concurrent
+retention must serialize requests sharing an artifact root.
 
 ## All-or-nothing validation
 

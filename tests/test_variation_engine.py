@@ -80,13 +80,22 @@ def test_oversized_batch_is_rejected_before_provider_or_storage(
     assert all(event.variation_index is None for event in events)
 
 
+@pytest.mark.parametrize("clock_order", ["forward", "backward", "same"])
 @pytest.mark.parametrize("limit", [2, 3, None])
 def test_allowed_batch_survives_retention_of_older_generations(
-    monkeypatch, tmp_path, sample_loop, limit
+    monkeypatch, tmp_path, sample_loop, limit, clock_order
 ):
+    # With fixed IDs, each batch uses two finalization times and one manifest time.
+    # Keep older IDs higher for ties so timestamp and ID sorting favor old history.
+    first = datetime(2026, 1, 2)
+    delta = timedelta(days=1 if clock_order == "forward" else -1)
+    second = first if clock_order == "same" else first + delta
     timestamps = iter(
-        datetime(2026, 1, 1) + timedelta(seconds=index) for index in range(10)
+        [first + timedelta(seconds=index) for index in range(3)]
+        + [second + timedelta(seconds=index) for index in range(3)]
     )
+    generation_ids = iter(("old-a", "old-b", "new-a", "new-b"))
+    monkeypatch.setattr(storage, "_generate_id", lambda: next(generation_ids))
 
     class SteppingDatetime(datetime):
         @classmethod
@@ -127,6 +136,22 @@ def test_allowed_batch_survives_retention_of_older_generations(
     )
     assert len(store.load_history()) == 2 + expected_older
     assert not (tmp_path / "unused-config-root").exists()
+
+    # Protection ends with this batch. An ordinary later finalization can prune
+    # the batch according to timestamps without changing its saved manifest.
+    monkeypatch.setattr(storage, "_generate_id", lambda: "later")
+    timestamps = iter([datetime(2026, 1, 4)])
+    workspace = store.create_generation_workspace()
+    Path(workspace.midi_path).write_bytes(b"midi")
+    store.finalize_generation(
+        workspace, "later", "C", "Major", "test-model", "OpenAI", 0.5
+    )
+    assert len(store.load_history()) == (5 if limit is None else limit)
+    assert store.get_variation_history(result.metadata.batch_id).record is not None
+    if limit == 2:
+        assert any(
+            not Path(item.generation.midi_path).exists() for item in result.items
+        )
 
 
 def test_generate_variations_persists_ordered_children_and_one_manifest(

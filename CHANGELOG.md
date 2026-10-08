@@ -48,6 +48,9 @@ while its public API is still in initial development.
 - Variation requests exceeding the artifact store's finite retention limit now
   raise `ValueError` before a provider call, preventing successful batches from
   immediately referring to generations deleted by retention.
+- Allowed variation batches now protect their current artifacts during
+  retention, even when prior history has later or tied timestamps. Remaining
+  history still follows timestamp order, and later requests can prune the batch.
 - Concurrent first-use generation requests can now initialize the same artifact
   root without failing after a completed provider response. Generation workspace
   allocation remains exclusive, and invalid roots or permission errors still fail.
