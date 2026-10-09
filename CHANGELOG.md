@@ -8,6 +8,11 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.8.3] - 2026-10-09
+
+Versions 0.6.1 through 0.8.2 were set in `pyproject.toml` during development
+but never tagged or released. This release contains all of their changes.
+
 ### Added
 
 - Claude Haiku 5.5 (`claude-haiku-5-5`) with adaptive thinking, five effort
@@ -486,7 +491,8 @@ other Conductor repositories could build on a shared engine.
 - Deterministic tests and package-boundary checks suitable for reuse outside the
   original LoopGPT application.
 
-[Unreleased]: https://github.com/laceyp99/conductor-core/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/laceyp99/conductor-core/compare/v0.8.3...HEAD
+[0.8.3]: https://github.com/laceyp99/conductor-core/compare/v0.6.0...v0.8.3
 [0.6.0]: https://github.com/laceyp99/conductor-core/compare/v0.5.6...v0.6.0
 [0.5.6]: https://github.com/laceyp99/conductor-core/compare/v0.5.5...v0.5.6
 [0.5.5]: https://github.com/laceyp99/conductor-core/compare/v0.5.3...v0.5.5
