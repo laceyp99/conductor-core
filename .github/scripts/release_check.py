@@ -5,8 +5,8 @@ A non-skip pull request must:
 
 1. declare a valid Semantic Versioning version in ``pyproject.toml``,
 2. bump that version above the version on the base branch, and
-3. update ``CHANGELOG.md`` with an ``[Unreleased]`` entry or a matching
-   ``[x.y.z]`` section for the new version.
+3. add a non-empty ``[x.y.z]`` section to ``CHANGELOG.md`` matching the new
+   version. The release workflow publishes that section as release notes.
 
 Pull requests are skipped when they carry the ``skip-release`` label or use a
 Conventional Commit title whose type is test, ci, docs, style, or chore. The
@@ -59,19 +59,6 @@ def git(*args: str) -> str:
     )
     if result.returncode != 0:
         fail(f"git {' '.join(args)} failed: {result.stderr.strip()}")
-    return result.stdout
-
-
-def git_optional(*args: str) -> str | None:
-    """Return git output, or None when the requested object does not exist."""
-    result = subprocess.run(
-        ["git", *args],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        return None
     return result.stdout
 
 
@@ -158,10 +145,6 @@ def section_body(text: str, version: str) -> str | None:
     return None
 
 
-def has_version_section(text: str, version: str) -> bool:
-    return any(label == version for label, _ in sections(text))
-
-
 def entry_lines(body: str) -> list[str]:
     """Return trimmed, non-empty lines so whitespace-only edits are ignored."""
     return [line.strip() for line in body.splitlines() if line.strip()]
@@ -171,32 +154,17 @@ def changelog_was_handled(new_version: str) -> None:
     if not Path(CHANGELOG_PATH).exists():
         fail(f"{CHANGELOG_PATH} does not exist")
 
-    head_text = Path(CHANGELOG_PATH).read_text(encoding="utf-8")
-
-    if has_version_section(head_text, new_version):
-        print(
-            f"release-check: {CHANGELOG_PATH} has a [{new_version}] section "
-            "matching pyproject.toml."
-        )
-        return
-
-    base_ref = os.environ.get("BASE_REF", "main")
-    base_text = git_optional("show", f"origin/{base_ref}:{CHANGELOG_PATH}") or ""
-    base_entries = set(entry_lines(section_body(base_text, "Unreleased") or ""))
-    head_entries = entry_lines(section_body(head_text, "Unreleased") or "")
-
-    if not head_entries:
+    text = Path(CHANGELOG_PATH).read_text(encoding="utf-8")
+    if not entry_lines(section_body(text, new_version) or ""):
         fail(
-            f"{CHANGELOG_PATH} needs either an [Unreleased] entry or a "
-            f"[{new_version}] section for this change."
-        )
-    if all(entry in base_entries for entry in head_entries):
-        fail(
-            f"{CHANGELOG_PATH} [Unreleased] has no new content. Add a "
-            f"user-facing entry under [Unreleased] or a [{new_version}] section."
+            f"{CHANGELOG_PATH} needs a [{new_version}] section with user-facing "
+            "entries. Merging publishes that section as the release notes."
         )
 
-    print(f"release-check: {CHANGELOG_PATH} [Unreleased] section was updated.")
+    print(
+        f"release-check: {CHANGELOG_PATH} has a [{new_version}] section "
+        "matching pyproject.toml."
+    )
 
 
 def main() -> None:

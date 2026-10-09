@@ -1,0 +1,47 @@
+name: Release
+
+# Tags and publishes a GitHub release whenever main declares a version in
+# pyproject.toml that has no matching tag yet. Release notes come from the
+# matching CHANGELOG.md section, which release-check requires on each PR.
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - name: Publish release for new version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          tag="v${version}"
+          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+            echo "${tag} already exists; nothing to release."
+            exit 0
+          fi
+          python - "$version" > release-notes.md <<'PY'
+          import sys
+          sys.path.insert(0, ".github/scripts")
+          from release_check import section_body
+          body = section_body(open("CHANGELOG.md", encoding="utf-8").read(), sys.argv[1])
+          if not (body or "").strip():
+              sys.exit(f"CHANGELOG.md has no [{sys.argv[1]}] section")
+          print(body.strip())
+          PY
+          gh release create "${tag}" --target "${GITHUB_SHA}" \
+            --title "Conductor Core ${tag}" --notes-file release-notes.md
