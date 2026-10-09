@@ -146,7 +146,8 @@ def section_body(text: str, version: str) -> str | None:
 
 
 def entry_lines(body: str) -> list[str]:
-    """Return trimmed, non-empty lines so whitespace-only edits are ignored."""
+    """Return non-empty lines after removing hidden HTML comment blocks."""
+    body = re.sub(r"<!--.*?(?:-->|$)", "", body, flags=re.DOTALL)
     return [line.strip() for line in body.splitlines() if line.strip()]
 
 
@@ -159,7 +160,7 @@ def changelog_was_handled(new_version: str) -> None:
     entries = [
         line
         for line in entry_lines(section_body(text, new_version) or "")
-        if not line.startswith(("#", "<!--"))
+        if not line.startswith("#")
     ]
     if not entries:
         fail(

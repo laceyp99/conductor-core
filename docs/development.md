@@ -79,6 +79,10 @@ tag and a GitHub release whose notes are that version's changelog section.
 Merges that keep the same version, such as skipped `docs` or `chore` changes,
 publish nothing. Consumers can pin the new tag right after the workflow runs.
 
+Release runs execute one at a time, with up to 100 pending runs queued so newer
+pushes do not replace waiting releases. HTML comments and subheadings do not
+count as user-facing changelog entries.
+
 ## Preview the documentation
 
 Install development dependencies, then serve the site locally:
