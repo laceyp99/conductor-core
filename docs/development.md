@@ -58,9 +58,8 @@ Every pull request must carry its own release metadata. The required
 
 - declares a valid Semantic Versioning version in `pyproject.toml`,
 - sets that version higher than the version on the base branch, and
-- updates `CHANGELOG.md`, either by adding at least one new non-whitespace
-  entry under `[Unreleased]` or by adding an `[x.y.z]` section matching the new
-  version.
+- adds a non-empty `## [x.y.z] - YYYY-MM-DD` section to `CHANGELOG.md`
+  matching the new version.
 
 The version bump is your choice: use `patch` for backward-compatible fixes,
 `minor` for new backward-compatible features, and `major` for breaking changes.
@@ -71,6 +70,18 @@ Skip `release-check` when a pull request does not affect releases by adding the
 `skip-release` label or by using a Conventional Commit title whose type is
 `test`, `ci`, `docs`, `style`, or `chore`. The check only validates; it never
 edits your branch.
+
+## Publishing releases
+
+Merging to `main` publishes the release. The `Release` workflow reads the
+version from `pyproject.toml`; if no `vX.Y.Z` tag exists yet, it creates the
+tag and a GitHub release whose notes are that version's changelog section.
+Merges that keep the same version, such as skipped `docs` or `chore` changes,
+publish nothing. Consumers can pin the new tag right after the workflow runs.
+
+Release runs execute one at a time, with up to 100 pending runs queued so newer
+pushes do not replace waiting releases. HTML comments and subheadings do not
+count as user-facing changelog entries.
 
 ## Preview the documentation
 

@@ -22,7 +22,7 @@ entry, this is a good draft of it. -->
 test/ci/docs/style/chore or with the skip-release label. -->
 
 - [ ] `pyproject.toml` version bumped above `main` (`patch`, `minor`, or `major`)
-- [ ] `CHANGELOG.md` updated under `[Unreleased]` with a user-facing entry
+- [ ] `CHANGELOG.md` has a matching `[x.y.z]` section with user-facing entries
 
 # Notes
 
