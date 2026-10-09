@@ -155,7 +155,13 @@ def changelog_was_handled(new_version: str) -> None:
         fail(f"{CHANGELOG_PATH} does not exist")
 
     text = Path(CHANGELOG_PATH).read_text(encoding="utf-8")
-    if not entry_lines(section_body(text, new_version) or ""):
+    # Subheadings like "### Added" and HTML comments are outline, not notes.
+    entries = [
+        line
+        for line in entry_lines(section_body(text, new_version) or "")
+        if not line.startswith(("#", "<!--"))
+    ]
+    if not entries:
         fail(
             f"{CHANGELOG_PATH} needs a [{new_version}] section with user-facing "
             "entries. Merging publishes that section as the release notes."
