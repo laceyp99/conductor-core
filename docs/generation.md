@@ -82,6 +82,25 @@ regardless of the requested one. When the field is absent or `null` and the
 model supports temperature, Core sends the requested value. Ollama's
 `model_capabilities` entries always include the field as `null`.
 
+### Ollama model discovery
+
+Use `conductor_core.providers.ollama.get_model_list(host_address=host,
+request_timeout=2.0)` for model names without capability inspection. It returns
+`list[str]`, omitting unnamed entries. An empty list means discovery succeeded
+with no named models; failures now raise instead of returning an empty list.
+Catch `ProviderTimeoutError`, `ProviderConnectionError`, or other `ProviderError`
+subclasses at the application boundary. A missing optional SDK raises
+`ImportError` naming the package extra to install.
+
+The default `request_timeout=None` leaves network waits unbounded. A finite
+value sets network operation timeouts, including connection and read waits;
+it is not a total deadline for discovery or generation. Consumers that previously
+treated every empty result as an offline host must handle exceptions separately.
+
+`get_ollama_status()` also inspects every listed model; `get_model_status()`
+inspects only the selected installed model. These status helpers retain their
+existing error fields and fallback behavior.
+
 ### Ollama reasoning capabilities
 
 `get_ollama_status()["model_capabilities"]` reports only the reasoning

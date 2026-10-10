@@ -243,17 +243,32 @@ def get_model_status(
     return status
 
 
-def get_model_list(host_address: str | None = None) -> list[str | None]:
-    """Get the available Ollama model names without inspecting each model."""
-    if ollama is None:
-        return []
-    host = _resolve_host(host_address)
+def get_model_list(
+    host_address: str | None = None,
+    request_timeout: float | None = None,
+) -> list[str]:
+    """List named models without inspecting capabilities.
+
+    An empty list means discovery succeeded with no named models. SDK failures
+    raise Core provider errors; a missing SDK raises ImportError. The timeout
+    applies to network operations, not a total deadline; None leaves it unbounded.
+    """
+    client = initialize_ollama_client(
+        host_address=_resolve_host(host_address),
+        **({"timeout": request_timeout} if request_timeout is not None else {}),
+    )
+    assert httpx is not None
+    assert ollama is not None
     try:
-        client = initialize_ollama_client(host_address=host)
-        return [model.model for model in client.list().models]
-    except Exception as exc:
-        logger.warning("Ollama unavailable at %s: %s", host, exc)
-        return []
+        return [model.model for model in client.list().models if model.model]
+    except (
+        httpx.TimeoutException,
+        httpx.NetworkError,
+        ConnectionError,
+        ollama.RequestError,
+        ollama.ResponseError,
+    ) as exc:
+        _raise_ollama_error(exc, "model discovery")
 
 
 def _thinking_option(
