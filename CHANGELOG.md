@@ -8,6 +8,16 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-10
+
+### Fixed
+
+- Variation history is now isolated under `<artifact_root>/variations/`, so
+  neighboring artifact stores cannot read, overwrite, or delete one another's
+  batch manifests. Existing manifests in the former sibling `variations/`
+  directory require manual migration to their owning root. There is no legacy
+  fallback or automatic migration; manifest JSON contents are unchanged.
+
 ## [0.8.4] - 2026-10-10
 
 ### Fixed

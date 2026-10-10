@@ -105,10 +105,30 @@ events have no variation index, while item events use zero-based indexes.
 ## Variation history
 
 Successful children remain ordinary generations under the configured artifact
-root. Core stores one immutable, versioned batch manifest in the sibling
-`variations/` directory (by default `~/.conductor/core/variations/`). It contains
+root. Core stores one immutable, versioned batch manifest in
+`<artifact_root>/variations/` (by default
+`~/.conductor/core/generations/variations/`). Each artifact root owns its own
+variation history, including when roots share a parent directory. It contains
 the ordered generation IDs and batch request metadata, not copied MIDI, audio,
 or `Loop` data.
+
+### Migrate existing variation history
+
+Earlier versions stored manifests in `<artifact_root.parent>/variations/`.
+Core no longer reads or modifies that directory and does not migrate it
+automatically. For the default root, manually move your `batch_*.json` files
+from `~/.conductor/core/variations/` into
+`~/.conductor/core/generations/variations/`. Environment overrides use the
+same layout beneath the selected Core data directory.
+
+For custom roots, assign each old manifest to its owning artifact root and
+move it into that root's `variations/` directory. Legacy manifests do not
+record their owning root, so Core cannot reliably infer ownership from
+generation IDs, especially after generation retention or deletion. Keep a
+backup and resolve existing destination filenames before moving files.
+The manifest schema is unchanged; JSON contents do not need editing.
+
+### Read and manage batches
 
 Use `list_variation_history()`, `get_variation_history()`,
 `delete_variation_history()`, and `clear_variation_history()` from the top-level
