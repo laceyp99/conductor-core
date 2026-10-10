@@ -67,9 +67,6 @@ it ignores the requested effort. It sends the model's lowest effort only where
 the provider's off setting takes one, such as Claude Sonnet 5.5, and uses the
 requested temperature where the model accepts one.
 
-Direct Ollama `loop_gen()` and `variations_gen()` calls also ignore the requested
-effort when `use_thinking=False`, including `None` and unsupported values.
-
 With `use_thinking=True`, Core validates and sends the requested effort. Models
 using thinking budgets retain their provider-specific limits. Because `effort`
 defaults to `None`, callers enabling thinking for a model with discrete options
