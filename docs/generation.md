@@ -93,10 +93,31 @@ controls Ollama confirms for each model. Offer controls from these fields:
 | `thinking_off: "lowest_effort"` | Effort dropdown with no off option | The chosen level, or the lowest when thinking is off |
 | `extended_thinking: false` | None | No `think` value |
 
-A model is also reported as `extended_thinking: false` when Core cannot
-inspect it. Core then sends no `think` value, so the request cannot fail on
-reasoning settings: models that reason by default still reason, and models
-without reasoning are never asked to.
+`get_model_status()` reports `available=True` after a successful listing and
+`installed=True` when the selected model was listed. If inspection fails,
+those facts remain true, `model_capabilities` is `None`, and `exception`
+contains the typed provider error with its original cause. `error` remains a
+display string. Listing failures set `available=False` and populate both
+error fields. A successful listing without the selected model has
+`installed=False` and no error.
+
+Broad `get_ollama_status()` discovery retains all named installed models and
+successful capabilities. Failed models have `None` capabilities and typed
+errors in `model_errors`, keyed by model name. Top-level `error` and
+`exception` describe listing failures only. Missing optional SDKs produce an
+actionable `ImportError` in `exception` without breaking package imports.
+
+Consumers must handle `None` capabilities before offering reasoning controls
+and read `exception` or `model_errors` for failures. Both generation routes
+raise the typed discovery or inspection error before sending a generation
+request. Successfully inspected models without thinking support still report
+`extended_thinking=False`; a missing selected model still raises `ValueError`.
+
+Older SDKs without a raw metadata request method, and successful server
+responses without the optional `thinking` field, retain boolean thinking
+controls when the model advertises thinking support. If a raw metadata request
+is available but fails, Core reports an inspection error rather than guessing
+the accepted reasoning controls.
 
 ## Rate-limit metadata
 

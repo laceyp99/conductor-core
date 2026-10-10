@@ -228,7 +228,9 @@ def test_ollama_requests_one_collection_format(monkeypatch):
     client = SimpleNamespace(chat=lambda **kwargs: calls.append(kwargs) or completion)
     monkeypatch.setattr(ollama, "initialize_ollama_client", lambda **kwargs: client)
 
-    collection, _, cost, usage = ollama.variations_gen("brief", "model")
+    collection, _, cost, usage = ollama.variations_gen(
+        "brief", "model", model_capabilities={"extended_thinking": False}
+    )
 
     assert len(calls) == 1
     assert calls[0]["format"] == VariationCollection.model_json_schema()
