@@ -8,6 +8,19 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.8.5] - 2026-10-10
+
+### Fixed
+
+- Ollama listing and capability inspection failures now reach loop and variation
+  generation callers as typed provider errors with their original causes, rather
+  than silently disabling thinking controls or reporting an invalid selection.
+- Ollama status results retain listing and installation facts after inspection
+  failures. Consumers must handle `None` capabilities and can read the new
+  `exception` field or broad discovery's per-model `model_errors`. The existing
+  `error` field remains a display string. Missing optional thinking metadata
+  retains boolean controls; failed metadata requests are reported as errors.
+
 ## [0.8.4] - 2026-10-10
 
 ### Fixed
