@@ -34,6 +34,79 @@ def _loop_payload():
     return {f"Bar_{number}": {**bar, "num": number} for number in range(1, 5)}
 
 
+@pytest.mark.parametrize("generation", ["loop", "variations"])
+@pytest.mark.parametrize("effort", ["high", None, "unsupported"])
+@pytest.mark.parametrize(
+    ("thinking_off", "effort_options", "expected"),
+    [
+        ("disabled", ["low", "medium", "high"], False),
+        ("lowest_effort", ["low", "medium", "high"], "low"),
+        ("lowest_effort", ["medium", "high"], "medium"),
+    ],
+)
+def test_direct_ollama_thinking_off_ignores_requested_effort(
+    monkeypatch, generation, effort, thinking_off, effort_options, expected
+):
+    calls = []
+    payload = _loop_payload()
+    if generation == "variations":
+        payload = {"variations": [payload]}
+    completion = SimpleNamespace(message=SimpleNamespace(content=json.dumps(payload)))
+    client = SimpleNamespace(chat=lambda **kwargs: calls.append(kwargs) or completion)
+    monkeypatch.setattr(ollama, "initialize_ollama_client", lambda **kwargs: client)
+
+    function = ollama.loop_gen if generation == "loop" else ollama.variations_gen
+    function(
+        "prompt",
+        "model",
+        use_thinking=False,
+        effort=effort,
+        model_capabilities={
+            "extended_thinking": True,
+            "effort_options": effort_options,
+            "thinking_off": thinking_off,
+        },
+    )
+
+    assert len(calls) == 1
+    if expected is False:
+        assert calls[0]["think"] is False
+    else:
+        assert calls[0]["think"] == expected
+
+
+@pytest.mark.parametrize("generation", ["loop", "variations"])
+@pytest.mark.parametrize("effort", ["high", "unsupported"])
+def test_direct_ollama_thinking_enabled_validates_effort(
+    monkeypatch, generation, effort
+):
+    calls = []
+    payload = _loop_payload()
+    if generation == "variations":
+        payload = {"variations": [payload]}
+    completion = SimpleNamespace(message=SimpleNamespace(content=json.dumps(payload)))
+    client = SimpleNamespace(chat=lambda **kwargs: calls.append(kwargs) or completion)
+    monkeypatch.setattr(ollama, "initialize_ollama_client", lambda **kwargs: client)
+
+    function = ollama.loop_gen if generation == "loop" else ollama.variations_gen
+    kwargs = {
+        "use_thinking": True,
+        "effort": effort,
+        "model_capabilities": {
+            "extended_thinking": True,
+            "effort_options": ["low", "medium", "high"],
+            "thinking_off": "lowest_effort",
+        },
+    }
+    if effort == "unsupported":
+        with pytest.raises(ValueError, match="Unsupported Ollama reasoning effort"):
+            function("prompt", "model", **kwargs)
+        assert calls == []
+    else:
+        function("prompt", "model", **kwargs)
+        assert calls[0]["think"] == effort
+
+
 @pytest.mark.parametrize(
     ("capabilities", "expected"),
     [

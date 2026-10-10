@@ -8,6 +8,14 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.8.4] - 2026-10-10
+
+### Fixed
+
+- Direct Ollama loop and variation calls now ignore the requested reasoning
+  effort when `use_thinking=False`, sending `think=False` where supported or
+  the model's lowest supported effort when reasoning cannot be disabled.
+
 ## [0.8.3] - 2026-10-09
 
 Versions 0.6.1 through 0.8.2 were set in `pyproject.toml` during development
