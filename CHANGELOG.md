@@ -8,7 +8,7 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
-## [0.8.4] - 2026-10-10
+## [0.8.5] - 2026-10-10
 
 ### Fixed
 
@@ -20,6 +20,14 @@ while its public API is still in initial development.
   `exception` field or broad discovery's per-model `model_errors`. The existing
   `error` field remains a display string. Missing optional thinking metadata
   retains boolean controls; failed metadata requests are reported as errors.
+
+## [0.8.4] - 2026-10-10
+
+### Fixed
+
+- Direct Ollama loop and variation calls now ignore the requested reasoning
+  effort when `use_thinking=False`, sending `think=False` where supported or
+  the model's lowest supported effort when reasoning cannot be disabled.
 
 ## [0.8.3] - 2026-10-09
 

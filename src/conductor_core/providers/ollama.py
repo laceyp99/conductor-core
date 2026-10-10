@@ -316,6 +316,14 @@ def _thinking_option(
     if not model_capabilities or not model_capabilities.get("extended_thinking"):
         return None
     effort_options = model_capabilities.get("effort_options") or []
+    if not use_thinking:
+        thinking_off = model_capabilities.get(
+            "thinking_off", "lowest_effort" if effort_options else "disabled"
+        )
+        if thinking_off == "disabled":
+            return False
+        # Ignore the requested effort when reasoning cannot be turned off.
+        effort = effort_options[0] if effort_options else None
     validated_effort: Literal["low", "medium", "high"] | None = None
     if effort_options and effort is not None:
         if effort not in effort_options:
@@ -323,16 +331,9 @@ def _thinking_option(
         if effort not in ("low", "medium", "high"):
             raise ValueError(f"Unsupported Ollama reasoning effort: {effort}")
         validated_effort = effort
-    if use_thinking:
-        return validated_effort if effort_options else True
-    thinking_off = model_capabilities.get(
-        "thinking_off", "lowest_effort" if effort_options else "disabled"
-    )
-    if thinking_off == "disabled":
-        return False
-    # Reasoning cannot be turned off: send the lowest level, or leave the
-    # model's default when it has no levels.
-    return validated_effort if effort_options else None
+    if effort_options:
+        return validated_effort
+    return True if use_thinking else None
 
 
 def _chat_options(temp, num_ctx):
