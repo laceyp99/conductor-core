@@ -75,7 +75,7 @@ def test_model_list_raises_typed_transport_errors(mock_transport, original, expe
     with pytest.raises(expected) as raised:
         ollama.get_model_list(request_timeout=2.0)
     assert raised.value.provider == "Ollama"
-    assert raised.value.operation == "model discovery"
+    assert raised.value.operation == "model listing"
     # Ollama may translate HTTPX connection failures before Core sees them.
     assert raised.value.__cause__ is not None
 
@@ -88,7 +88,7 @@ def test_model_list_raises_typed_response_errors(mock_transport, status, expecte
     mock_transport(lambda request: httpx.Response(status, json={"error": "failed"}))
     with pytest.raises(expected) as raised:
         ollama.get_model_list()
-    assert raised.value.operation == "model discovery"
+    assert raised.value.operation == "model listing"
     assert isinstance(raised.value.__cause__, sdk.ResponseError)
 
 

@@ -58,11 +58,9 @@ def test_routing_normalizes_all_variation_providers(
         monkeypatch.setattr(
             routing.ollama_api,
             "get_model_status",
-            lambda model_name, **kwargs: {
-                "available": True,
-                "installed": True,
-                "model_capabilities": {},
-            },
+            lambda model_name, **kwargs: ollama.OllamaModelInspection(
+                model_name, {}, None
+            ),
         )
     collection = VariationCollection(
         variations=[Loop.model_validate(_loop_payload())] * 2
@@ -228,7 +226,9 @@ def test_ollama_requests_one_collection_format(monkeypatch):
     client = SimpleNamespace(chat=lambda **kwargs: calls.append(kwargs) or completion)
     monkeypatch.setattr(ollama, "initialize_ollama_client", lambda **kwargs: client)
 
-    collection, _, cost, usage = ollama.variations_gen("brief", "model")
+    collection, _, cost, usage = ollama.variations_gen(
+        "brief", "model", model_capabilities={"extended_thinking": False}
+    )
 
     assert len(calls) == 1
     assert calls[0]["format"] == VariationCollection.model_json_schema()

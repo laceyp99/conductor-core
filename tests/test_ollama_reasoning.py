@@ -123,19 +123,17 @@ def test_ollama_status_reports_thinking_capability(monkeypatch, capabilities, ex
 
     status = ollama.get_ollama_status()
 
-    assert status["models"] == ["local-model"]
-    assert status["model_capabilities"] == {
-        "local-model": {
-            "extended_thinking": expected,
-            "effort_options": [],
-            "temperature_supported": True,
-            "thinking_fixed_temperature": None,
-            "thinking_off": "disabled" if expected else None,
-        }
+    assert [model.name for model in status.models] == ["local-model"]
+    assert status.models[0].capabilities == {
+        "extended_thinking": expected,
+        "effort_options": [],
+        "temperature_supported": True,
+        "thinking_fixed_temperature": None,
+        "thinking_off": "disabled" if expected else None,
     }
 
 
-def test_ollama_status_reports_show_failure_as_temperature_only(monkeypatch):
+def test_ollama_status_preserves_partial_inspection_results(monkeypatch):
     def show(name):
         if name == "broken-model":
             raise RuntimeError("show unavailable")
@@ -154,14 +152,14 @@ def test_ollama_status_reports_show_failure_as_temperature_only(monkeypatch):
 
     status = ollama.get_ollama_status()
 
-    assert status["model_capabilities"]["thinking-model"]["extended_thinking"]
-    assert status["model_capabilities"]["broken-model"] == {
-        "extended_thinking": False,
-        "effort_options": [],
-        "temperature_supported": True,
-        "thinking_fixed_temperature": None,
-        "thinking_off": None,
-    }
+    successful, failed = status.models
+    assert successful.name == "thinking-model"
+    assert successful.capabilities["extended_thinking"]
+    assert successful.error is None
+    assert failed.name == "broken-model"
+    assert failed.capabilities is None
+    assert isinstance(failed.error, ollama.ProviderRequestError)
+    assert str(failed.error.__cause__) == "show unavailable"
 
 
 def test_ollama_status_discovers_effort_levels_from_raw_show(monkeypatch):
@@ -186,7 +184,7 @@ def test_ollama_status_discovers_effort_levels_from_raw_show(monkeypatch):
 
     status = ollama.get_ollama_status()
 
-    assert status["model_capabilities"]["gpt-oss"] == {
+    assert status.models[0].capabilities == {
         "extended_thinking": True,
         "effort_options": ["low", "medium", "high"],
         "temperature_supported": True,
@@ -268,15 +266,15 @@ def test_ollama_routing_rejects_invalid_effort(monkeypatch, generator):
     monkeypatch.setattr(
         routing.ollama_api,
         "get_model_status",
-        lambda model_name, **kwargs: {
-            "available": True,
-            "installed": True,
-            "model_capabilities": {
+        lambda model_name, **kwargs: ollama.OllamaModelInspection(
+            name=model_name,
+            capabilities={
                 "extended_thinking": True,
                 "effort_options": ["low", "medium", "high"],
                 "temperature_supported": True,
             },
-        },
+            error=None,
+        ),
     )
 
     def request():
@@ -306,14 +304,10 @@ def test_ollama_status_return_keys(monkeypatch):
     )
     monkeypatch.setattr(ollama, "initialize_ollama_client", lambda **kwargs: client)
 
-    assert set(ollama.get_ollama_status()) == {
-        "available",
-        "models",
-        "model_capabilities",
-        "host",
-        "error",
-    }
-    assert ollama.get_ollama_status()["models"] == []
+    status = ollama.get_ollama_status()
+    assert isinstance(status, ollama.OllamaStatus)
+    assert status.models == ()
+    assert isinstance(status.host, str)
 
 
 def test_ollama_effort_levels_are_forwarded_by_both_adapters(monkeypatch):
@@ -402,7 +396,7 @@ def test_ollama_status_reports_thinking_off(
     )
     monkeypatch.setattr(ollama, "initialize_ollama_client", lambda **kwargs: client)
 
-    model_capabilities = ollama.get_ollama_status()["model_capabilities"]["local-model"]
+    model_capabilities = ollama.get_ollama_status().models[0].capabilities
 
     assert model_capabilities["thinking_off"] == thinking_off
     if effort_options is not None:
@@ -470,9 +464,9 @@ def test_model_status_inspects_only_the_requested_model(monkeypatch):
     status = ollama.get_model_status("b")
 
     assert shown == ["b"]
-    assert status["available"] is True
-    assert status["installed"] is True
-    assert status["model_capabilities"]["thinking_off"] == "disabled"
+    assert status.name == "b"
+    assert status.error is None
+    assert status.capabilities["thinking_off"] == "disabled"
 
 
 def test_model_status_skips_inspection_for_missing_model(monkeypatch):
@@ -483,21 +477,20 @@ def test_model_status_skips_inspection_for_missing_model(monkeypatch):
     status = ollama.get_model_status("missing")
 
     assert shown == []
-    assert status["installed"] is False
-    assert status["model_capabilities"] is None
+    assert status is None
 
 
 def test_model_status_reports_unavailable_server(monkeypatch):
+    error = ollama.ProviderConnectionError("Ollama", "refused")
+
     def fail(**kwargs):
-        raise ConnectionError("refused")
+        raise error
 
     monkeypatch.setattr(ollama, "initialize_ollama_client", fail)
 
-    status = ollama.get_model_status("a")
-
-    assert status["available"] is False
-    assert status["installed"] is False
-    assert "refused" in status["error"]
+    with pytest.raises(ollama.ProviderConnectionError, match="refused") as raised:
+        ollama.get_model_status("a")
+    assert raised.value is error
 
 
 def test_model_list_does_not_inspect_models(monkeypatch):

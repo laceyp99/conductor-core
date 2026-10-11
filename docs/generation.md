@@ -80,7 +80,7 @@ Some models require a fixed temperature while thinking is enabled. A model's
 `thinking_fixed_temperature` reports the temperature Core sends in that case,
 regardless of the requested one. When the field is absent or `null` and the
 model supports temperature, Core sends the requested value. Ollama's
-`model_capabilities` entries always include the field as `null`.
+inspection capability dictionaries include the field as `null`.
 
 ### Ollama model discovery
 
@@ -98,13 +98,12 @@ it is not a total deadline for discovery or generation. Consumers that previousl
 treated every empty result as an offline host must handle exceptions separately.
 
 `get_ollama_status()` also inspects every listed model; `get_model_status()`
-inspects only the selected installed model. These status helpers retain their
-existing error fields and fallback behavior.
+inspects only the selected installed model. Both raise listing failures directly.
 
 ### Ollama reasoning capabilities
 
-`get_ollama_status()["model_capabilities"]` reports only the reasoning
-controls Ollama confirms for each model. Offer controls from these fields:
+Successful model inspections report the reasoning controls Ollama confirms.
+Offer controls from these capability fields:
 
 | Capabilities | Control to offer | What Core sends |
 | --- | --- | --- |
@@ -112,10 +111,46 @@ controls Ollama confirms for each model. Offer controls from these fields:
 | `thinking_off: "lowest_effort"` | Effort dropdown with no off option | The chosen level, or the lowest when thinking is off |
 | `extended_thinking: false` | None | No `think` value |
 
-A model is also reported as `extended_thinking: false` when Core cannot
-inspect it. Core then sends no `think` value, so the request cannot fail on
-reasoning settings: models that reason by default still reason, and models
-without reasoning are never asked to.
+`get_ollama_status()` returns an `OllamaStatus` record with `.host` and `.models`.
+The models are a tuple of `OllamaModelInspection` records. Each inspection keeps
+its `.name`, `.capabilities`, and `.error` together. Exactly one of capabilities
+or error is present. A failed inspection preserves the installed model's name,
+sets capabilities to `None`, and retains the typed error and original cause.
+Other models can still inspect successfully, even when one model fails.
+
+```python
+from conductor_core.providers.ollama import get_ollama_status
+
+status = get_ollama_status(request_timeout=2.0)
+for inspection in status.models:
+    if inspection.error is not None:
+        print(f"{inspection.name}: inspection failed: {inspection.error}")
+    else:
+        print(inspection.name, inspection.capabilities)
+```
+
+`get_model_status(name)` returns one inspection record for an installed model,
+or `None` only when listing succeeded and the selected model was absent. Listing
+and client initialization failures raise directly from both helpers. A missing
+optional SDK raises an actionable `ImportError` without breaking package imports.
+An empty `.models` tuple means a successful listing with no named models.
+
+Migration requires replacing the old status dictionary fields with record
+attributes. There are no top-level `available`, `installed`, `error`, or
+`exception` fields and no separate capability or error dictionaries. Handle each
+inspection's `.error` before offering reasoning controls. These Python records
+contain exceptions on inspection failure and are not directly JSON serializable.
+
+Both generation routes raise the typed listing or selected inspection error
+before sending a generation request. Successfully inspected models without
+thinking support still report `extended_thinking=False`; a missing selected
+model still raises `ValueError`.
+
+Older SDKs without a raw metadata request method, and successful server
+responses without the optional `thinking` field, retain boolean thinking
+controls when the model advertises thinking support. If a raw metadata request
+is available but fails, Core reports an inspection error rather than guessing
+the accepted reasoning controls.
 
 ## Rate-limit metadata
 

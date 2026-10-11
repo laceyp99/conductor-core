@@ -269,7 +269,9 @@ def test_ollama_request_normalizes_authentication_error(monkeypatch):
     monkeypatch.setattr(ollama_api, "initialize_ollama_client", lambda **kwargs: client)
 
     with pytest.raises(ProviderAuthenticationError) as raised:
-        ollama_api.loop_gen("write a loop", "llama3")
+        ollama_api.loop_gen(
+            "write a loop", "llama3", model_capabilities={"extended_thinking": False}
+        )
 
     assert raised.value.provider == "Ollama"
     assert raised.value.operation == "request"
@@ -282,7 +284,9 @@ def test_ollama_request_normalizes_sdk_connection_error(monkeypatch):
     monkeypatch.setattr(ollama_api, "initialize_ollama_client", lambda **kwargs: client)
 
     with pytest.raises(ProviderConnectionError) as raised:
-        ollama_api.loop_gen("write a loop", "llama3")
+        ollama_api.loop_gen(
+            "write a loop", "llama3", model_capabilities={"extended_thinking": False}
+        )
 
     assert raised.value.provider == "Ollama"
     assert raised.value.operation == "request"
@@ -351,7 +355,7 @@ def test_ollama_status_forwards_request_timeout(monkeypatch):
         request_timeout=2.5,
     )
 
-    assert status["available"] is True
+    assert status.models == ()
     assert captured == {"host_address": "http://ollama.test", "timeout": 2.5}
 
 
@@ -379,10 +383,10 @@ def test_ollama_status_queries_each_host_on_every_call(monkeypatch):
         "http://ollama.test/two",
         "http://ollama.test/one",
     ]
-    assert first["models"] == ["one-1"]
-    assert second["models"] == ["one-2"]
-    assert other["models"] == ["two-1"]
-    assert third["models"] == ["one-3"]
+    assert [model.name for model in first.models] == ["one-1"]
+    assert [model.name for model in second.models] == ["one-2"]
+    assert [model.name for model in other.models] == ["two-1"]
+    assert [model.name for model in third.models] == ["one-3"]
     assert first is not second
 
 
@@ -447,7 +451,7 @@ def test_routing_forwards_request_timeout(monkeypatch, provider, model, adapter_
             "get_model_status",
             lambda model_name, **kwargs: (
                 status_captured.update(kwargs)
-                or {"available": True, "installed": True, "model_capabilities": {}}
+                or ollama_api.OllamaModelInspection(model_name, {}, None)
             ),
         )
 

@@ -183,7 +183,7 @@ def test_ollama_thinking_fixed_temperature_matches_adapter_request(
         chat=lambda **kwargs: calls.append(kwargs) or completion,
     )
     monkeypatch.setattr(ollama, "initialize_ollama_client", lambda **kwargs: client)
-    capabilities = ollama.get_ollama_status()["model_capabilities"]["local-model"]
+    capabilities = ollama.get_ollama_status().models[0].capabilities
 
     function = ollama.loop_gen if generation == "loop" else ollama.variations_gen
     function(

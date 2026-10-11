@@ -8,6 +8,42 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-10
+
+### Changed
+
+- Ollama status helpers now raise listing failures directly. Broad discovery
+  returns an `OllamaStatus` with `.host` and `.models`, a tuple of
+  `OllamaModelInspection` records. Each record keeps `.name`, `.capabilities`,
+  and `.error` together, preserving partial successes without separate error
+  dictionaries. Exactly one of capabilities or error is present.
+- `get_model_status()` returns one inspection record for an installed model,
+  or `None` after a successful listing that lacks the model. Generation raises
+  the selected model's inspection error before sending a request. Consumers must
+  migrate from dictionary fields to record attributes and catch listing errors.
+- `get_model_list()` now raises typed provider errors on SDK failures and
+  `ImportError` when the optional SDK is missing, instead of returning `[]`.
+  Unnamed entries are omitted, so its return type is `list[str]`.
+
+### Fixed
+
+- Ollama model listing accepts `request_timeout`. Set a finite timeout to avoid
+  waiting indefinitely on an unresponsive host; the default `None` preserves
+  unbounded network waits.
+
+## [0.8.5] - 2026-10-10
+
+### Fixed
+
+- Ollama listing and capability inspection failures now reach loop and variation
+  generation callers as typed provider errors with their original causes, rather
+  than silently disabling thinking controls or reporting an invalid selection.
+- Ollama status results retain listing and installation facts after inspection
+  failures. Consumers must handle `None` capabilities and can read the new
+  `exception` field or broad discovery's per-model `model_errors`. The existing
+  `error` field remains a display string. Missing optional thinking metadata
+  retains boolean controls; failed metadata requests are reported as errors.
+
 ## [0.8.4] - 2026-10-10
 
 ### Fixed
