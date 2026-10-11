@@ -15,6 +15,34 @@ from conductor_core.errors import (
 from conductor_core.providers import ollama
 
 
+@pytest.mark.parametrize("capabilities", [None, {}])
+def test_inspection_rejects_ambiguous_capability_and_error_state(capabilities):
+    error = (
+        ProviderRequestError("Ollama", "failed") if capabilities is not None else None
+    )
+    with pytest.raises(ValueError, match="either capabilities or an error"):
+        ollama.OllamaModelInspection("local", capabilities, error)
+
+
+def test_selected_model_status_forwards_host_and_timeout(monkeypatch):
+    captured = {}
+    client = SimpleNamespace(
+        list=lambda: SimpleNamespace(models=[SimpleNamespace(model="local")]),
+        show=lambda name: SimpleNamespace(capabilities=[]),
+    )
+    monkeypatch.setattr(
+        ollama,
+        "initialize_ollama_client",
+        lambda **kwargs: captured.update(kwargs) or client,
+    )
+    inspection = ollama.get_model_status(
+        "local", host_address="http://ollama.test", request_timeout=2.5
+    )
+    assert inspection.name == "local"
+    assert inspection.error is None
+    assert captured == {"host_address": "http://ollama.test", "timeout": 2.5}
+
+
 @pytest.mark.parametrize("generator", ["generate_midi", "generate_variations"])
 @pytest.mark.parametrize("operation", ["list", "show", "raw"])
 @pytest.mark.parametrize(
@@ -60,19 +88,23 @@ def test_status_and_both_routes_preserve_failures(
         lambda: {"models": {"OpenAI": {}, "Google": {}, "Anthropic": {}}},
     )
 
-    status = ollama.get_model_status("local", request_timeout=2)
-    assert status["available"] is (operation != "list")
-    assert status["installed"] is (operation != "list")
-    assert status["model_capabilities"] is None
-    assert isinstance(status["exception"], error_type)
-    assert status["exception"].__cause__ is failure
+    if operation == "list":
+        with pytest.raises(error_type) as raised:
+            ollama.get_model_status("local", request_timeout=2)
+        error = raised.value
+    else:
+        status = ollama.get_model_status("local", request_timeout=2)
+        assert status.name == "local"
+        assert status.capabilities is None
+        error = status.error
+        assert isinstance(error, error_type)
+    assert error.__cause__ is failure
     expected_operation = {
         "list": "model listing",
         "show": "capability inspection",
         "raw": "thinking metadata inspection",
     }[operation]
-    assert expected_operation in status["exception"].operation
-    assert status["error"] == str(status["exception"])
+    assert expected_operation in error.operation
 
     args = (
         ("local", "prompt") if generator == "generate_midi" else ("local", "prompt", 2)
@@ -92,12 +124,9 @@ def test_broad_listing_failure_is_typed(monkeypatch):
     monkeypatch.setattr(
         ollama, "initialize_ollama_client", lambda **kwargs: SimpleNamespace(list=fail)
     )
-    status = ollama.get_ollama_status()
-    assert status["available"] is False
-    assert status["models"] == []
-    assert status["model_errors"] == {}
-    assert isinstance(status["exception"], ProviderTimeoutError)
-    assert status["exception"].__cause__ is failure
+    with pytest.raises(ProviderTimeoutError) as raised:
+        ollama.get_ollama_status()
+    assert raised.value.__cause__ is failure
 
 
 @pytest.mark.parametrize("generator", ["loop_gen", "variations_gen"])
@@ -128,9 +157,7 @@ def test_missing_model_is_invalid_selection_after_successful_listing(
     )
     monkeypatch.setattr(ollama, "initialize_ollama_client", lambda **kwargs: client)
     status = ollama.get_model_status("missing")
-    assert status["available"] is True
-    assert status["installed"] is False
-    assert status["exception"] is None
+    assert status is None
     args = (
         ("missing", "prompt")
         if generator == "generate_midi"
@@ -144,7 +171,8 @@ def test_missing_model_is_invalid_selection_after_successful_listing(
 def test_missing_sdk_is_actionable_and_import_safe(monkeypatch, generator):
     monkeypatch.setattr(ollama, "ollama", None)
     monkeypatch.setattr(ollama, "httpx", None)
-    assert isinstance(ollama.get_ollama_status()["exception"], ImportError)
+    with pytest.raises(ImportError, match=r"Install conductor-core\[ollama\]"):
+        ollama.get_ollama_status()
     args = (
         ("local", "prompt") if generator == "generate_midi" else ("local", "prompt", 2)
     )
@@ -162,6 +190,6 @@ def test_absent_optional_metadata_retains_boolean_thinking(monkeypatch, raw_avai
         client._request_raw = lambda *a, **k: SimpleNamespace(json=dict)
     monkeypatch.setattr(ollama, "initialize_ollama_client", lambda **kwargs: client)
     status = ollama.get_model_status("local")
-    assert status["exception"] is None
-    assert status["model_capabilities"]["extended_thinking"] is True
-    assert status["model_capabilities"]["thinking_off"] == "disabled"
+    assert status.error is None
+    assert status.capabilities["extended_thinking"] is True
+    assert status.capabilities["thinking_off"] == "disabled"

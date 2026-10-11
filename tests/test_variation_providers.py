@@ -58,11 +58,9 @@ def test_routing_normalizes_all_variation_providers(
         monkeypatch.setattr(
             routing.ollama_api,
             "get_model_status",
-            lambda model_name, **kwargs: {
-                "available": True,
-                "installed": True,
-                "model_capabilities": {},
-            },
+            lambda model_name, **kwargs: ollama.OllamaModelInspection(
+                model_name, {}, None
+            ),
         )
     collection = VariationCollection(
         variations=[Loop.model_validate(_loop_payload())] * 2
