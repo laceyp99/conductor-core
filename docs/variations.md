@@ -105,10 +105,14 @@ events have no variation index, while item events use zero-based indexes.
 ## Variation history
 
 Successful children remain ordinary generations under the configured artifact
-root. Core stores one immutable, versioned batch manifest in the sibling
-`variations/` directory (by default `~/.conductor/core/variations/`). It contains
+root. Core stores one immutable, versioned batch manifest in
+`<artifact_root>/variations/` (by default
+`~/.conductor/core/generations/variations/`). Each artifact root owns its own
+variation history, including when roots share a parent directory. It contains
 the ordered generation IDs and batch request metadata, not copied MIDI, audio,
 or `Loop` data.
+
+### Read and manage batches
 
 Use `list_variation_history()`, `get_variation_history()`,
 `delete_variation_history()`, and `clear_variation_history()` from the top-level
