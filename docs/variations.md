@@ -112,22 +112,6 @@ variation history, including when roots share a parent directory. It contains
 the ordered generation IDs and batch request metadata, not copied MIDI, audio,
 or `Loop` data.
 
-### Migrate existing variation history
-
-Earlier versions stored manifests in `<artifact_root.parent>/variations/`.
-Core no longer reads or modifies that directory and does not migrate it
-automatically. For the default root, manually move your `batch_*.json` files
-from `~/.conductor/core/variations/` into
-`~/.conductor/core/generations/variations/`. Environment overrides use the
-same layout beneath the selected Core data directory.
-
-For custom roots, assign each old manifest to its owning artifact root and
-move it into that root's `variations/` directory. Legacy manifests do not
-record their owning root, so Core cannot reliably infer ownership from
-generation IDs, especially after generation retention or deletion. Keep a
-backup and resolve existing destination filenames before moving files.
-The manifest schema is unchanged; JSON contents do not need editing.
-
 ### Read and manage batches
 
 Use `list_variation_history()`, `get_variation_history()`,
