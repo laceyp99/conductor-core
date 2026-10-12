@@ -114,6 +114,21 @@ for an
 offline example that normalizes note starts and durations to sixteenth-note
 integer positions.
 
+MIDI export uses channel 0 and treats overlapping notes of the same MIDI pitch
+as retriggers: the earlier note ends when the next note starts, including across
+bar boundaries. Notes that touch without overlapping are unchanged. Simultaneous
+notes of the same pitch keep the highest velocity, then the longest duration;
+exact duplicates become one MIDI note. Different pitches remain independent.
+
+`loop_to_midi()` returns one summary warning when this cleanup shortens or
+consolidates notes, with separate counts for each change. The engine includes it
+in the result's `warnings`. The source `Loop` and provider message history are
+unchanged. Original generated timings remain in `messages.json` for normal
+generations and in the shared batch message history for variations. No additional
+Loop artifact is written. Direct utility callers must save their own source data
+if they need it later; importing the MIDI alone recovers the cleaned playback
+timings, not the original overlaps.
+
 Related modules include:
 
 - `conductor_core.models` for loop, bar, note, and timing models;

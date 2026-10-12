@@ -56,6 +56,160 @@ def test_loop_to_midi_orders_note_off_before_note_on_at_same_tick(
     ]
 
 
+@pytest.mark.parametrize(
+    ("first_duration", "second_duration"),
+    [(12, 4), (8, 8)],
+    ids=["nested", "crossing"],
+)
+def test_loop_to_midi_shortens_same_pitch_overlaps_without_mutating_loop(
+    loop_factory, note_factory, first_duration, second_duration
+):
+    loop = loop_factory(
+        bars=[
+            [
+                note_factory(start_beat=1, duration=first_duration, velocity=80),
+                note_factory(start_beat=5, duration=second_duration, velocity=110),
+            ],
+            [],
+            [],
+            [],
+        ]
+    )
+    original = loop.model_dump()
+    midi = MidiFile(ticks_per_beat=480)
+
+    warnings = loop_to_midi(midi, loop)
+
+    assert _note_events_with_absolute_times(midi) == [
+        ("note_on", 60, 0),
+        ("note_off", 60, 480),
+        ("note_on", 60, 480),
+        ("note_off", 60, (4 + second_duration) * 120),
+    ]
+    assert loop.model_dump() == original
+    assert len(warnings) == 1
+    assert "shortened 1" in warnings[0].lower()
+    assert "consolidated" not in warnings[0].lower()
+    assert "Original Loop unchanged" in warnings[0]
+    assert {msg.channel for msg in midi.tracks[0] if not msg.is_meta} == {0}
+
+
+def test_loop_to_midi_cleans_cross_bar_overlap_and_round_trips(
+    tmp_path, loop_factory, note_factory
+):
+    loop = loop_factory(
+        bars=[
+            [note_factory(start_beat=15, duration=8, velocity=70)],
+            [note_factory(start_beat=2, duration=4, velocity=115)],
+            [],
+            [],
+        ]
+    )
+    midi = MidiFile(ticks_per_beat=480)
+
+    warnings = loop_to_midi(midi, loop)
+    path = tmp_path / "cleaned-cross-bar.mid"
+    midi.save(path)
+    imported = midi_to_loop(str(path))
+
+    assert _note_events_with_absolute_times(midi) == [
+        ("note_on", 60, 1680),
+        ("note_off", 60, 2040),
+        ("note_on", 60, 2040),
+        ("note_off", 60, 2520),
+    ]
+    assert len(warnings) == 1
+    assert "shortened 1" in warnings[0].lower()
+    assert [
+        (note.time.start_beat, note.time.duration, note.velocity)
+        for bar in [imported.Bar_1, imported.Bar_2]
+        for note in bar.notes
+    ] == [
+        (15, 3, 70),
+        (2, 4, 115),
+    ]
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("later_start", [None, 5])
+def test_loop_to_midi_consolidates_enharmonics_by_velocity_then_duration(
+    tmp_path, loop_factory, note_factory, reverse, later_start
+):
+    notes = [
+        note_factory(pitch="C#", duration=12, velocity=80),
+        note_factory(pitch="Db", duration=4, velocity=110),
+        note_factory(pitch="C#", duration=8, velocity=110),
+        note_factory(pitch="Db", duration=8, velocity=110),
+    ]
+    if later_start is not None:
+        notes.append(
+            note_factory(pitch="C#", start_beat=later_start, duration=4, velocity=90)
+        )
+    if reverse:
+        notes.reverse()
+    loop = loop_factory(bars=[notes, [], [], []])
+    original = loop.model_dump()
+    midi = MidiFile(ticks_per_beat=480)
+
+    warnings = loop_to_midi(midi, loop)
+    path = tmp_path / "consolidated.mid"
+    midi.save(path)
+    imported = midi_to_loop(str(path))
+
+    expected = [(1, 8, 110)] if later_start is None else [(1, 4, 110), (5, 4, 90)]
+    assert [
+        (note.time.start_beat, note.time.duration, note.velocity)
+        for note in imported.Bar_1.notes
+    ] == expected
+    assert loop.model_dump() == original
+    assert len(warnings) == 1
+    if later_start is not None:
+        assert "shortened 1" in warnings[0].lower()
+    else:
+        assert "shortened" not in warnings[0].lower()
+    assert "consolidated 3" in warnings[0].lower()
+    assert "Original Loop unchanged" in warnings[0]
+
+
+@pytest.mark.parametrize("second_pitch", ["C", "E"])
+def test_loop_to_midi_preserves_touching_notes_and_different_pitch_overlaps(
+    loop_factory, note_factory, second_pitch
+):
+    second_start = 5 if second_pitch == "C" else 3
+    loop = loop_factory(
+        bars=[
+            [
+                note_factory(start_beat=1, duration=4),
+                note_factory(pitch=second_pitch, start_beat=second_start, duration=4),
+            ],
+            [],
+            [],
+            [],
+        ]
+    )
+    midi = MidiFile(ticks_per_beat=480)
+
+    warnings = loop_to_midi(midi, loop)
+
+    assert warnings == []
+    expected = (
+        [
+            ("note_on", 60, 0),
+            ("note_off", 60, 480),
+            ("note_on", 60, 480),
+            ("note_off", 60, 960),
+        ]
+        if second_pitch == "C"
+        else [
+            ("note_on", 60, 0),
+            ("note_on", 64, 240),
+            ("note_off", 60, 480),
+            ("note_off", 64, 720),
+        ]
+    )
+    assert _note_events_with_absolute_times(midi) == expected
+
+
 def test_loop_to_midi_clamps_out_of_range_velocity(loop_factory, note_factory):
     note = note_factory(pitch="C", start_beat=1, duration=4).model_copy(
         update={"velocity": 200}
