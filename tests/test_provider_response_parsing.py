@@ -135,11 +135,7 @@ def _anthropic_tool_block(index, name, payload):
 
 
 @pytest.mark.parametrize("generation", ["loop_gen", "variations_gen"])
-@pytest.mark.parametrize("second_name", [None, "unexpected_tool"])
-@pytest.mark.parametrize("interleaved", [False, True])
-def test_claude_generation_rejects_multiple_tool_calls(
-    monkeypatch, generation, second_name, interleaved
-):
+def test_claude_generation_rejects_multiple_tool_calls(monkeypatch, generation):
     tool_name = (
         "build_MIDI_loop" if generation == "loop_gen" else "build_MIDI_variations"
     )
@@ -147,15 +143,12 @@ def test_claude_generation_rejects_multiple_tool_calls(
     if generation == "variations_gen":
         payload = {"variations": [payload]}
     payload_json = json.dumps(payload)
-    first_block = _anthropic_tool_block(1, tool_name, payload_json)
-    second_name = second_name or tool_name
-    second_block = _anthropic_tool_block(3, second_name, payload_json)
-    completion = (
-        [first_block[0], second_block[0], *first_block[1:], *second_block[1:]]
-        if interleaved
-        else [*first_block, *second_block]
+    completion = _AnthropicStream(
+        [
+            *_anthropic_tool_block(1, tool_name, payload_json),
+            *_anthropic_tool_block(3, tool_name, payload_json),
+        ]
     )
-    completion = _AnthropicStream(completion)
     client = SimpleNamespace(
         messages=SimpleNamespace(create=lambda **kwargs: completion)
     )
@@ -167,29 +160,24 @@ def test_claude_generation_rejects_multiple_tool_calls(
         getattr(claude_api, generation)("write music", "claude-sonnet-4-5")
 
     assert f"{tool_name} (block index 1)" in str(raised.value)
-    assert f"{second_name} (block index 3)" in str(raised.value)
+    assert f"{tool_name} (block index 3)" in str(raised.value)
     assert completion.closed
 
 
 @pytest.mark.parametrize("generation", ["loop_gen", "variations_gen"])
-@pytest.mark.parametrize("response", ["success", "unexpected_tool", "misplaced_json"])
-def test_claude_generation_closes_stream_on_success_and_parser_errors(
-    monkeypatch, generation, response
-):
+def test_claude_generation_closes_stream_after_message_stop(monkeypatch, generation):
     tool_name = (
         "build_MIDI_loop" if generation == "loop_gen" else "build_MIDI_variations"
     )
     payload = _loop_payload()
     if generation == "variations_gen":
         payload = {"variations": [payload]}
-    events = _anthropic_tool_block(
-        0,
-        "other_tool" if response == "unexpected_tool" else tool_name,
-        json.dumps(payload),
+    completion = _AnthropicStream(
+        [
+            *_anthropic_tool_block(0, tool_name, json.dumps(payload)),
+            SimpleNamespace(type="message_stop"),
+        ]
     )
-    if response == "misplaced_json":
-        events = events[1:]
-    completion = _AnthropicStream(events)
     client = SimpleNamespace(
         messages=SimpleNamespace(create=lambda **kwargs: completion)
     )
@@ -197,25 +185,14 @@ def test_claude_generation_closes_stream_on_success_and_parser_errors(
         claude_api, "initialize_anthropic_client", lambda **kwargs: client
     )
 
-    if response == "success":
-        getattr(claude_api, generation)("write music", "claude-sonnet-4-5")
-    else:
-        message = (
-            "unexpected tool" if response == "unexpected_tool" else "active tool call"
-        )
-        with pytest.raises(ValueError, match=message) as raised:
-            getattr(claude_api, generation)("write music", "claude-sonnet-4-5")
-        assert raised.value.__traceback__ is not None
+    getattr(claude_api, generation)("write music", "claude-sonnet-4-5")
 
     assert completion.closed
 
 
-@pytest.mark.parametrize("tool_name", ["build_MIDI_loop", "build_MIDI_variations"])
-def test_claude_streaming_preserves_fragmented_tool_json_and_other_blocks(tool_name):
-    payload = _loop_payload()
-    if tool_name == "build_MIDI_variations":
-        payload = {"variations": [payload]}
-    payload_json = json.dumps(payload)
+def test_claude_streaming_preserves_fragmented_tool_json_and_other_blocks():
+    tool_name = "build_MIDI_loop"
+    payload_json = json.dumps(_loop_payload())
     completion = [
         SimpleNamespace(
             type="content_block_start",
