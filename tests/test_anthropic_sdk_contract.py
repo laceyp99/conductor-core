@@ -35,7 +35,10 @@ def test_haiku_5_5_thinking_controls(use_thinking, effort):
     if use_thinking:
         assert request["thinking"] == {"type": "adaptive"}
         assert request["output_config"] == {"effort": effort}
-        assert request["tool_choice"] == {"type": "auto"}
+        assert request["tool_choice"] == {
+            "type": "auto",
+            "disable_parallel_tool_use": True,
+        }
     else:
         assert request["thinking"] == {"type": "disabled"}
         # Omit effort so disabled thinking uses the API's valid medium default.
@@ -77,6 +80,7 @@ def test_anthropic_request_matches_installed_sdk_signature(
             effort=effort_options[-1] if effort_options else None,
         )
 
+    assert captured["tool_choice"]["disable_parallel_tool_use"] is True
     assert "temperature" not in captured
     if model_config.get("temperature_supported", True):
         expected = 1.0 if use_thinking else 0.4

@@ -8,6 +8,17 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-10-12
+
+### Fixed
+
+- Anthropic loop and variation generation disable parallel tool calls, including
+  when thinking is enabled. Streaming responses with multiple calls now raise a
+  clear `ValueError` naming the tools and block indexes, rather than concatenating
+  separate JSON documents. Unexpected tool names and misplaced tool JSON
+  fragments are also rejected. Streams are closed on success and failure,
+  including early rejection.
+
 ## [0.10.1] - 2026-10-12
 
 ### Fixed
