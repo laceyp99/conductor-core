@@ -29,6 +29,7 @@ from conductor_core.errors import (
     ProviderTimeoutError,
 )
 from conductor_core.provider_types import ProviderMessage
+from conductor_core.providers._reasoning import _resolve_discrete_effort
 from conductor_core.providers._variations import VariationCollection
 from conductor_core.variations import VariationUsage
 
@@ -78,10 +79,7 @@ class _AnthropicRequest(TypedDict):
 
 def _validated_effort(
     effort: str | None,
-    effort_options: list[str] | None = None,
 ) -> Literal["low", "medium", "high", "xhigh", "max"]:
-    if effort_options and effort not in effort_options:
-        raise ValueError(f"Unsupported Anthropic model reasoning effort: {effort}")
     if effort not in ("low", "medium", "high", "xhigh", "max"):
         raise ValueError(f"Unsupported Anthropic reasoning effort: {effort}")
     return effort
@@ -112,16 +110,12 @@ def _apply_thinking_params(
         if not use_thinking and model_config.get("thinking_off_type"):
             api_params["thinking"] = {"type": model_config["thinking_off_type"]}
         api_params["output_config"] = {
-            "effort": _validated_effort(
-                effort if use_thinking else effort_options[0], effort_options
-            )
+            "effort": _validated_effort(effort if use_thinking else effort_options[0])
         }
         thinking_enabled = True
     elif use_thinking and effort_options:
         api_params["thinking"] = {"type": "adaptive"}
-        api_params["output_config"] = {
-            "effort": _validated_effort(effort, effort_options)
-        }
+        api_params["output_config"] = {"effort": _validated_effort(effort)}
         thinking_enabled = True
     elif use_thinking and model_config.get("extended_thinking"):
         api_params["thinking"] = {
@@ -323,12 +317,19 @@ def loop_gen(
     model: str,
     temp: float = 0.0,
     use_thinking: bool = False,
-    effort: str | None = "low",
+    effort: str | None = None,
     api_key: str | None = None,
     system_prompt: str | None = None,
     request_timeout: float | None = None,
 ) -> tuple[objects.Loop, list[ProviderMessage], float | None]:
     """Generate a MIDI loop using the specified Anthropic model and prompt."""
+    if Anthropic is None:
+        raise ImportError("Install conductor-core[anthropic] to use Anthropic models.")
+    model_config = utils.get_model_info()["models"]["Anthropic"][model]
+    effort = _resolve_discrete_effort(
+        model, model_config.get("effort_options") or [], use_thinking, effort
+    )
+
     client = initialize_anthropic_client(
         api_key=api_key,
         **({"timeout": request_timeout} if request_timeout is not None else {}),
@@ -342,8 +343,6 @@ def loop_gen(
         }
     ]
 
-    model_info = utils.get_model_info()
-    model_config = model_info["models"]["Anthropic"][model]
     api_params: _AnthropicRequest = {
         "model": model,
         "max_tokens": model_config["max_tokens"],
@@ -407,7 +406,7 @@ def variations_gen(
     model: str,
     temp: float = 0.0,
     use_thinking: bool = False,
-    effort: str | None = "low",
+    effort: str | None = None,
     api_key: str | None = None,
     system_prompt: str | None = None,
     request_timeout: float | None = None,
@@ -415,12 +414,18 @@ def variations_gen(
     VariationCollection, list[ProviderMessage], float | None, VariationUsage | None
 ]:
     """Generate an ordered collection of loops in one Anthropic response."""
+    if Anthropic is None:
+        raise ImportError("Install conductor-core[anthropic] to use Anthropic models.")
+    model_config = utils.get_model_info()["models"]["Anthropic"][model]
+    effort = _resolve_discrete_effort(
+        model, model_config.get("effort_options") or [], use_thinking, effort
+    )
+
     client = initialize_anthropic_client(
         api_key=api_key,
         **({"timeout": request_timeout} if request_timeout is not None else {}),
     )
     loop_prompt = system_prompt or utils.get_variation_prompt()
-    model_config = utils.get_model_info()["models"]["Anthropic"][model]
     api_params: _AnthropicRequest = {
         "model": model,
         "max_tokens": model_config["max_tokens"],

@@ -23,6 +23,7 @@ from conductor_core.errors import (
     ProviderTimeoutError,
 )
 from conductor_core.provider_types import ProviderMessage
+from conductor_core.providers._reasoning import _resolve_discrete_effort
 from conductor_core.providers._variations import VariationCollection
 from conductor_core.variations import VariationUsage
 
@@ -77,9 +78,7 @@ class _VariationParseKwargs(TypedDict):
     temperature: NotRequired[float]
 
 
-def _reasoning_params(effort: str, effort_options: list[str]) -> Reasoning:
-    if effort_options and effort not in effort_options:
-        raise ValueError(f"Unsupported OpenAI model reasoning effort: {effort}")
+def _reasoning_params(effort: str) -> Reasoning:
     if effort not in ("none", "minimal", "low", "medium", "high", "xhigh", "max"):
         raise ValueError(f"Unsupported OpenAI reasoning effort: {effort}")
     return {"effort": cast("ReasoningEffort", effort), "summary": "auto"}
@@ -179,6 +178,12 @@ def loop_gen(
     request_timeout: float | None = None,
 ) -> tuple[objects.Loop, list[ProviderMessage], float]:
     """Generate a MIDI loop using the specified OpenAI model and prompt."""
+    if OpenAI is None:
+        raise ImportError("Install conductor-core[openai] to use OpenAI models.")
+    model_config = utils.get_model_info()["models"]["OpenAI"][model]
+    effort_options = model_config.get("effort_options") or []
+    effort = _resolve_discrete_effort(model, effort_options, use_thinking, effort)
+
     client = initialize_openai_client(
         api_key=api_key,
         **({"timeout": request_timeout} if request_timeout is not None else {}),
@@ -189,7 +194,6 @@ def loop_gen(
         {"role": "user", "content": prompt},
     ]
 
-    model_info = utils.get_model_info()
     request_params: _LoopParseKwargs = {
         "model": model,
         "instructions": loop_prompt,
@@ -198,12 +202,8 @@ def loop_gen(
         "store": False,
     }
 
-    model_config = model_info["models"]["OpenAI"][model]
-    effort_options = model_config.get("effort_options") or []
-    if effort_options and not use_thinking:
-        effort = effort_options[0]
     if model_config.get("extended_thinking") and effort:
-        request_params["reasoning"] = _reasoning_params(effort, effort_options)
+        request_params["reasoning"] = _reasoning_params(effort)
     elif model_config.get("temperature_supported", True):
         request_params["temperature"] = temp
 
@@ -245,6 +245,12 @@ def variations_gen(
     VariationCollection, list[ProviderMessage], float | None, VariationUsage | None
 ]:
     """Generate an ordered collection of loops in one OpenAI response."""
+    if OpenAI is None:
+        raise ImportError("Install conductor-core[openai] to use OpenAI models.")
+    model_config = utils.get_model_info()["models"]["OpenAI"][model]
+    effort_options = model_config.get("effort_options") or []
+    effort = _resolve_discrete_effort(model, effort_options, use_thinking, effort)
+
     client = initialize_openai_client(
         api_key=api_key,
         **({"timeout": request_timeout} if request_timeout is not None else {}),
@@ -261,12 +267,8 @@ def variations_gen(
         "text_format": VariationCollection,
         "store": False,
     }
-    model_config = utils.get_model_info()["models"]["OpenAI"][model]
-    effort_options = model_config.get("effort_options") or []
-    if effort_options and not use_thinking:
-        effort = effort_options[0]
     if model_config.get("extended_thinking") and effort:
-        request_params["reasoning"] = _reasoning_params(effort, effort_options)
+        request_params["reasoning"] = _reasoning_params(effort)
     elif model_config.get("temperature_supported", True):
         request_params["temperature"] = temp
     try:

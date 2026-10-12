@@ -1,6 +1,7 @@
 import json
 import logging
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -17,17 +18,21 @@ class _RequestCaptured(Exception):
 
 
 @pytest.mark.parametrize("generate_name", ["loop_gen", "variations_gen"])
-@pytest.mark.parametrize("provider", [openai_api, claude_api])
+@pytest.mark.parametrize(
+    ("provider", "initialize", "provider_name"),
+    [
+        (openai_api, "initialize_openai_client", "OpenAI"),
+        (gemini_api, "initialize_gemini_client", "Google"),
+        (claude_api, "initialize_anthropic_client", "Anthropic"),
+    ],
+)
+# 'high' is valid in the SDK vocabulary, but not for this selected model.
+@pytest.mark.parametrize("effort_kwargs", [{}, {"effort": "high"}])
 def test_direct_cloud_adapter_rejects_effort_not_supported_by_model(
-    monkeypatch, provider, generate_name
+    monkeypatch, provider, initialize, provider_name, generate_name, effort_kwargs
 ):
-    provider_name = "OpenAI" if provider is openai_api else "Anthropic"
-    initialize = (
-        "initialize_openai_client"
-        if provider is openai_api
-        else "initialize_anthropic_client"
-    )
-    monkeypatch.setattr(provider, initialize, lambda **kwargs: SimpleNamespace())
+    initialize_client = Mock()
+    monkeypatch.setattr(provider, initialize, initialize_client)
     monkeypatch.setattr(
         music,
         "get_model_info",
@@ -43,11 +48,15 @@ def test_direct_cloud_adapter_rejects_effort_not_supported_by_model(
             }
         },
     )
-    # 'high' is valid in the SDK vocabulary, but not for this selected model.
-    with pytest.raises(ValueError, match=r"Unsupported .* model reasoning effort"):
+    with pytest.raises(ValueError, match="Invalid effort") as error:
         getattr(provider, generate_name)(
-            prompt="melody", model="test-model", use_thinking=True, effort="high"
+            prompt="melody", model="test-model", use_thinking=True, **effort_kwargs
         )
+    assert str(error.value) == (
+        f"Invalid effort {effort_kwargs.get('effort')!r} for test-model. "
+        "Expected one of: low, medium"
+    )
+    initialize_client.assert_not_called()
 
 
 def _loop_payload():
@@ -1020,7 +1029,7 @@ def test_gemini_budget_thinking_uses_metadata_bounds(
     assert captured["config"]["thinking_config"].thinking_budget == expected_budget
 
 
-@pytest.mark.parametrize("use_thinking", [False, True])
+@pytest.mark.parametrize("use_thinking", [False, True, None])
 def test_claude_budget_thinking_respects_toggle(monkeypatch, use_thinking):
     captured = {}
     payload = json.dumps(_loop_payload())
@@ -1044,6 +1053,45 @@ def test_claude_budget_thinking_respects_toggle(monkeypatch, use_thinking):
         }
     else:
         assert "thinking" not in captured
+
+
+@pytest.mark.parametrize("generate_name", ["loop_gen", "variations_gen"])
+@pytest.mark.parametrize(
+    ("adapter", "initializer", "model"),
+    [
+        (openai_api, "initialize_openai_client", "gpt-6-astra"),
+        (gemini_api, "initialize_gemini_client", "gemini-3.8-flash"),
+        (claude_api, "initialize_anthropic_client", "claude-sonnet-5-5"),
+    ],
+)
+@pytest.mark.parametrize("use_thinking", [False, None])
+def test_direct_disabled_thinking_ignores_invalid_effort(
+    monkeypatch, generate_name, adapter, initializer, model, use_thinking
+):
+    captured = {}
+
+    def capture_request(**kwargs):
+        captured.update(kwargs)
+        raise _RequestCaptured
+
+    client = SimpleNamespace(
+        responses=SimpleNamespace(parse=capture_request),
+        models=SimpleNamespace(generate_content=capture_request),
+        messages=SimpleNamespace(create=capture_request),
+    )
+    monkeypatch.setattr(adapter, initializer, lambda **kwargs: client)
+
+    with pytest.raises(_RequestCaptured):
+        getattr(adapter, generate_name)(
+            "prompt", model, use_thinking=use_thinking, effort="unsupported"
+        )
+
+    if adapter is openai_api:
+        assert captured["reasoning"]["effort"] == "low"
+    elif adapter is gemini_api:
+        assert captured["config"]["thinking_config"].thinking_level.value == "LOW"
+    else:
+        assert captured["output_config"] == {"effort": "low"}
 
 
 def test_ollama_loop_gen_accepts_missing_thinking(monkeypatch):
@@ -1093,52 +1141,6 @@ def test_openai_loop_gen_does_not_write_message_log(monkeypatch):
     assert cost == 0
 
 
-def test_gemini_loop_gen_logs_unsupported_effort(monkeypatch, caplog, capsys):
-    response = SimpleNamespace(
-        candidates=[
-            SimpleNamespace(
-                content=SimpleNamespace(
-                    parts=[
-                        SimpleNamespace(text=json.dumps(_loop_payload()), thought=False)
-                    ]
-                )
-            )
-        ],
-        usage_metadata=SimpleNamespace(
-            cached_content_token_count=0,
-            prompt_token_count=0,
-            candidates_token_count=0,
-            thoughts_token_count=0,
-        ),
-    )
-    fake_client = SimpleNamespace(
-        models=SimpleNamespace(generate_content=lambda **kwargs: response)
-    )
-
-    monkeypatch.setattr(
-        gemini_api, "initialize_gemini_client", lambda api_key: fake_client
-    )
-
-    monkeypatch.setattr(gemini_api.utils, "get_loop_prompt", lambda: "system prompt")
-    monkeypatch.setattr(gemini_api.utils, "save_messages_to_json", _fail_save_messages)
-
-    with caplog.at_level(logging.WARNING, logger=gemini_api.__name__):
-        midi_loop, messages, cost = gemini_api.loop_gen(
-            "write a loop",
-            "gemini-3.1-flash-lite",
-            use_thinking=True,
-            effort="bogus",
-        )
-
-    assert isinstance(midi_loop, objects.Loop)
-    assert messages[-1]["content"] == json.dumps(_loop_payload())
-    assert cost == 0
-    assert capsys.readouterr().out == ""
-    assert (
-        "Effort 'bogus' is not supported by model gemini-3.1-flash-lite" in caplog.text
-    )
-
-
 def test_gemini_loop_gen_omits_unsupported_temperature(monkeypatch):
     captured = {}
     response = SimpleNamespace(
@@ -1184,15 +1186,15 @@ def test_gemini_loop_gen_omits_unsupported_temperature(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ("provider", "initializer"),
+    ("provider", "initializer", "model"),
     [
-        (openai_api, "initialize_openai_client"),
-        (gemini_api, "initialize_gemini_client"),
-        (claude_api, "initialize_anthropic_client"),
+        (openai_api, "initialize_openai_client", "gpt-4o-mini"),
+        (gemini_api, "initialize_gemini_client", "gemini-3.8-flash"),
+        (claude_api, "initialize_anthropic_client", "claude-sonnet-4-5"),
     ],
 )
 def test_provider_loop_gen_propagates_client_initialization_type_errors(
-    monkeypatch, provider, initializer
+    monkeypatch, provider, initializer, model
 ):
     def raise_type_error(*, api_key):
         assert api_key == "injected-key"
@@ -1201,7 +1203,7 @@ def test_provider_loop_gen_propagates_client_initialization_type_errors(
     monkeypatch.setattr(provider, initializer, raise_type_error)
 
     with pytest.raises(TypeError, match="client initialization failed"):
-        provider.loop_gen("write a loop", "test-model", api_key="injected-key")
+        provider.loop_gen("write a loop", model, api_key="injected-key")
 
 
 def test_ollama_loop_gen_rejects_missing_content(monkeypatch):

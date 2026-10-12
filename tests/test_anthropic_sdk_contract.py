@@ -16,13 +16,6 @@ def test_anthropic_rejects_unknown_reasoning_effort():
         anthropic._validated_effort("extreme")
 
 
-def test_anthropic_rejects_effort_not_advertised_by_model():
-    with pytest.raises(
-        ValueError, match="Unsupported Anthropic model reasoning effort"
-    ):
-        anthropic._validated_effort("high", ["low", "medium"])
-
-
 @pytest.mark.parametrize("use_thinking", [False, True])
 @pytest.mark.parametrize("effort", ["low", "medium", "high", "xhigh", "max"])
 def test_haiku_5_5_thinking_controls(use_thinking, effort):
