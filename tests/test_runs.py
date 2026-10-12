@@ -159,11 +159,11 @@ def test_generate_midi_routes_to_ollama_and_forwards_temperature(monkeypatch):
     monkeypatch.setattr(
         runs.ollama_api,
         "get_model_status",
-        lambda model_name, host_address=None: {
-            "available": True,
-            "installed": model_name == "llama3",
-            "model_capabilities": {},
-        },
+        lambda model_name, host_address=None: (
+            runs.ollama_api.OllamaModelInspection(model_name, {}, None)
+            if model_name == "llama3"
+            else None
+        ),
     )
 
     def fake_loop_gen(
@@ -422,16 +422,16 @@ def test_generate_midi_rejects_unknown_models_when_ollama_is_unavailable(monkeyp
     monkeypatch.setattr(
         runs.ollama_api,
         "get_model_status",
-        lambda model_name, host_address=None: {
-            "available": False,
-            "installed": False,
-            "model_capabilities": None,
-        },
+        lambda model_name, host_address=None: (_ for _ in ()).throw(
+            runs.ollama_api.ProviderConnectionError(
+                "Ollama", "unavailable", operation="model listing"
+            )
+        ),
     )
 
     with pytest.raises(
-        ValueError,
-        match=r"Invalid Model Selected\. If you intended to use Ollama, it is currently unavailable\.",
+        runs.ollama_api.ProviderConnectionError,
+        match="unavailable",
     ):
         runs.generate_midi("unknown-model", "write a loop")
 
@@ -445,11 +445,7 @@ def test_generate_midi_rejects_unknown_models_when_ollama_is_available(monkeypat
     monkeypatch.setattr(
         runs.ollama_api,
         "get_model_status",
-        lambda model_name, host_address=None: {
-            "available": True,
-            "installed": False,
-            "model_capabilities": None,
-        },
+        lambda model_name, host_address=None: None,
     )
 
     with pytest.raises(ValueError, match="Invalid Model Selected"):

@@ -5,9 +5,8 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, NoReturn
-
-from typing_extensions import TypedDict
 
 if TYPE_CHECKING:
     from ollama import Client as OllamaClient
@@ -36,23 +35,27 @@ except ImportError:  # pragma: no cover - exercised only in minimal installs
 logger = logging.getLogger(__name__)
 
 
-class OllamaStatus(TypedDict):
-    available: bool
-    models: list[str]
-    model_capabilities: dict[str, dict[str, object] | None]
-    model_errors: dict[str, ProviderError]
-    host: str
-    error: str | None
-    exception: ProviderError | ImportError | None
+@dataclass(frozen=True)
+class OllamaModelInspection:
+    """One installed model's inspected capabilities or typed inspection error."""
+
+    name: str
+    capabilities: dict[str, object] | None
+    error: ProviderError | None
+
+    def __post_init__(self) -> None:
+        if (self.capabilities is None) == (self.error is None):
+            raise ValueError(
+                "An inspection must contain either capabilities or an error."
+            )
 
 
-class OllamaModelStatus(TypedDict):
-    available: bool
-    installed: bool
-    model_capabilities: dict[str, object] | None
+@dataclass(frozen=True)
+class OllamaStatus:
+    """A successful catalog listing, including every model's inspection result."""
+
     host: str
-    error: str | None
-    exception: ProviderError | ImportError | None
+    models: tuple[OllamaModelInspection, ...]
 
 
 def _get_thinking_metadata(client, model_name, model_info):
@@ -90,7 +93,7 @@ def _get_thinking_metadata(client, model_name, model_info):
     return effort_options, any(value is False for value in values)
 
 
-def _get_model_capabilities(client, model_name, host):
+def _get_model_capabilities(client, model_name, host) -> dict[str, object]:
     effort_options = []
     accepts_think_false = None
     try:
@@ -183,107 +186,55 @@ def initialize_ollama_client(
         _raise_ollama_error(exc, "client initialization")
 
 
+def _inspect_model(client, model_name: str, host: str) -> OllamaModelInspection:
+    """Keep a model's capabilities and any inspection failure in one record."""
+    try:
+        capabilities = _get_model_capabilities(client, model_name, host)
+    except ProviderError as exc:
+        return OllamaModelInspection(model_name, None, exc)
+    return OllamaModelInspection(model_name, capabilities, None)
+
+
 def get_ollama_status(
     host_address: str | None = None,
     request_timeout: float | None = None,
 ) -> OllamaStatus:
-    """Report listing availability and per-model inspection results.
+    """List and inspect all named models, retaining individual failures.
 
-    Failed inspections have unknown (None) capabilities and a typed entry in
-    model_errors. Listing failures populate error and exception instead.
+    Listing and client initialization failures raise directly. A successful
+    listing returns one inspection record per named model, even if inspection
+    fails; failed records contain a typed error instead of guessed capabilities.
     """
     host = _resolve_host(host_address)
-    status: OllamaStatus = {
-        "available": False,
-        "models": [],
-        "model_capabilities": {},
-        "model_errors": {},
-        "host": host,
-        "error": None,
-        "exception": None,
-    }
-
-    if ollama is None:
-        status["exception"] = ImportError(
-            "Install conductor-core[ollama] to use Ollama models."
-        )
-        status["error"] = str(status["exception"])
-        return status
-
-    try:
-        client = initialize_ollama_client(
-            host_address=host,
-            **({"timeout": request_timeout} if request_timeout is not None else {}),
-        )
-        status["models"] = _list_models(client)
-        status["available"] = True
-    except Exception as exc:
-        status["exception"] = _ollama_error(exc, "model listing")
-        status["error"] = str(status["exception"])
-        logger.warning("Ollama unavailable at %s: %s", host, exc)
-        return status
-
-    for model_name in status["models"]:
-        try:
-            status["model_capabilities"][model_name] = _get_model_capabilities(
-                client, model_name, host
-            )
-        # Each network inspection must fail independently to retain partial results.
-        except ProviderError as exc:  # noqa: PERF203
-            status["model_capabilities"][model_name] = None
-            status["model_errors"][model_name] = exc
-
-    return status
+    client = initialize_ollama_client(
+        host_address=host,
+        **({"timeout": request_timeout} if request_timeout is not None else {}),
+    )
+    names = _list_models(client)
+    return OllamaStatus(
+        host=host,
+        models=tuple(_inspect_model(client, name, host) for name in names),
+    )
 
 
 def get_model_status(
     model_name: str,
     host_address: str | None = None,
     request_timeout: float | None = None,
-) -> OllamaModelStatus:
-    """Check whether one model is installed and inspect only that model.
+) -> OllamaModelInspection | None:
+    """Inspect one installed model; return None only if it was not listed.
 
-    Unlike :func:`get_ollama_status`, this lists installed models and then
-    requests details for ``model_name`` alone, so generation does not pay for
-    inspecting every installed model.
-
-    available and installed remain true after a failed inspection; capabilities
-    are then None, with a display error and the original typed exception.
+    Listing failures raise directly. An installed model's inspection failure
+    returns a record with unknown capabilities and the typed error.
     """
     host = _resolve_host(host_address)
-    status: OllamaModelStatus = {
-        "available": False,
-        "installed": False,
-        "model_capabilities": None,
-        "host": host,
-        "error": None,
-        "exception": None,
-    }
-    if ollama is None:
-        status["exception"] = ImportError(
-            "Install conductor-core[ollama] to use Ollama models."
-        )
-        status["error"] = str(status["exception"])
-        return status
-
-    try:
-        client = initialize_ollama_client(
-            host_address=host,
-            **({"timeout": request_timeout} if request_timeout is not None else {}),
-        )
-        models = _list_models(client)
-        status["available"] = True
-        if model_name in models:
-            status["installed"] = True
-            status["model_capabilities"] = _get_model_capabilities(
-                client, model_name, host
-            )
-    except Exception as exc:
-        status["exception"] = _ollama_error(exc, "model listing")
-        status["error"] = str(status["exception"])
-        logger.warning("Ollama status failed at %s: %s", host, exc)
-
-    return status
+    client = initialize_ollama_client(
+        host_address=host,
+        **({"timeout": request_timeout} if request_timeout is not None else {}),
+    )
+    if model_name not in _list_models(client):
+        return None
+    return _inspect_model(client, model_name, host)
 
 
 def _list_models(client) -> list[str]:
@@ -294,17 +245,21 @@ def _list_models(client) -> list[str]:
         _raise_ollama_error(exc, "model listing")
 
 
-def get_model_list(host_address: str | None = None) -> list[str | None]:
-    """Get the available Ollama model names without inspecting each model."""
-    if ollama is None:
-        return []
-    host = _resolve_host(host_address)
-    try:
-        client = initialize_ollama_client(host_address=host)
-        return [model.model for model in client.list().models]
-    except Exception as exc:
-        logger.warning("Ollama unavailable at %s: %s", host, exc)
-        return []
+def get_model_list(
+    host_address: str | None = None,
+    request_timeout: float | None = None,
+) -> list[str]:
+    """List named models without inspecting capabilities.
+
+    An empty list means discovery succeeded with no named models. SDK failures
+    raise Core provider errors; a missing SDK raises ImportError. The timeout
+    applies to network operations, not a total deadline; None leaves it unbounded.
+    """
+    client = initialize_ollama_client(
+        host_address=_resolve_host(host_address),
+        **({"timeout": request_timeout} if request_timeout is not None else {}),
+    )
+    return _list_models(client)
 
 
 def _thinking_option(

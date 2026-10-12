@@ -189,10 +189,10 @@ def generate_midi(
             ),
         )
 
-        if exception := ollama_status.get("exception"):
-            raise exception
-        if ollama_status["installed"]:
-            model_capabilities = ollama_status["model_capabilities"]
+        if ollama_status is not None:
+            if ollama_status.error is not None:
+                raise ollama_status.error
+            model_capabilities = ollama_status.capabilities
             # Successful inspection is required before routing reasoning controls.
             assert model_capabilities is not None
             effective_effort = _resolve_reasoning_effort(
@@ -214,10 +214,6 @@ def generate_midi(
                     else {}
                 ),
                 **({"num_ctx": ollama_num_ctx} if ollama_num_ctx is not None else {}),
-            )
-        elif not ollama_status["available"]:
-            raise ValueError(
-                "Invalid Model Selected. If you intended to use Ollama, it is currently unavailable."
             )
         else:
             raise ValueError("Invalid Model Selected")
@@ -318,15 +314,11 @@ def generate_variations(
                 else {}
             ),
         )
-        if exception := status.get("exception"):
-            raise exception
-        if not status["installed"]:
-            if not status["available"]:
-                raise ValueError(
-                    "Invalid Model Selected. If you intended to use Ollama, it is currently unavailable."
-                )
+        if status is None:
             raise ValueError("Invalid Model Selected")
-        model_capabilities = status["model_capabilities"]
+        if status.error is not None:
+            raise status.error
+        model_capabilities = status.capabilities
         assert model_capabilities is not None
         effective_effort = _resolve_reasoning_effort(
             model_choice, model_capabilities, use_thinking, effort
