@@ -8,6 +8,17 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-10-12
+
+### Fixed
+
+- MIDI export now treats overlapping notes of the same pitch as single-channel
+  retriggers, shortening earlier notes at the next start rather than emitting
+  ambiguous note endings. Simultaneous notes keep the highest velocity, then the
+  longest duration, and exact duplicates become one MIDI note. One summary warning
+  counts shortened and consolidated notes. The original Loop and generated message
+  history retain their original timings; MIDI import reflects the cleaned output.
+
 ## [0.10.0] - 2026-10-11
 
 ### Changed
