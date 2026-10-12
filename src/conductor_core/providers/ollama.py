@@ -17,6 +17,7 @@ from conductor_core import music as utils
 from conductor_core.errors import (
     ProviderConnectionError,
     ProviderContextLengthError,
+    ProviderError,
     ProviderRequestError,
     ProviderTimeoutError,
     error_for_status,
@@ -37,10 +38,12 @@ logger = logging.getLogger(__name__)
 
 class OllamaStatus(TypedDict):
     available: bool
-    models: list[str | None]
-    model_capabilities: dict[str | None, dict[str, object]]
+    models: list[str]
+    model_capabilities: dict[str, dict[str, object] | None]
+    model_errors: dict[str, ProviderError]
     host: str
     error: str | None
+    exception: ProviderError | ImportError | None
 
 
 class OllamaModelStatus(TypedDict):
@@ -49,6 +52,7 @@ class OllamaModelStatus(TypedDict):
     model_capabilities: dict[str, object] | None
     host: str
     error: str | None
+    exception: ProviderError | ImportError | None
 
 
 def _get_thinking_metadata(client, model_name, model_info):
@@ -69,8 +73,10 @@ def _get_thinking_metadata(client, model_name, model_info):
             try:
                 response = request_raw("POST", "/api/show", json={"model": model_name})
                 thinking = response.json().get("thinking")
-            except Exception:
-                logger.debug("Could not read Ollama think values for %s", model_name)
+            except Exception as exc:
+                _raise_ollama_error(
+                    exc, f"thinking metadata inspection for {model_name!r}"
+                )
 
     if not isinstance(thinking, dict):
         return [], None
@@ -95,10 +101,7 @@ def _get_model_capabilities(client, model_name, host):
         )
         supports_thinking = "thinking" in capabilities or bool(effort_options)
     except Exception as exc:
-        logger.warning(
-            "Could not inspect Ollama model %s at %s: %s", model_name, host, exc
-        )
-        supports_thinking = False
+        _raise_ollama_error(exc, f"capability inspection for {model_name!r} at {host}")
     if not supports_thinking:
         thinking_off = None
     elif accepts_think_false is False:
@@ -123,7 +126,10 @@ def _resolve_host(host_address: str | None = None) -> str:
     )
 
 
-def _raise_ollama_error(exc: Exception, operation: str) -> NoReturn:
+def _ollama_error(exc: Exception, operation: str) -> ProviderError | ImportError:
+    """Normalize SDK failures while retaining already normalized errors and causes."""
+    if isinstance(exc, (ProviderError, ImportError)):
+        return exc
     assert httpx is not None
     assert ollama is not None
     if isinstance(exc, httpx.TimeoutException):
@@ -137,8 +143,20 @@ def _raise_ollama_error(exc: Exception, operation: str) -> NoReturn:
             exc.status_code,
             operation=operation,
         )
+    elif isinstance(exc, httpx.HTTPStatusError):
+        error = error_for_status(
+            "Ollama", str(exc), exc.response.status_code, operation=operation
+        )
     else:
         error = ProviderRequestError("Ollama", str(exc), operation=operation)
+    error.__cause__ = exc
+    return error
+
+
+def _raise_ollama_error(exc: Exception, operation: str) -> NoReturn:
+    error = _ollama_error(exc, operation)
+    if error is exc:
+        raise error
     raise error from exc
 
 
@@ -169,18 +187,27 @@ def get_ollama_status(
     host_address: str | None = None,
     request_timeout: float | None = None,
 ) -> OllamaStatus:
-    """Get the current Ollama availability and discovered models."""
+    """Report listing availability and per-model inspection results.
+
+    Failed inspections have unknown (None) capabilities and a typed entry in
+    model_errors. Listing failures populate error and exception instead.
+    """
     host = _resolve_host(host_address)
     status: OllamaStatus = {
         "available": False,
         "models": [],
         "model_capabilities": {},
+        "model_errors": {},
         "host": host,
         "error": None,
+        "exception": None,
     }
 
     if ollama is None:
-        status["error"] = "Install conductor-core[ollama] to use Ollama models."
+        status["exception"] = ImportError(
+            "Install conductor-core[ollama] to use Ollama models."
+        )
+        status["error"] = str(status["exception"])
         return status
 
     try:
@@ -188,15 +215,23 @@ def get_ollama_status(
             host_address=host,
             **({"timeout": request_timeout} if request_timeout is not None else {}),
         )
-        status["models"] = [model.model for model in client.list().models]
-        status["model_capabilities"] = {
-            model_name: _get_model_capabilities(client, model_name, host)
-            for model_name in status["models"]
-        }
+        status["models"] = _list_models(client)
         status["available"] = True
     except Exception as exc:
-        status["error"] = str(exc)
+        status["exception"] = _ollama_error(exc, "model listing")
+        status["error"] = str(status["exception"])
         logger.warning("Ollama unavailable at %s: %s", host, exc)
+        return status
+
+    for model_name in status["models"]:
+        try:
+            status["model_capabilities"][model_name] = _get_model_capabilities(
+                client, model_name, host
+            )
+        # Each network inspection must fail independently to retain partial results.
+        except ProviderError as exc:  # noqa: PERF203
+            status["model_capabilities"][model_name] = None
+            status["model_errors"][model_name] = exc
 
     return status
 
@@ -211,6 +246,9 @@ def get_model_status(
     Unlike :func:`get_ollama_status`, this lists installed models and then
     requests details for ``model_name`` alone, so generation does not pay for
     inspecting every installed model.
+
+    available and installed remain true after a failed inspection; capabilities
+    are then None, with a display error and the original typed exception.
     """
     host = _resolve_host(host_address)
     status: OllamaModelStatus = {
@@ -219,9 +257,13 @@ def get_model_status(
         "model_capabilities": None,
         "host": host,
         "error": None,
+        "exception": None,
     }
     if ollama is None:
-        status["error"] = "Install conductor-core[ollama] to use Ollama models."
+        status["exception"] = ImportError(
+            "Install conductor-core[ollama] to use Ollama models."
+        )
+        status["error"] = str(status["exception"])
         return status
 
     try:
@@ -229,7 +271,7 @@ def get_model_status(
             host_address=host,
             **({"timeout": request_timeout} if request_timeout is not None else {}),
         )
-        models = [model.model for model in client.list().models]
+        models = _list_models(client)
         status["available"] = True
         if model_name in models:
             status["installed"] = True
@@ -237,10 +279,19 @@ def get_model_status(
                 client, model_name, host
             )
     except Exception as exc:
-        status["error"] = str(exc)
-        logger.warning("Ollama unavailable at %s: %s", host, exc)
+        status["exception"] = _ollama_error(exc, "model listing")
+        status["error"] = str(status["exception"])
+        logger.warning("Ollama status failed at %s: %s", host, exc)
 
     return status
+
+
+def _list_models(client) -> list[str]:
+    """List named models, preserving the SDK failure and operation."""
+    try:
+        return [model.model for model in client.list().models if model.model]
+    except Exception as exc:
+        _raise_ollama_error(exc, "model listing")
 
 
 def get_model_list(host_address: str | None = None) -> list[str | None]:

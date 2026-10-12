@@ -189,9 +189,11 @@ def generate_midi(
             ),
         )
 
+        if exception := ollama_status.get("exception"):
+            raise exception
         if ollama_status["installed"]:
             model_capabilities = ollama_status["model_capabilities"]
-            # Installed-model status always includes the inspected capabilities.
+            # Successful inspection is required before routing reasoning controls.
             assert model_capabilities is not None
             effective_effort = _resolve_reasoning_effort(
                 model_choice, model_capabilities, use_thinking, effort
@@ -316,6 +318,8 @@ def generate_variations(
                 else {}
             ),
         )
+        if exception := status.get("exception"):
+            raise exception
         if not status["installed"]:
             if not status["available"]:
                 raise ValueError(

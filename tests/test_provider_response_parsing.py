@@ -877,7 +877,9 @@ def test_ollama_loop_gen_accepts_missing_thinking(monkeypatch):
     monkeypatch.setattr(ollama_api.utils, "get_loop_prompt", lambda: "system prompt")
     monkeypatch.setattr(ollama_api.utils, "save_messages_to_json", _fail_save_messages)
 
-    midi_loop, messages, cost = ollama_api.loop_gen("write a loop", "llama3")
+    midi_loop, messages, cost = ollama_api.loop_gen(
+        "write a loop", "llama3", model_capabilities={"extended_thinking": False}
+    )
 
     assert isinstance(midi_loop, objects.Loop)
     assert objects.Loop.model_validate_json(messages[-1]["content"]) == midi_loop
@@ -1034,7 +1036,9 @@ def test_ollama_loop_gen_rejects_missing_content(monkeypatch):
     with pytest.raises(
         ValueError, match="Ollama response did not include generated content"
     ):
-        ollama_api.loop_gen("write a loop", "llama3")
+        ollama_api.loop_gen(
+            "write a loop", "llama3", model_capabilities={"extended_thinking": False}
+        )
 
 
 def test_claude_unsupported_thinking_warns_once(monkeypatch, caplog):

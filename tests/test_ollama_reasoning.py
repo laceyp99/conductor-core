@@ -135,7 +135,7 @@ def test_ollama_status_reports_thinking_capability(monkeypatch, capabilities, ex
     }
 
 
-def test_ollama_status_reports_show_failure_as_temperature_only(monkeypatch):
+def test_ollama_status_preserves_partial_inspection_results(monkeypatch):
     def show(name):
         if name == "broken-model":
             raise RuntimeError("show unavailable")
@@ -155,13 +155,12 @@ def test_ollama_status_reports_show_failure_as_temperature_only(monkeypatch):
     status = ollama.get_ollama_status()
 
     assert status["model_capabilities"]["thinking-model"]["extended_thinking"]
-    assert status["model_capabilities"]["broken-model"] == {
-        "extended_thinking": False,
-        "effort_options": [],
-        "temperature_supported": True,
-        "thinking_fixed_temperature": None,
-        "thinking_off": None,
-    }
+    assert status["available"] is True
+    assert status["model_capabilities"]["broken-model"] is None
+    error = status["model_errors"]["broken-model"]
+    assert isinstance(error, ollama.ProviderRequestError)
+    assert str(error.__cause__) == "show unavailable"
+    assert status["exception"] is None
 
 
 def test_ollama_status_discovers_effort_levels_from_raw_show(monkeypatch):
@@ -312,6 +311,8 @@ def test_ollama_status_return_keys(monkeypatch):
         "model_capabilities",
         "host",
         "error",
+        "exception",
+        "model_errors",
     }
     assert ollama.get_ollama_status()["models"] == []
 

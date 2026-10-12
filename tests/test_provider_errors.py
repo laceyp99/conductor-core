@@ -269,7 +269,9 @@ def test_ollama_request_normalizes_authentication_error(monkeypatch):
     monkeypatch.setattr(ollama_api, "initialize_ollama_client", lambda **kwargs: client)
 
     with pytest.raises(ProviderAuthenticationError) as raised:
-        ollama_api.loop_gen("write a loop", "llama3")
+        ollama_api.loop_gen(
+            "write a loop", "llama3", model_capabilities={"extended_thinking": False}
+        )
 
     assert raised.value.provider == "Ollama"
     assert raised.value.operation == "request"
@@ -282,7 +284,9 @@ def test_ollama_request_normalizes_sdk_connection_error(monkeypatch):
     monkeypatch.setattr(ollama_api, "initialize_ollama_client", lambda **kwargs: client)
 
     with pytest.raises(ProviderConnectionError) as raised:
-        ollama_api.loop_gen("write a loop", "llama3")
+        ollama_api.loop_gen(
+            "write a loop", "llama3", model_capabilities={"extended_thinking": False}
+        )
 
     assert raised.value.provider == "Ollama"
     assert raised.value.operation == "request"
