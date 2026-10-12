@@ -8,6 +8,50 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-12
+
+### Fixed
+
+- Each generation now protects its own artifacts during finalization retention,
+  alongside any protected variation batch. Ordinary generation no longer deletes
+  its new MIDI when prior history has later timestamps, such as after clock
+  rollback. Remaining capacity retains prior history in timestamp order; later
+  requests can still prune earlier results. Future-dated timestamps are not repaired.
+
+### Changed
+
+- **Breaking timestamp contract:** Core now returns timezone-aware UTC timestamps
+  for generation metadata, including legacy records. New metadata and
+  timestamp-based generation IDs use UTC. Stored timestamps without timezone
+  information are interpreted as local time on the reading machine, then converted
+  to UTC in memory. Reading history does not rewrite existing metadata files.
+
+### Migration
+
+Old history remains readable without a migration command. Sorting timestamps from
+old and new returned records works because both are now aware UTC values. Callers
+must use aware datetimes when comparing timestamps or calculating elapsed time.
+For example, this calculation now raises
+`TypeError: can't subtract offset-naive and offset-aware datetimes`:
+
+```python
+datetime.now() - generation.timestamp
+```
+
+Use UTC for the current time instead:
+
+```python
+from datetime import datetime, timezone
+
+elapsed = datetime.now(timezone.utc) - generation.timestamp
+```
+
+Comparing a returned timestamp with a naive datetime can also raise
+`TypeError: can't compare offset-naive and offset-aware datetimes`. When history
+files were moved between timezones, Core cannot recover the original timezone of
+timestamps stored without an offset. There is no compatibility setting to return
+naive timestamps.
+
 ## [0.10.3] - 2026-10-12
 
 ### Fixed

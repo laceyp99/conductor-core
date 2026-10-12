@@ -2,7 +2,7 @@ import json
 import os
 import shutil
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from threading import Barrier, current_thread
 
@@ -221,6 +221,69 @@ def test_finalize_generation_persists_metadata_for_direct_written_artifacts(
     assert metadata.messages_path == str(gen_dir / "messages.json")
     assert metadata.soundfont == "FM-Piano1-20190916.sf2"
     assert loaded_metadata == metadata
+    assert metadata.timestamp.utcoffset() == timedelta(0)
+    persisted_timestamp = json.loads(
+        Path(workspace.metadata_path).read_text(encoding="utf-8")
+    )["timestamp"]
+    assert datetime.fromisoformat(
+        persisted_timestamp.replace("Z", "+00:00")
+    ).utcoffset() == timedelta(0)
+
+
+def test_generation_ids_use_utc(monkeypatch):
+    utc_time = datetime(2026, 10, 8, 3, 4, 5, 123456, tzinfo=timezone.utc)
+
+    class FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            assert tz is timezone.utc
+            return utc_time
+
+    monkeypatch.setattr(history, "datetime", FixedDatetime)
+    assert history._generate_id() == "20261008_030405_123456"
+
+
+@pytest.mark.parametrize("module_helpers", [False, True])
+def test_mixed_history_returns_utc_and_retains_by_instant_without_rewriting(
+    isolated_history_dir, module_helpers
+):
+    legacy_instant = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    timestamps = {
+        "legacy": legacy_instant.astimezone().replace(tzinfo=None),
+        "utc": legacy_instant + timedelta(hours=1),
+        "offset": (legacy_instant - timedelta(hours=1)).astimezone(
+            timezone(timedelta(hours=5))
+        ),
+    }
+    metadata_paths = {
+        gen_id: _write_generation_metadata(
+            isolated_history_dir, gen_id=gen_id, timestamp=timestamp
+        )
+        / "metadata.json"
+        for gen_id, timestamp in timestamps.items()
+    }
+    original_bytes = {
+        gen_id: path.read_bytes() for gen_id, path in metadata_paths.items()
+    }
+    store = history.FilesystemArtifactStore(isolated_history_dir, max_generations=2)
+    load_history = history.load_history if module_helpers else store.load_history
+    get_generation = history.get_generation if module_helpers else store.get_generation
+
+    loaded = load_history()
+    assert [item.id for item in loaded] == ["utc", "legacy", "offset"]
+    for item in loaded:
+        expected = timestamps[item.id].astimezone(timezone.utc)
+        assert item.timestamp == expected
+        assert item.timestamp.utcoffset() == timedelta(0)
+        assert get_generation(item.id) == item
+        assert metadata_paths[item.id].read_bytes() == original_bytes[item.id]
+
+    history._enforce_limit(isolated_history_dir, max_generations=2)
+
+    assert [item.id for item in load_history()] == ["utc", "legacy"]
+    assert not metadata_paths["offset"].parent.exists()
+    for gen_id in ("utc", "legacy"):
+        assert metadata_paths[gen_id].read_bytes() == original_bytes[gen_id]
 
 
 def test_finalize_generation_discards_audio_after_reported_render_failure(
@@ -268,7 +331,10 @@ def test_finalize_generation_requires_direct_written_midi(
     assert not (isolated_history_dir / "gen_fixed_id" / "metadata.json").exists()
 
 
-def test_finalize_generation_rejects_protection_exceeding_capacity(tmp_path):
+@pytest.mark.parametrize("include_current", [False, True])
+def test_finalize_generation_rejects_protection_exceeding_capacity(
+    tmp_path, include_current
+):
     store = history.FilesystemArtifactStore(tmp_path / "generations", max_generations=1)
     workspace = store.create_generation_workspace()
     Path(workspace.midi_path).write_bytes(b"midi")
@@ -282,11 +348,44 @@ def test_finalize_generation_rejects_protection_exceeding_capacity(tmp_path):
             "model",
             "OpenAI",
             0.0,
-            protected_generation_ids=(workspace.id, "other"),
+            protected_generation_ids=(workspace.id, "other")
+            if include_current
+            else ("other",),
         )
 
     assert not Path(workspace.metadata_path).exists()
     assert Path(workspace.midi_path).is_file()
+
+
+def test_finalize_generation_merges_and_deduplicates_protection(tmp_path):
+    root = tmp_path / "generations"
+    store = history.FilesystemArtifactStore(root, max_generations=3)
+    prior_directories = {
+        gen_id: _write_generation_metadata(
+            root, gen_id=gen_id, timestamp=datetime(year, 1, 1)
+        )
+        for gen_id, year in [("protected", 2000), ("older", 2098), ("newer", 2099)]
+    }
+    workspace = store.create_generation_workspace()
+    Path(workspace.midi_path).write_bytes(b"midi")
+
+    metadata = store.finalize_generation(
+        workspace,
+        "prompt",
+        "C",
+        "major",
+        "model",
+        "OpenAI",
+        0.0,
+        protected_generation_ids=("protected", "protected", workspace.id, workspace.id),
+    )
+
+    assert store.get_generation(workspace.id) == metadata
+    assert Path(workspace.midi_path).is_file()
+    assert Path(workspace.metadata_path).is_file()
+    assert prior_directories["protected"].is_dir()
+    assert prior_directories["newer"].is_dir()
+    assert not prior_directories["older"].exists()
 
 
 def test_finalize_generation_replaces_hard_linked_metadata_without_overwriting_target(

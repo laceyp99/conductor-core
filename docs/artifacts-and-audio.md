@@ -68,11 +68,12 @@ The limit counts saved generations, not provider requests or disk bytes. Each
 variation in a batch counts separately, so a request for four variations needs
 `max_generations >= 4` or `None` for unlimited retention. Core rejects a batch
 that exceeds the actual store's finite limit before provider work begins.
-An allowed variation batch takes priority during its own retention passes;
-Core fills remaining capacity with the newest prior history, even if a clock
-change makes older work appear newer than the current batch. Ordinary retention
-passes keep the newest generations by timestamp. Later requests can prune
-artifacts from a previously returned batch. Variation manifests have a separate
+The generation being finalized takes priority during its retention pass, along
+with any protected variation batch. Core fills remaining capacity with the newest
+prior history, even if a clock change makes older work appear newer than the
+current generation. Future-dated records follow the same timestamp ordering.
+Later requests can prune artifacts from previously returned generations or
+batches. Variation manifests have a separate
 lifetime and are not removed by generation retention; see
 [Variation history](variations.md#variation-history).
 
@@ -91,6 +92,18 @@ lifetime and are not removed by generation retention; see
 
 Use `FilesystemArtifactStore` for custom roots, loading or deleting saved
 generations, and updating saved audio metadata.
+
+### Timestamps
+
+`GenerationMetadata.timestamp` is a timezone-aware UTC datetime. New metadata
+records the finalization time in UTC, and timestamp-based generation IDs use UTC
+when the workspace is allocated. IDs keep the `YYYYMMDD_HHMMSS_ffffff` format.
+
+When reading stored metadata, Core converts timestamps to UTC in memory. Values
+without timezone information are interpreted using the reading machine's local
+timezone; their original timezone cannot be recovered from the file. Reads leave
+metadata files unchanged. History and retention order records by their timestamp
+instant. Compare returned timestamps with other timezone-aware datetimes.
 
 ## Audio previews
 
