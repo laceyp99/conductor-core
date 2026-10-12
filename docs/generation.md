@@ -87,15 +87,14 @@ inspection capability dictionaries include the field as `null`.
 Use `conductor_core.providers.ollama.get_model_list(host_address=host,
 request_timeout=2.0)` for model names without capability inspection. It returns
 `list[str]`, omitting unnamed entries. An empty list means discovery succeeded
-with no named models; failures now raise instead of returning an empty list.
+with no named models. Failures raise typed provider errors.
 Catch `ProviderTimeoutError`, `ProviderConnectionError`, or other `ProviderError`
 subclasses at the application boundary. A missing optional SDK raises
 `ImportError` naming the package extra to install.
 
 The default `request_timeout=None` leaves network waits unbounded. A finite
 value sets network operation timeouts, including connection and read waits;
-it is not a total deadline for discovery or generation. Consumers that previously
-treated every empty result as an offline host must handle exceptions separately.
+it is not a total deadline for discovery or generation.
 
 `get_ollama_status()` also inspects every listed model; `get_model_status()`
 inspects only the selected installed model. Both raise listing failures directly.
@@ -136,12 +135,6 @@ or `None` only when listing succeeded and the selected model was absent. Listing
 and client initialization failures raise directly from both helpers. A missing
 optional SDK raises an actionable `ImportError` without breaking package imports.
 An empty `.models` tuple means a successful listing with no named models.
-
-Migration requires replacing the old status dictionary fields with record
-attributes. There are no top-level `available`, `installed`, `error`, or
-`exception` fields and no separate capability or error dictionaries. Handle each
-inspection's `.error` before offering reasoning controls. These Python records
-contain exceptions on inspection failure and are not directly JSON serializable.
 
 Both generation routes raise the typed listing or selected inspection error
 before sending a generation request. Successfully inspected models without

@@ -31,6 +31,17 @@ while its public API is still in initial development.
   waiting indefinitely on an unresponsive host; the default `None` preserves
   unbounded network waits.
 
+### Migration
+
+Replace status dictionary fields with inspection record attributes. The top-level
+`available`, `installed`, `error`, and `exception` fields and the separate
+capability and error dictionaries are removed. Check each inspection's `.error`
+before offering reasoning controls. Failed inspection records contain Python
+exceptions and require conversion before JSON serialization.
+
+Callers that treated an empty model list as an offline host must catch discovery
+exceptions separately from a successful empty catalog.
+
 ## [0.9.1] - 2026-10-11
 
 ### Fixed
