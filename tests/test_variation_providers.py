@@ -136,19 +136,31 @@ def test_openai_requests_one_typed_collection(monkeypatch):
     assert usage is None
 
 
-def test_anthropic_requests_one_collection_tool(monkeypatch):
+@pytest.mark.parametrize("use_thinking", [False, True, None])
+def test_anthropic_requests_one_collection_tool(monkeypatch, use_thinking):
     calls = []
     payload = json.dumps({"variations": [_loop_payload()]})
     completion = [
         SimpleNamespace(
+            type="content_block_start",
+            index=0,
+            content_block=SimpleNamespace(
+                type="tool_use", name="build_MIDI_variations"
+            ),
+        ),
+        SimpleNamespace(
             type="content_block_delta",
+            index=0,
             delta=SimpleNamespace(partial_json=payload),
         ),
+        SimpleNamespace(type="content_block_stop", index=0),
         SimpleNamespace(type="message_stop"),
     ]
     client = SimpleNamespace(
         messages=SimpleNamespace(
-            create=lambda **kwargs: calls.append(kwargs) or completion
+            create=lambda **kwargs: (
+                calls.append(kwargs) or (event for event in completion)
+            )
         )
     )
     monkeypatch.setattr(
@@ -162,6 +174,8 @@ def test_anthropic_requests_one_collection_tool(monkeypatch):
                 "Anthropic": {
                     "model": {
                         "max_tokens": 1000,
+                        "extended_thinking": True,
+                        "max_thinking_budget": 59000,
                         "cost": {"input": 0, "output": 0},
                     }
                 }
@@ -169,16 +183,24 @@ def test_anthropic_requests_one_collection_tool(monkeypatch):
         },
     )
 
-    collection, _, _, _ = anthropic.variations_gen("brief", "model")
+    collection, _, _, _ = anthropic.variations_gen(
+        "brief", "model", use_thinking=use_thinking
+    )
 
     assert len(calls) == 1
     assert (
         calls[0]["tools"][0]["input_schema"] == VariationCollection.model_json_schema()
     )
     assert len(collection.variations) == 1
+    if use_thinking:
+        assert calls[0]["thinking"] == {"type": "enabled", "budget_tokens": 59000}
+    else:
+        assert "thinking" not in calls[0]
+    assert "output_config" not in calls[0]
 
 
-def test_google_requests_one_collection_schema(monkeypatch):
+def _fake_gemini_variations(monkeypatch, model_config):
+    """Capture Gemini variation requests made against fake model metadata."""
     calls = []
     content = json.dumps({"variations": [_loop_payload()]})
     response = SimpleNamespace(
@@ -200,8 +222,13 @@ def test_google_requests_one_collection_schema(monkeypatch):
     monkeypatch.setattr(
         google.utils,
         "get_model_info",
-        lambda: {"models": {"Google": {"model": {"extended_thinking": False}}}},
+        lambda: {"models": {"Google": {"model": model_config}}},
     )
+    return calls
+
+
+def test_google_requests_one_collection_schema(monkeypatch):
+    calls = _fake_gemini_variations(monkeypatch, {"extended_thinking": False})
 
     collection, _, cost, usage = google.variations_gen("brief", "model")
 
@@ -211,8 +238,54 @@ def test_google_requests_one_collection_schema(monkeypatch):
         == VariationCollection.model_json_schema()
     )
     assert len(collection.variations) == 1
+    assert "thinking_config" not in calls[0]["config"]
     assert cost is None
     assert usage is None
+
+
+@pytest.mark.parametrize(
+    ("model_config", "use_thinking", "expected_level", "expected_budget"),
+    [
+        # Discrete models have no budget keys; see issue #148.
+        (
+            {"extended_thinking": True, "effort_options": ["low", "high"]},
+            True,
+            "HIGH",
+            None,
+        ),
+        (
+            {
+                "extended_thinking": True,
+                "min_thinking_budget": 128,
+                "max_thinking_budget": 32768,
+            },
+            True,
+            None,
+            32768,
+        ),
+        (
+            {
+                "extended_thinking": True,
+                "min_thinking_budget": 128,
+                "max_thinking_budget": 32768,
+            },
+            False,
+            None,
+            128,
+        ),
+    ],
+    ids=["discrete", "budget-on", "budget-off"],
+)
+def test_google_variations_thinking_config(
+    monkeypatch, model_config, use_thinking, expected_level, expected_budget
+):
+    calls = _fake_gemini_variations(monkeypatch, model_config)
+
+    google.variations_gen("brief", "model", use_thinking=use_thinking, effort="high")
+
+    thinking = calls[0]["config"]["thinking_config"]
+    assert getattr(thinking.thinking_level, "value", None) == expected_level
+    assert thinking.thinking_budget == expected_budget
 
 
 def test_ollama_requests_one_collection_format(monkeypatch):
@@ -243,14 +316,25 @@ def test_opus_5_5_variations_use_always_on_thinking(monkeypatch, use_thinking, e
     payload = json.dumps({"variations": [_loop_payload()]})
     completion = [
         SimpleNamespace(
+            type="content_block_start",
+            index=0,
+            content_block=SimpleNamespace(
+                type="tool_use", name="build_MIDI_variations"
+            ),
+        ),
+        SimpleNamespace(
             type="content_block_delta",
+            index=0,
             delta=SimpleNamespace(partial_json=payload),
         ),
+        SimpleNamespace(type="content_block_stop", index=0),
         SimpleNamespace(type="message_stop"),
     ]
     client = SimpleNamespace(
         messages=SimpleNamespace(
-            create=lambda **kwargs: calls.append(kwargs) or completion
+            create=lambda **kwargs: (
+                calls.append(kwargs) or (event for event in completion)
+            )
         )
     )
     monkeypatch.setattr(
@@ -264,6 +348,9 @@ def test_opus_5_5_variations_use_always_on_thinking(monkeypatch, use_thinking, e
     assert len(collection.variations) == 1
     assert calls[0]["max_tokens"] == 128000
     assert calls[0]["output_config"] == {"effort": effort}
-    assert calls[0]["tool_choice"] == {"type": "auto"}
+    assert calls[0]["tool_choice"] == {
+        "type": "auto",
+        "disable_parallel_tool_use": True,
+    }
     assert "temperature" not in calls[0]
     assert "thinking" not in calls[0]

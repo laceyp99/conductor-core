@@ -29,6 +29,7 @@ from conductor_core.errors import (
     ProviderTimeoutError,
 )
 from conductor_core.provider_types import ProviderMessage
+from conductor_core.providers._reasoning import _resolve_discrete_effort
 from conductor_core.providers._variations import VariationCollection
 from conductor_core.variations import VariationUsage
 
@@ -78,10 +79,7 @@ class _AnthropicRequest(TypedDict):
 
 def _validated_effort(
     effort: str | None,
-    effort_options: list[str] | None = None,
 ) -> Literal["low", "medium", "high", "xhigh", "max"]:
-    if effort_options and effort not in effort_options:
-        raise ValueError(f"Unsupported Anthropic model reasoning effort: {effort}")
     if effort not in ("low", "medium", "high", "xhigh", "max"):
         raise ValueError(f"Unsupported Anthropic reasoning effort: {effort}")
     return effort
@@ -112,16 +110,12 @@ def _apply_thinking_params(
         if not use_thinking and model_config.get("thinking_off_type"):
             api_params["thinking"] = {"type": model_config["thinking_off_type"]}
         api_params["output_config"] = {
-            "effort": _validated_effort(
-                effort if use_thinking else effort_options[0], effort_options
-            )
+            "effort": _validated_effort(effort if use_thinking else effort_options[0])
         }
         thinking_enabled = True
     elif use_thinking and effort_options:
         api_params["thinking"] = {"type": "adaptive"}
-        api_params["output_config"] = {
-            "effort": _validated_effort(effort, effort_options)
-        }
+        api_params["output_config"] = {"effort": _validated_effort(effort)}
         thinking_enabled = True
     elif use_thinking and model_config.get("extended_thinking"):
         api_params["thinking"] = {
@@ -134,7 +128,7 @@ def _apply_thinking_params(
         api_params["thinking"] = {"type": "disabled"}
 
     if thinking_enabled:
-        api_params["tool_choice"] = {"type": "auto"}
+        api_params["tool_choice"] = {"type": "auto", "disable_parallel_tool_use": True}
     if model_config.get("temperature_supported", True):
         # SDK 1.x removed the temperature keyword, but older models still
         # accept it in the API request body. extra_body works in both SDK lines.
@@ -229,7 +223,7 @@ def build_system_prompt_block(loop_prompt):
     return block
 
 
-def process_streaming_response(completion):
+def process_streaming_response(completion, expected_tool_name: str | None = None):
     """Extract text, tool JSON, and token usage from a streaming response."""
     output = {
         "loop": "",
@@ -270,16 +264,45 @@ def process_streaming_response(completion):
                 if value is not None:
                     output[key] = value
 
+    tool_calls: list[tuple[int, str]] = []
+    active_tool_index: int | None = None
+
     for chunk in completion:
         if chunk.type == "message_start":
             if hasattr(chunk, "message") and hasattr(chunk.message, "usage"):
                 apply_usage(chunk.message.usage)
+        elif chunk.type == "content_block_start":
+            block = chunk.content_block
+            if block.type == "tool_use":
+                tool_calls.append((chunk.index, block.name))
+                if len(tool_calls) > 1:
+                    calls = ", ".join(
+                        f"{name} (block index {index})" for index, name in tool_calls
+                    )
+                    raise ValueError(
+                        f"Anthropic response contains multiple tool calls: {calls}. "
+                        "Expected exactly one tool call."
+                    )
+                if expected_tool_name is not None and block.name != expected_tool_name:
+                    raise ValueError(
+                        f"Anthropic response called unexpected tool {block.name} "
+                        f"(block index {chunk.index}); expected {expected_tool_name}."
+                    )
+                active_tool_index = chunk.index
+        elif chunk.type == "content_block_stop":
+            if chunk.index == active_tool_index:
+                active_tool_index = None
         elif chunk.type == "content_block_delta":
             if hasattr(chunk.delta, "thinking"):
                 output["thinking_content"] += chunk.delta.thinking
             elif hasattr(chunk.delta, "text"):
                 output["text"] += chunk.delta.text
             elif hasattr(chunk.delta, "partial_json"):
+                if active_tool_index is None or chunk.index != active_tool_index:
+                    raise ValueError(
+                        f"Anthropic tool JSON delta at block index {chunk.index} "
+                        "does not belong to an active tool call."
+                    )
                 output["loop"] += chunk.delta.partial_json
         elif chunk.type == "message_delta":
             if hasattr(chunk, "usage"):
@@ -294,12 +317,19 @@ def loop_gen(
     model: str,
     temp: float = 0.0,
     use_thinking: bool = False,
-    effort: str | None = "low",
+    effort: str | None = None,
     api_key: str | None = None,
     system_prompt: str | None = None,
     request_timeout: float | None = None,
 ) -> tuple[objects.Loop, list[ProviderMessage], float | None]:
     """Generate a MIDI loop using the specified Anthropic model and prompt."""
+    if Anthropic is None:
+        raise ImportError("Install conductor-core[anthropic] to use Anthropic models.")
+    model_config = utils.get_model_info()["models"]["Anthropic"][model]
+    effort = _resolve_discrete_effort(
+        model, model_config.get("effort_options") or [], use_thinking, effort
+    )
+
     client = initialize_anthropic_client(
         api_key=api_key,
         **({"timeout": request_timeout} if request_timeout is not None else {}),
@@ -313,15 +343,17 @@ def loop_gen(
         }
     ]
 
-    model_info = utils.get_model_info()
-    model_config = model_info["models"]["Anthropic"][model]
     api_params: _AnthropicRequest = {
         "model": model,
         "max_tokens": model_config["max_tokens"],
         "system": [build_system_prompt_block(loop_prompt)],
         "messages": [{"role": "user", "content": prompt}],
         "tools": tools,
-        "tool_choice": {"type": "tool", "name": "build_MIDI_loop"},
+        "tool_choice": {
+            "type": "tool",
+            "name": "build_MIDI_loop",
+            "disable_parallel_tool_use": True,
+        },
         "stream": True,
     }
     _apply_thinking_params(api_params, model_config, temp, use_thinking, effort)
@@ -339,7 +371,7 @@ def loop_gen(
         _raise_anthropic_error(exc, "request")
 
     try:
-        output = process_streaming_response(completion)
+        output = process_streaming_response(completion, "build_MIDI_loop")
     except (
         AuthenticationError,
         RateLimitError,
@@ -349,6 +381,8 @@ def loop_gen(
     ) as exc:
         logger.error("Anthropic stream failed: %s", exc)
         _raise_anthropic_error(exc, "stream")
+    finally:
+        completion.close()
     if not output["loop"]:
         raise ValueError(
             f"Model {model} did not call the build_MIDI_loop tool. "
@@ -372,7 +406,7 @@ def variations_gen(
     model: str,
     temp: float = 0.0,
     use_thinking: bool = False,
-    effort: str | None = "low",
+    effort: str | None = None,
     api_key: str | None = None,
     system_prompt: str | None = None,
     request_timeout: float | None = None,
@@ -380,12 +414,18 @@ def variations_gen(
     VariationCollection, list[ProviderMessage], float | None, VariationUsage | None
 ]:
     """Generate an ordered collection of loops in one Anthropic response."""
+    if Anthropic is None:
+        raise ImportError("Install conductor-core[anthropic] to use Anthropic models.")
+    model_config = utils.get_model_info()["models"]["Anthropic"][model]
+    effort = _resolve_discrete_effort(
+        model, model_config.get("effort_options") or [], use_thinking, effort
+    )
+
     client = initialize_anthropic_client(
         api_key=api_key,
         **({"timeout": request_timeout} if request_timeout is not None else {}),
     )
     loop_prompt = system_prompt or utils.get_variation_prompt()
-    model_config = utils.get_model_info()["models"]["Anthropic"][model]
     api_params: _AnthropicRequest = {
         "model": model,
         "max_tokens": model_config["max_tokens"],
@@ -398,7 +438,11 @@ def variations_gen(
                 "input_schema": VariationCollection.model_json_schema(),
             }
         ],
-        "tool_choice": {"type": "tool", "name": "build_MIDI_variations"},
+        "tool_choice": {
+            "type": "tool",
+            "name": "build_MIDI_variations",
+            "disable_parallel_tool_use": True,
+        },
         "stream": True,
     }
     _apply_thinking_params(api_params, model_config, temp, use_thinking, effort)
@@ -413,7 +457,7 @@ def variations_gen(
     ) as exc:
         _raise_anthropic_error(exc, "request")
     try:
-        output = process_streaming_response(completion)
+        output = process_streaming_response(completion, "build_MIDI_variations")
     except (
         AuthenticationError,
         RateLimitError,
@@ -422,6 +466,8 @@ def variations_gen(
         APIError,
     ) as exc:
         _raise_anthropic_error(exc, "stream")
+    finally:
+        completion.close()
     if not output["loop"]:
         raise ValueError(f"Model {model} did not call the build_MIDI_variations tool.")
     collection = VariationCollection.model_validate_json(output["loop"])

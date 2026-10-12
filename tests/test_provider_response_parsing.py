@@ -1,6 +1,7 @@
 import json
 import logging
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -17,17 +18,21 @@ class _RequestCaptured(Exception):
 
 
 @pytest.mark.parametrize("generate_name", ["loop_gen", "variations_gen"])
-@pytest.mark.parametrize("provider", [openai_api, claude_api])
+@pytest.mark.parametrize(
+    ("provider", "initialize", "provider_name"),
+    [
+        (openai_api, "initialize_openai_client", "OpenAI"),
+        (gemini_api, "initialize_gemini_client", "Google"),
+        (claude_api, "initialize_anthropic_client", "Anthropic"),
+    ],
+)
+# 'high' is valid in the SDK vocabulary, but not for this selected model.
+@pytest.mark.parametrize("effort_kwargs", [{}, {"effort": "high"}])
 def test_direct_cloud_adapter_rejects_effort_not_supported_by_model(
-    monkeypatch, provider, generate_name
+    monkeypatch, provider, initialize, provider_name, generate_name, effort_kwargs
 ):
-    provider_name = "OpenAI" if provider is openai_api else "Anthropic"
-    initialize = (
-        "initialize_openai_client"
-        if provider is openai_api
-        else "initialize_anthropic_client"
-    )
-    monkeypatch.setattr(provider, initialize, lambda **kwargs: SimpleNamespace())
+    initialize_client = Mock()
+    monkeypatch.setattr(provider, initialize, initialize_client)
     monkeypatch.setattr(
         music,
         "get_model_info",
@@ -43,11 +48,15 @@ def test_direct_cloud_adapter_rejects_effort_not_supported_by_model(
             }
         },
     )
-    # 'high' is valid in the SDK vocabulary, but not for this selected model.
-    with pytest.raises(ValueError, match=r"Unsupported .* model reasoning effort"):
+    with pytest.raises(ValueError, match="Invalid effort") as error:
         getattr(provider, generate_name)(
-            prompt="melody", model="test-model", use_thinking=True, effort="high"
+            prompt="melody", model="test-model", use_thinking=True, **effort_kwargs
         )
+    assert str(error.value) == (
+        f"Invalid effort {effort_kwargs.get('effort')!r} for test-model. "
+        "Expected one of: low, medium"
+    )
+    initialize_client.assert_not_called()
 
 
 def _loop_payload():
@@ -74,6 +83,18 @@ def _fail_save_messages(*args, **kwargs):
     raise AssertionError("provider adapters should not write message logs")
 
 
+class _AnthropicStream:
+    def __init__(self, events):
+        self.events = events
+        self.closed = False
+
+    def __iter__(self):
+        return iter(self.events)
+
+    def close(self):
+        self.closed = True
+
+
 def _anthropic_completion(payload):
     usage = SimpleNamespace(
         input_tokens=100,
@@ -81,13 +102,164 @@ def _anthropic_completion(payload):
         cache_creation_input_tokens=0,
         cache_read_input_tokens=0,
     )
+    return _AnthropicStream(
+        [
+            SimpleNamespace(type="message_start", message=SimpleNamespace(usage=usage)),
+            SimpleNamespace(
+                type="content_block_start",
+                index=0,
+                content_block=SimpleNamespace(type="tool_use", name="build_MIDI_loop"),
+            ),
+            SimpleNamespace(
+                type="content_block_delta",
+                index=0,
+                delta=SimpleNamespace(partial_json=payload),
+            ),
+            SimpleNamespace(type="content_block_stop", index=0),
+            SimpleNamespace(type="message_stop"),
+        ]
+    )
+
+
+def _anthropic_tool_block(index, name, payload):
+    midpoint = len(payload) // 2
     return [
-        SimpleNamespace(type="message_start", message=SimpleNamespace(usage=usage)),
         SimpleNamespace(
-            type="content_block_delta", delta=SimpleNamespace(partial_json=payload)
+            type="content_block_start",
+            index=index,
+            content_block=SimpleNamespace(type="tool_use", name=name, input={}),
         ),
+        SimpleNamespace(
+            type="content_block_delta",
+            index=index,
+            delta=SimpleNamespace(partial_json=payload[:midpoint]),
+        ),
+        SimpleNamespace(
+            type="content_block_delta",
+            index=index,
+            delta=SimpleNamespace(partial_json=payload[midpoint:]),
+        ),
+        SimpleNamespace(type="content_block_stop", index=index),
+    ]
+
+
+@pytest.mark.parametrize("generation", ["loop_gen", "variations_gen"])
+def test_claude_generation_rejects_multiple_tool_calls(monkeypatch, generation):
+    tool_name = (
+        "build_MIDI_loop" if generation == "loop_gen" else "build_MIDI_variations"
+    )
+    payload = _loop_payload()
+    if generation == "variations_gen":
+        payload = {"variations": [payload]}
+    payload_json = json.dumps(payload)
+    completion = _AnthropicStream(
+        [
+            *_anthropic_tool_block(1, tool_name, payload_json),
+            *_anthropic_tool_block(3, tool_name, payload_json),
+        ]
+    )
+    client = SimpleNamespace(
+        messages=SimpleNamespace(create=lambda **kwargs: completion)
+    )
+    monkeypatch.setattr(
+        claude_api, "initialize_anthropic_client", lambda **kwargs: client
+    )
+
+    with pytest.raises(ValueError, match="multiple tool calls") as raised:
+        getattr(claude_api, generation)("write music", "claude-sonnet-4-5")
+
+    assert f"{tool_name} (block index 1)" in str(raised.value)
+    assert f"{tool_name} (block index 3)" in str(raised.value)
+    assert completion.closed
+
+
+@pytest.mark.parametrize("generation", ["loop_gen", "variations_gen"])
+def test_claude_generation_closes_stream_after_message_stop(monkeypatch, generation):
+    tool_name = (
+        "build_MIDI_loop" if generation == "loop_gen" else "build_MIDI_variations"
+    )
+    payload = _loop_payload()
+    if generation == "variations_gen":
+        payload = {"variations": [payload]}
+    completion = _AnthropicStream(
+        [
+            *_anthropic_tool_block(0, tool_name, json.dumps(payload)),
+            SimpleNamespace(type="message_stop"),
+        ]
+    )
+    client = SimpleNamespace(
+        messages=SimpleNamespace(create=lambda **kwargs: completion)
+    )
+    monkeypatch.setattr(
+        claude_api, "initialize_anthropic_client", lambda **kwargs: client
+    )
+
+    getattr(claude_api, generation)("write music", "claude-sonnet-4-5")
+
+    assert completion.closed
+
+
+def test_claude_streaming_preserves_fragmented_tool_json_and_other_blocks():
+    tool_name = "build_MIDI_loop"
+    payload_json = json.dumps(_loop_payload())
+    completion = [
+        SimpleNamespace(
+            type="content_block_start",
+            index=0,
+            content_block=SimpleNamespace(type="thinking"),
+        ),
+        SimpleNamespace(
+            type="content_block_delta",
+            index=0,
+            delta=SimpleNamespace(thinking="reason"),
+        ),
+        SimpleNamespace(type="content_block_stop", index=0),
+        SimpleNamespace(
+            type="content_block_start",
+            index=1,
+            content_block=SimpleNamespace(type="text"),
+        ),
+        SimpleNamespace(
+            type="content_block_delta", index=1, delta=SimpleNamespace(text="music")
+        ),
+        SimpleNamespace(type="content_block_stop", index=1),
+        *_anthropic_tool_block(2, tool_name, payload_json),
         SimpleNamespace(type="message_stop"),
     ]
+
+    output = claude_api.process_streaming_response(completion, tool_name)
+
+    assert output["loop"] == payload_json
+    assert output["thinking_content"] == "reason"
+    assert output["text"] == "music"
+
+
+def test_claude_streaming_rejects_unexpected_tool_name():
+    completion = _anthropic_tool_block(4, "other_tool", json.dumps(_loop_payload()))
+
+    with pytest.raises(
+        ValueError,
+        match=r"unexpected tool other_tool \(block index 4\); expected build_MIDI_loop",
+    ):
+        claude_api.process_streaming_response(completion, "build_MIDI_loop")
+
+
+@pytest.mark.parametrize("state", ["not_started", "wrong_index", "stopped"])
+def test_claude_streaming_rejects_json_outside_active_tool_block(state):
+    block = _anthropic_tool_block(2, "build_MIDI_loop", "{}")
+    completion = [] if state == "not_started" else [block[0]]
+    if state == "stopped":
+        completion.append(block[-1])
+    completion.append(
+        SimpleNamespace(
+            type="content_block_delta",
+            index=3 if state == "wrong_index" else 2,
+            delta=SimpleNamespace(partial_json="{}"),
+        )
+    )
+
+    with pytest.raises(ValueError, match="does not belong to an active tool call"):
+        claude_api.process_streaming_response(completion, "build_MIDI_loop")
 
 
 def test_openai_extract_reasoning_ignores_missing_summary():
@@ -556,7 +728,10 @@ def test_claude_opus_5_uses_adaptive_thinking_and_effort(monkeypatch):
     assert captured["thinking"] == {"type": "adaptive"}
     assert captured["output_config"] == {"effort": "max"}
     assert "temperature" not in captured
-    assert captured["tool_choice"] == {"type": "auto"}
+    assert captured["tool_choice"] == {
+        "type": "auto",
+        "disable_parallel_tool_use": True,
+    }
 
 
 @pytest.mark.parametrize(
@@ -582,7 +757,10 @@ def test_claude_uses_metadata_driven_always_on_thinking(monkeypatch, model):
     assert "thinking" not in captured
     assert "temperature" not in captured
     assert captured["output_config"] == {"effort": "max"}
-    assert captured["tool_choice"] == {"type": "auto"}
+    assert captured["tool_choice"] == {
+        "type": "auto",
+        "disable_parallel_tool_use": True,
+    }
 
 
 @pytest.mark.parametrize(
@@ -606,7 +784,10 @@ def test_claude_always_on_thinking_off_uses_lowest_effort(monkeypatch, model):
 
     assert captured["output_config"] == {"effort": "low"}
     assert "thinking" not in captured
-    assert captured["tool_choice"] == {"type": "auto"}
+    assert captured["tool_choice"] == {
+        "type": "auto",
+        "disable_parallel_tool_use": True,
+    }
 
 
 def test_claude_sonnet_5_5_thinking_off_uses_between_tools(monkeypatch):
@@ -629,7 +810,10 @@ def test_claude_sonnet_5_5_thinking_off_uses_between_tools(monkeypatch):
 
     assert captured["thinking"] == {"type": "between_tools"}
     assert captured["output_config"] == {"effort": "low"}
-    assert captured["tool_choice"] == {"type": "auto"}
+    assert captured["tool_choice"] == {
+        "type": "auto",
+        "disable_parallel_tool_use": True,
+    }
     assert "extra_body" not in captured
 
 
@@ -669,7 +853,11 @@ def test_claude_thinking_off_disables_adaptive_thinking(
     tool_name = request["tools"][0]["name"]
     assert request["thinking"] == {"type": "disabled"}
     assert "output_config" not in request
-    assert request["tool_choice"] == {"type": "tool", "name": tool_name}
+    assert request["tool_choice"] == {
+        "type": "tool",
+        "name": tool_name,
+        "disable_parallel_tool_use": True,
+    }
     assert "temperature" not in request
     assert request.get("extra_body", {}).get("temperature") == expected_temperature
 
@@ -707,6 +895,7 @@ def test_claude_thinking_off_always_forces_the_output_tool(
     assert request["tool_choice"] == {
         "type": "tool",
         "name": request["tools"][0]["name"],
+        "disable_parallel_tool_use": True,
     }
     assert request.get("thinking", {"type": "disabled"}) == {"type": "disabled"}
 
@@ -840,7 +1029,7 @@ def test_gemini_budget_thinking_uses_metadata_bounds(
     assert captured["config"]["thinking_config"].thinking_budget == expected_budget
 
 
-@pytest.mark.parametrize("use_thinking", [False, True])
+@pytest.mark.parametrize("use_thinking", [False, True, None])
 def test_claude_budget_thinking_respects_toggle(monkeypatch, use_thinking):
     captured = {}
     payload = json.dumps(_loop_payload())
@@ -864,6 +1053,45 @@ def test_claude_budget_thinking_respects_toggle(monkeypatch, use_thinking):
         }
     else:
         assert "thinking" not in captured
+
+
+@pytest.mark.parametrize("generate_name", ["loop_gen", "variations_gen"])
+@pytest.mark.parametrize(
+    ("adapter", "initializer", "model"),
+    [
+        (openai_api, "initialize_openai_client", "gpt-6-astra"),
+        (gemini_api, "initialize_gemini_client", "gemini-3.8-flash"),
+        (claude_api, "initialize_anthropic_client", "claude-sonnet-5-5"),
+    ],
+)
+@pytest.mark.parametrize("use_thinking", [False, None])
+def test_direct_disabled_thinking_ignores_invalid_effort(
+    monkeypatch, generate_name, adapter, initializer, model, use_thinking
+):
+    captured = {}
+
+    def capture_request(**kwargs):
+        captured.update(kwargs)
+        raise _RequestCaptured
+
+    client = SimpleNamespace(
+        responses=SimpleNamespace(parse=capture_request),
+        models=SimpleNamespace(generate_content=capture_request),
+        messages=SimpleNamespace(create=capture_request),
+    )
+    monkeypatch.setattr(adapter, initializer, lambda **kwargs: client)
+
+    with pytest.raises(_RequestCaptured):
+        getattr(adapter, generate_name)(
+            "prompt", model, use_thinking=use_thinking, effort="unsupported"
+        )
+
+    if adapter is openai_api:
+        assert captured["reasoning"]["effort"] == "low"
+    elif adapter is gemini_api:
+        assert captured["config"]["thinking_config"].thinking_level.value == "LOW"
+    else:
+        assert captured["output_config"] == {"effort": "low"}
 
 
 def test_ollama_loop_gen_accepts_missing_thinking(monkeypatch):
@@ -913,52 +1141,6 @@ def test_openai_loop_gen_does_not_write_message_log(monkeypatch):
     assert cost == 0
 
 
-def test_gemini_loop_gen_logs_unsupported_effort(monkeypatch, caplog, capsys):
-    response = SimpleNamespace(
-        candidates=[
-            SimpleNamespace(
-                content=SimpleNamespace(
-                    parts=[
-                        SimpleNamespace(text=json.dumps(_loop_payload()), thought=False)
-                    ]
-                )
-            )
-        ],
-        usage_metadata=SimpleNamespace(
-            cached_content_token_count=0,
-            prompt_token_count=0,
-            candidates_token_count=0,
-            thoughts_token_count=0,
-        ),
-    )
-    fake_client = SimpleNamespace(
-        models=SimpleNamespace(generate_content=lambda **kwargs: response)
-    )
-
-    monkeypatch.setattr(
-        gemini_api, "initialize_gemini_client", lambda api_key: fake_client
-    )
-
-    monkeypatch.setattr(gemini_api.utils, "get_loop_prompt", lambda: "system prompt")
-    monkeypatch.setattr(gemini_api.utils, "save_messages_to_json", _fail_save_messages)
-
-    with caplog.at_level(logging.WARNING, logger=gemini_api.__name__):
-        midi_loop, messages, cost = gemini_api.loop_gen(
-            "write a loop",
-            "gemini-3.1-flash-lite",
-            use_thinking=True,
-            effort="bogus",
-        )
-
-    assert isinstance(midi_loop, objects.Loop)
-    assert messages[-1]["content"] == json.dumps(_loop_payload())
-    assert cost == 0
-    assert capsys.readouterr().out == ""
-    assert (
-        "Effort 'bogus' is not supported by model gemini-3.1-flash-lite" in caplog.text
-    )
-
-
 def test_gemini_loop_gen_omits_unsupported_temperature(monkeypatch):
     captured = {}
     response = SimpleNamespace(
@@ -1004,15 +1186,15 @@ def test_gemini_loop_gen_omits_unsupported_temperature(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ("provider", "initializer"),
+    ("provider", "initializer", "model"),
     [
-        (openai_api, "initialize_openai_client"),
-        (gemini_api, "initialize_gemini_client"),
-        (claude_api, "initialize_anthropic_client"),
+        (openai_api, "initialize_openai_client", "gpt-4o-mini"),
+        (gemini_api, "initialize_gemini_client", "gemini-3.8-flash"),
+        (claude_api, "initialize_anthropic_client", "claude-sonnet-4-5"),
     ],
 )
 def test_provider_loop_gen_propagates_client_initialization_type_errors(
-    monkeypatch, provider, initializer
+    monkeypatch, provider, initializer, model
 ):
     def raise_type_error(*, api_key):
         assert api_key == "injected-key"
@@ -1021,7 +1203,7 @@ def test_provider_loop_gen_propagates_client_initialization_type_errors(
     monkeypatch.setattr(provider, initializer, raise_type_error)
 
     with pytest.raises(TypeError, match="client initialization failed"):
-        provider.loop_gen("write a loop", "test-model", api_key="injected-key")
+        provider.loop_gen("write a loop", model, api_key="injected-key")
 
 
 def test_ollama_loop_gen_rejects_missing_content(monkeypatch):
