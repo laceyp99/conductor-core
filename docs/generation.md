@@ -111,6 +111,8 @@ Offer controls from these capability fields:
 | `thinking_off: "lowest_effort"` | Effort dropdown with no off option | The chosen level, or the lowest when thinking is off |
 | `extended_thinking: false` | None | No `think` value |
 
+#### Discovery status and failures
+
 `get_ollama_status()` returns an `OllamaStatus` record with `.host` and `.models`.
 The models are a tuple of `OllamaModelInspection` records. Each inspection keeps
 its `.name`, `.capabilities`, and `.error` together. Exactly one of capabilities
@@ -146,11 +148,12 @@ before sending a generation request. Successfully inspected models without
 thinking support still report `extended_thinking=False`; a missing selected
 model still raises `ValueError`.
 
-Older SDKs without a raw metadata request method, and successful server
-responses without the optional `thinking` field, retain boolean thinking
-controls when the model advertises thinking support. If a raw metadata request
-is available but fails, Core reports an inspection error rather than guessing
-the accepted reasoning controls.
+#### Thinking metadata
+
+Core reads thinking metadata through the SDK's raw request method. If a
+successful server response omits the optional `thinking` field, Core retains
+boolean thinking controls when the model advertises thinking support. If the
+metadata request fails, Core reports an inspection error.
 
 ## Rate-limit metadata
 

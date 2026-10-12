@@ -339,14 +339,11 @@ def _validate_batch_id(batch_id: str) -> None:
 
 
 def _get_variations_dir(artifact_root: str | Path) -> Path:
-    """Return the canonical sibling directory used for variation manifests."""
+    """Return the variation-history directory owned by this artifact root."""
     artifact_path = Path(_resolve_artifact_root(artifact_root)).resolve()
-    parent = artifact_path.parent
-    candidate = (parent / "variations").resolve()
-    if candidate.parent != parent or candidate.name != "variations":
-        raise ValueError(
-            "variations path must be a direct sibling of the artifact root"
-        )
+    candidate = (artifact_path / "variations").resolve()
+    if candidate.parent != artifact_path or candidate.name != "variations":
+        raise ValueError("variations path must be a direct child of the artifact root")
     return candidate
 
 

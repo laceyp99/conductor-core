@@ -13,6 +13,8 @@ Core stores durable history under one predictable Conductor suite root:
         loop.mp3          # only when audio rendering succeeds
         messages.json     # when provider messages are available
         metadata.json
+      variations/
+        batch_<id>.json  # shared request metadata and generation IDs
 ```
 
 On Windows, the default is `%USERPROFILE%\.conductor\core`. Selection follows

@@ -8,7 +8,7 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
-## [0.9.0] - 2026-10-10
+## [0.10.0] - 2026-10-11
 
 ### Changed
 
@@ -31,7 +31,7 @@ while its public API is still in initial development.
   waiting indefinitely on an unresponsive host; the default `None` preserves
   unbounded network waits.
 
-## [0.8.5] - 2026-10-10
+## [0.9.1] - 2026-10-11
 
 ### Fixed
 
@@ -43,6 +43,16 @@ while its public API is still in initial development.
   `exception` field or broad discovery's per-model `model_errors`. The existing
   `error` field remains a display string. Missing optional thinking metadata
   retains boolean controls; failed metadata requests are reported as errors.
+
+## [0.9.0] - 2026-10-10
+
+### Fixed
+
+- Variation history is now isolated under `<artifact_root>/variations/`, so
+  neighboring artifact stores cannot read, overwrite, or delete one another's
+  batch manifests. Existing manifests in the former sibling `variations/`
+  directory require manual migration to their owning root. There is no legacy
+  fallback or automatic migration; manifest JSON contents are unchanged.
 
 ## [0.8.4] - 2026-10-10
 
