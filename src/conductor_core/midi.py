@@ -39,6 +39,9 @@ def loop_to_midi(midi: MidiFile, loop: objects.Loop) -> list[str]:
 
     This function schedules all note on/off events with absolute timing, sorts them,
     then computes the delta times required by MIDI format before appending them to a new track.
+    Same-pitch overlaps become single-channel retriggers. Simultaneous notes of
+    the same pitch keep the highest velocity, then the longest duration. The
+    input loop is unchanged; returned warnings summarize overlap cleanup.
 
     Args:
         midi (MidiFile): The MidiFile instance to which the track will be added.
@@ -65,8 +68,9 @@ def loop_to_midi(midi: MidiFile, loop: objects.Loop) -> list[str]:
     bar_length = 16 * ticks_per_sixteenth
     final_bar_ticks = 4 * bar_length
 
-    # Initialize a list to hold all note events (on and off).
-    events = []
+    # One retained note per MIDI pitch and absolute start: (end tick, velocity).
+    scheduled_notes: dict[tuple[int, int], tuple[int, int]] = {}
+    consolidated = 0
     # Iterate through each bar and its notes to schedule events.
     for bar_index, bar in enumerate(complete_bars):
         bar_offset = bar_index * bar_length
@@ -136,9 +140,45 @@ def loop_to_midi(midi: MidiFile, loop: objects.Loop) -> list[str]:
                 warnings.append(warning)
                 note_end_tick = final_bar_ticks
 
-            # Append note on and note off events.
-            events.append((note_start_tick, "note_on", note_num, velocity))
-            events.append((note_end_tick, "note_off", note_num, velocity))
+            note_key = (note_num, note_start_tick)
+            previous = scheduled_notes.get(note_key)
+            if previous is not None:
+                consolidated += 1
+                if (velocity, note_end_tick) <= (previous[1], previous[0]):
+                    continue
+            scheduled_notes[note_key] = (note_end_tick, velocity)
+
+    # Sorting by pitch and start makes each note's next retrigger explicit,
+    # including across bars and regardless of the input note order.
+    notes = sorted(scheduled_notes.items())
+    events = []
+    shortened = 0
+    for index, ((note_num, note_start_tick), (note_end_tick, velocity)) in enumerate(
+        notes
+    ):
+        if index + 1 < len(notes):
+            (next_pitch, next_start), _ = notes[index + 1]
+            if next_pitch == note_num and next_start < note_end_tick:
+                note_end_tick = next_start
+                shortened += 1
+        events.append((note_start_tick, "note_on", note_num, velocity))
+        events.append((note_end_tick, "note_off", note_num, velocity))
+
+    if shortened or consolidated:
+        changes = []
+        if shortened:
+            changes.append(
+                f"Shortened {shortened} note{'s' if shortened != 1 else ''} "
+                "for same-pitch retriggers."
+            )
+        if consolidated:
+            changes.append(
+                f"Consolidated {consolidated} simultaneous same-pitch "
+                f"note{'s' if consolidated != 1 else ''}."
+            )
+        warning = " ".join([*changes, "Original Loop unchanged."])
+        logger.warning("[MIDI] %s", warning)
+        warnings.append(warning)
 
     # Sort events by time; for equal timestamps, note_off is processed before note_on.
     events.sort(key=lambda ev: (ev[0], 0 if ev[1] == "note_off" else 1))

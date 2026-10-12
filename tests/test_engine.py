@@ -10,9 +10,83 @@ from conductor_core import (
     GenerationRequest,
     LoopGenerationEngine,
     ProviderCredentials,
+    VariationGenerationRequest,
 )
 from conductor_core import engine as engine_module
-from conductor_core.routing import LoopProviderResult
+from conductor_core.midi import midi_to_loop
+from conductor_core.routing import LoopProviderResult, VariationProviderResult
+
+
+@pytest.mark.parametrize("variations", [False, True])
+def test_retrigger_export_preserves_original_loop_in_message_history(
+    monkeypatch, tmp_path, loop_factory, note_factory, variations
+):
+    loop = loop_factory(
+        bars=[
+            [
+                note_factory(velocity=80, start_beat=1, duration=8),
+                note_factory(velocity=100, start_beat=3, duration=2),
+            ],
+            [],
+            [],
+            [],
+        ]
+    )
+    original = loop.model_dump(mode="json")
+    content = {"variations": [original, original]} if variations else original
+    messages = [{"role": "assistant", "content": json.dumps(content)}]
+    if variations:
+        provider = VariationProviderResult(
+            variations=(loop, loop),
+            provider="OpenAI",
+            messages=messages,
+            usage=None,
+            cost=0.25,
+        )
+        method = "generate_variations"
+    else:
+        provider = LoopProviderResult(
+            loop=loop, messages=messages, cost=0.25, provider="OpenAI"
+        )
+        method = "generate_midi"
+    monkeypatch.setattr(engine_module.routing, method, lambda **kwargs: provider)
+    root = tmp_path / "generations"
+    engine = LoopGenerationEngine(EngineConfig(artifact_root=root))
+    request_values = {
+        "key": "C",
+        "scale": "Major",
+        "description": "repeated keys",
+        "model": "gpt-4o-mini",
+    }
+    if variations:
+        batch = engine.generate_variations(
+            VariationGenerationRequest(**request_values, count=2)
+        )
+        assert batch.status == "complete"
+        history_path = root / "variations" / f"batch_{batch.metadata.batch_id}.json"
+        saved_messages = json.loads(history_path.read_text(encoding="utf-8"))[
+            "messages"
+        ]
+        results = batch.items
+    else:
+        result = engine.generate(GenerationRequest(**request_values))
+        history_path = Path(result.midi_path).with_name("messages.json")
+        saved_messages = json.loads(history_path.read_text(encoding="utf-8"))
+        results = [result]
+
+    assert saved_messages == messages
+    assert json.loads(saved_messages[0]["content"]) == content
+    assert loop.model_dump(mode="json") == original
+    for item in results:
+        assert item.loop.model_dump(mode="json") == original
+        assert len(item.warnings) == 1
+        assert "Shortened 1" in item.warnings[0]
+        path = item.generation.midi_path if variations else item.midi_path
+        imported = midi_to_loop(path)
+        assert [
+            (note.velocity, note.time.start_beat, note.time.duration)
+            for note in imported.Bar_1.notes
+        ] == [(80, 1, 2), (100, 3, 2)]
 
 
 def test_engine_generates_persisted_artifacts_with_mocked_provider(
