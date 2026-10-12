@@ -157,7 +157,9 @@ def test_anthropic_requests_one_collection_tool(monkeypatch):
     ]
     client = SimpleNamespace(
         messages=SimpleNamespace(
-            create=lambda **kwargs: calls.append(kwargs) or completion
+            create=lambda **kwargs: (
+                calls.append(kwargs) or (event for event in completion)
+            )
         )
     )
     monkeypatch.setattr(
@@ -268,7 +270,9 @@ def test_opus_5_5_variations_use_always_on_thinking(monkeypatch, use_thinking, e
     ]
     client = SimpleNamespace(
         messages=SimpleNamespace(
-            create=lambda **kwargs: calls.append(kwargs) or completion
+            create=lambda **kwargs: (
+                calls.append(kwargs) or (event for event in completion)
+            )
         )
     )
     monkeypatch.setattr(

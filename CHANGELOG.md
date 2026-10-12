@@ -16,7 +16,8 @@ while its public API is still in initial development.
   when thinking is enabled. Streaming responses with multiple calls now raise a
   clear `ValueError` naming the tools and block indexes, rather than concatenating
   separate JSON documents. Unexpected tool names and misplaced tool JSON
-  fragments are also rejected.
+  fragments are also rejected. Streams are closed on success and failure,
+  including early rejection.
 
 ## [0.10.0] - 2026-10-11
 

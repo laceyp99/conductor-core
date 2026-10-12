@@ -194,21 +194,28 @@ def test_openai_request_normalizes_rate_limit_error(monkeypatch):
     assert raised.value.__cause__ is original
 
 
-def test_anthropic_stream_normalizes_timeout_error(monkeypatch):
+@pytest.mark.parametrize("generation", ["loop_gen", "variations_gen"])
+def test_anthropic_stream_normalizes_timeout_error(monkeypatch, generation):
     class AnthropicTimeoutError(Exception):
         pass
 
     original = AnthropicTimeoutError("stream timed out")
 
     class FailingStream:
+        closed = False
+
         def __iter__(self):
             return self
 
         def __next__(self):
             raise original
 
+        def close(self):
+            self.closed = True
+
+    completion = FailingStream()
     client = SimpleNamespace(
-        messages=SimpleNamespace(create=lambda **kwargs: FailingStream())
+        messages=SimpleNamespace(create=lambda **kwargs: completion)
     )
     monkeypatch.setattr(anthropic_api, "APITimeoutError", AnthropicTimeoutError)
     monkeypatch.setattr(
@@ -216,11 +223,12 @@ def test_anthropic_stream_normalizes_timeout_error(monkeypatch):
     )
 
     with pytest.raises(ProviderTimeoutError) as raised:
-        anthropic_api.loop_gen("write a loop", "claude-sonnet-4-5")
+        getattr(anthropic_api, generation)("write a loop", "claude-sonnet-4-5")
 
     assert raised.value.provider == "Anthropic"
     assert raised.value.operation == "stream"
     assert raised.value.__cause__ is original
+    assert completion.closed
 
 
 def test_google_request_normalizes_rate_limit_error(monkeypatch):

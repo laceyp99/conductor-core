@@ -382,6 +382,8 @@ def loop_gen(
     ) as exc:
         logger.error("Anthropic stream failed: %s", exc)
         _raise_anthropic_error(exc, "stream")
+    finally:
+        completion.close()
     if not output["loop"]:
         raise ValueError(
             f"Model {model} did not call the build_MIDI_loop tool. "
@@ -459,6 +461,8 @@ def variations_gen(
         APIError,
     ) as exc:
         _raise_anthropic_error(exc, "stream")
+    finally:
+        completion.close()
     if not output["loop"]:
         raise ValueError(f"Model {model} did not call the build_MIDI_variations tool.")
     collection = VariationCollection.model_validate_json(output["loop"])

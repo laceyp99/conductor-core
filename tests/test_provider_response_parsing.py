@@ -74,6 +74,18 @@ def _fail_save_messages(*args, **kwargs):
     raise AssertionError("provider adapters should not write message logs")
 
 
+class _AnthropicStream:
+    def __init__(self, events):
+        self.events = events
+        self.closed = False
+
+    def __iter__(self):
+        return iter(self.events)
+
+    def close(self):
+        self.closed = True
+
+
 def _anthropic_completion(payload):
     usage = SimpleNamespace(
         input_tokens=100,
@@ -81,21 +93,23 @@ def _anthropic_completion(payload):
         cache_creation_input_tokens=0,
         cache_read_input_tokens=0,
     )
-    return [
-        SimpleNamespace(type="message_start", message=SimpleNamespace(usage=usage)),
-        SimpleNamespace(
-            type="content_block_start",
-            index=0,
-            content_block=SimpleNamespace(type="tool_use", name="build_MIDI_loop"),
-        ),
-        SimpleNamespace(
-            type="content_block_delta",
-            index=0,
-            delta=SimpleNamespace(partial_json=payload),
-        ),
-        SimpleNamespace(type="content_block_stop", index=0),
-        SimpleNamespace(type="message_stop"),
-    ]
+    return _AnthropicStream(
+        [
+            SimpleNamespace(type="message_start", message=SimpleNamespace(usage=usage)),
+            SimpleNamespace(
+                type="content_block_start",
+                index=0,
+                content_block=SimpleNamespace(type="tool_use", name="build_MIDI_loop"),
+            ),
+            SimpleNamespace(
+                type="content_block_delta",
+                index=0,
+                delta=SimpleNamespace(partial_json=payload),
+            ),
+            SimpleNamespace(type="content_block_stop", index=0),
+            SimpleNamespace(type="message_stop"),
+        ]
+    )
 
 
 def _anthropic_tool_block(index, name, payload):
@@ -141,6 +155,7 @@ def test_claude_generation_rejects_multiple_tool_calls(
         if interleaved
         else [*first_block, *second_block]
     )
+    completion = _AnthropicStream(completion)
     client = SimpleNamespace(
         messages=SimpleNamespace(create=lambda **kwargs: completion)
     )
@@ -153,6 +168,46 @@ def test_claude_generation_rejects_multiple_tool_calls(
 
     assert f"{tool_name} (block index 1)" in str(raised.value)
     assert f"{second_name} (block index 3)" in str(raised.value)
+    assert completion.closed
+
+
+@pytest.mark.parametrize("generation", ["loop_gen", "variations_gen"])
+@pytest.mark.parametrize("response", ["success", "unexpected_tool", "misplaced_json"])
+def test_claude_generation_closes_stream_on_success_and_parser_errors(
+    monkeypatch, generation, response
+):
+    tool_name = (
+        "build_MIDI_loop" if generation == "loop_gen" else "build_MIDI_variations"
+    )
+    payload = _loop_payload()
+    if generation == "variations_gen":
+        payload = {"variations": [payload]}
+    events = _anthropic_tool_block(
+        0,
+        "other_tool" if response == "unexpected_tool" else tool_name,
+        json.dumps(payload),
+    )
+    if response == "misplaced_json":
+        events = events[1:]
+    completion = _AnthropicStream(events)
+    client = SimpleNamespace(
+        messages=SimpleNamespace(create=lambda **kwargs: completion)
+    )
+    monkeypatch.setattr(
+        claude_api, "initialize_anthropic_client", lambda **kwargs: client
+    )
+
+    if response == "success":
+        getattr(claude_api, generation)("write music", "claude-sonnet-4-5")
+    else:
+        message = (
+            "unexpected tool" if response == "unexpected_tool" else "active tool call"
+        )
+        with pytest.raises(ValueError, match=message) as raised:
+            getattr(claude_api, generation)("write music", "claude-sonnet-4-5")
+        assert raised.value.__traceback__ is not None
+
+    assert completion.closed
 
 
 @pytest.mark.parametrize("tool_name", ["build_MIDI_loop", "build_MIDI_variations"])
