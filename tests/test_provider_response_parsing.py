@@ -28,7 +28,8 @@ def test_direct_cloud_adapter_rejects_effort_not_supported_by_model(
         if provider is openai_api
         else "initialize_anthropic_client"
     )
-    monkeypatch.setattr(provider, initialize, lambda **kwargs: SimpleNamespace())
+    initialize_client = Mock()
+    monkeypatch.setattr(provider, initialize, initialize_client)
     monkeypatch.setattr(
         music,
         "get_model_info",
@@ -45,10 +46,14 @@ def test_direct_cloud_adapter_rejects_effort_not_supported_by_model(
         },
     )
     # 'high' is valid in the SDK vocabulary, but not for this selected model.
-    with pytest.raises(ValueError, match=r"Unsupported .* model reasoning effort"):
+    with pytest.raises(ValueError, match="Invalid effort") as error:
         getattr(provider, generate_name)(
             prompt="melody", model="test-model", use_thinking=True, effort="high"
         )
+    assert str(error.value) == (
+        "Invalid effort 'high' for test-model. Expected one of: low, medium"
+    )
+    initialize_client.assert_not_called()
 
 
 def _loop_payload():
@@ -841,7 +846,7 @@ def test_gemini_budget_thinking_uses_metadata_bounds(
     assert captured["config"]["thinking_config"].thinking_budget == expected_budget
 
 
-@pytest.mark.parametrize("use_thinking", [False, True])
+@pytest.mark.parametrize("use_thinking", [False, True, None])
 def test_claude_budget_thinking_respects_toggle(monkeypatch, use_thinking):
     captured = {}
     payload = json.dumps(_loop_payload())
@@ -865,6 +870,81 @@ def test_claude_budget_thinking_respects_toggle(monkeypatch, use_thinking):
         }
     else:
         assert "thinking" not in captured
+
+
+@pytest.mark.parametrize("generate_name", ["loop_gen", "variations_gen"])
+@pytest.mark.parametrize(
+    ("adapter", "initializer", "model", "always_on"),
+    [
+        (openai_api, "initialize_openai_client", "gpt-6-astra", False),
+        (gemini_api, "initialize_gemini_client", "gemini-3.8-flash", False),
+        (claude_api, "initialize_anthropic_client", "claude-haiku-5-5", False),
+        (claude_api, "initialize_anthropic_client", "claude-sonnet-5-5", True),
+    ],
+)
+@pytest.mark.parametrize(
+    ("use_thinking", "effort_kwargs"),
+    [(True, {"effort": "high"})]
+    + [
+        (use_thinking, effort_kwargs)
+        for use_thinking in [False, None]
+        for effort_kwargs in [
+            {},
+            {"effort": None},
+            {"effort": ""},
+            {"effort": "unsupported"},
+        ]
+    ],
+)
+def test_direct_discrete_thinking_requests_respect_toggle_and_effort(
+    monkeypatch,
+    generate_name,
+    adapter,
+    initializer,
+    model,
+    always_on,
+    use_thinking,
+    effort_kwargs,
+):
+    captured = {}
+
+    def capture_request(**kwargs):
+        captured.update(kwargs)
+        raise _RequestCaptured
+
+    client = SimpleNamespace(
+        responses=SimpleNamespace(parse=capture_request),
+        models=SimpleNamespace(generate_content=capture_request),
+        messages=SimpleNamespace(create=capture_request),
+    )
+    monkeypatch.setattr(adapter, initializer, lambda **kwargs: client)
+
+    with pytest.raises(_RequestCaptured):
+        getattr(adapter, generate_name)(
+            "prompt", model, use_thinking=use_thinking, **effort_kwargs
+        )
+
+    expected_effort = "high" if use_thinking else "low"
+    if adapter is openai_api:
+        assert captured["reasoning"] == {"effort": expected_effort, "summary": "auto"}
+    elif adapter is gemini_api:
+        thinking = captured["config"]["thinking_config"]
+        assert thinking.thinking_level.value == expected_effort.upper()
+        assert thinking.thinking_budget is None
+    elif use_thinking or always_on:
+        assert captured["output_config"] == {"effort": expected_effort}
+        assert captured["tool_choice"] == {"type": "auto"}
+        if not always_on:
+            assert captured["thinking"] == {"type": "adaptive"}
+        elif not use_thinking:
+            assert captured["thinking"] == {"type": "between_tools"}
+    else:
+        assert "output_config" not in captured
+        assert captured["thinking"] == {"type": "disabled"}
+        assert captured["tool_choice"] == {
+            "type": "tool",
+            "name": captured["tools"][0]["name"],
+        }
 
 
 def test_ollama_loop_gen_accepts_missing_thinking(monkeypatch):
@@ -914,21 +994,39 @@ def test_openai_loop_gen_does_not_write_message_log(monkeypatch):
     assert cost == 0
 
 
-@pytest.mark.parametrize("effort", [None, "unsupported"])
-def test_gemini_loop_rejects_invalid_effort_before_client_initialization(
-    monkeypatch, effort
+@pytest.mark.parametrize(
+    ("adapter", "initializer", "provider", "model"),
+    [
+        (openai_api, "initialize_openai_client", "OpenAI", "gpt-6-astra"),
+        (gemini_api, "initialize_gemini_client", "Google", "gemini-3.8-flash"),
+        (claude_api, "initialize_anthropic_client", "Anthropic", "claude-haiku-5-5"),
+        (claude_api, "initialize_anthropic_client", "Anthropic", "claude-sonnet-5-5"),
+    ],
+)
+@pytest.mark.parametrize(
+    "effort_kwargs",
+    [
+        {},
+        {"effort": None},
+        {"effort": ""},
+        {"effort": "unsupported"},
+        {"effort": "minimal"},
+    ],
+    ids=["omitted", "none", "empty", "unsupported", "model-unsupported"],
+)
+def test_provider_loop_rejects_invalid_effort_before_client_initialization(
+    monkeypatch, adapter, initializer, provider, model, effort_kwargs
 ):
     initialize_client = Mock()
-    monkeypatch.setattr(gemini_api, "initialize_gemini_client", initialize_client)
+    monkeypatch.setattr(adapter, initializer, initialize_client)
 
     with pytest.raises(ValueError, match="Invalid effort") as error:
-        gemini_api.loop_gen(
-            "write a loop", "gemini-3.8-flash", use_thinking=True, effort=effort
-        )
+        adapter.loop_gen("write a loop", model, use_thinking=True, **effort_kwargs)
 
+    options = music.get_model_info()["models"][provider][model]["effort_options"]
     assert str(error.value) == (
-        f"Invalid effort {effort!r} for gemini-3.8-flash. "
-        "Expected one of: low, medium, high"
+        f"Invalid effort {effort_kwargs.get('effort')!r} for {model}. "
+        f"Expected one of: {', '.join(options)}"
     )
     initialize_client.assert_not_called()
 

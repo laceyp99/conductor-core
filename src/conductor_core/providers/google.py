@@ -19,6 +19,7 @@ from conductor_core.errors import (
     error_for_status,
 )
 from conductor_core.provider_types import ProviderMessage
+from conductor_core.providers._reasoning import _resolve_discrete_effort
 from conductor_core.providers._variations import VariationCollection
 from conductor_core.variations import VariationUsage
 
@@ -145,14 +146,8 @@ def loop_gen(
     if genai is None:
         raise ImportError("Install conductor-core[google] to use Google models.")
     model_config = utils.get_model_info()["models"]["Google"][model]
-    effort_options = model_config.get("effort_options", [])
-    if effort_options and not use_thinking:
-        effort = effort_options[0]
-    if effort_options and effort not in effort_options:
-        supported_values = ", ".join(effort_options)
-        raise ValueError(
-            f"Invalid effort {effort!r} for {model}. Expected one of: {supported_values}"
-        )
+    effort_options = model_config.get("effort_options") or []
+    effort = _resolve_discrete_effort(model, effort_options, use_thinking, effort)
 
     client = initialize_gemini_client(
         api_key=api_key,
@@ -233,14 +228,8 @@ def variations_gen(
     if genai is None:
         raise ImportError("Install conductor-core[google] to use Google models.")
     model_config = utils.get_model_info()["models"]["Google"][model]
-    effort_options = model_config.get("effort_options", [])
-    if effort_options and not use_thinking:
-        effort = effort_options[0]
-    if effort_options and effort not in effort_options:
-        supported_values = ", ".join(effort_options)
-        raise ValueError(
-            f"Invalid effort {effort!r} for {model}. Expected one of: {supported_values}"
-        )
+    effort_options = model_config.get("effort_options") or []
+    effort = _resolve_discrete_effort(model, effort_options, use_thinking, effort)
 
     client = initialize_gemini_client(
         api_key=api_key,

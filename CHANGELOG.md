@@ -12,11 +12,13 @@ while its public API is still in initial development.
 
 ### Fixed
 
-- Direct Gemini variation calls now reject omitted or unsupported reasoning
-  effort with `ValueError` when thinking is enabled for a discrete-effort model,
-  instead of failing with a missing thinking-budget key. Direct single-loop
-  calls also raise `ValueError` rather than warning and using provider defaults.
-  Both adapters validate effort before initializing the provider client.
+- Direct Google, OpenAI, and Anthropic single-loop and variation calls now
+  require a supported reasoning effort when thinking is enabled for a
+  discrete-effort model. Omitted, empty, or unsupported values raise an
+  informative `ValueError` before client initialization. This fixes Gemini's
+  missing-budget-key variation error and replaces Google/OpenAI provider-default
+  fallbacks and Anthropic's implicit `"low"` effort with explicit validation.
+  Disabled thinking controls and budget-based models retain their behavior.
 
 ## [0.10.0] - 2026-10-11
 

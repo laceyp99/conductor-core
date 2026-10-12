@@ -137,7 +137,8 @@ def test_openai_requests_one_typed_collection(monkeypatch):
     assert usage is None
 
 
-def test_anthropic_requests_one_collection_tool(monkeypatch):
+@pytest.mark.parametrize("use_thinking", [False, True, None])
+def test_anthropic_requests_one_collection_tool(monkeypatch, use_thinking):
     calls = []
     payload = json.dumps({"variations": [_loop_payload()]})
     completion = [
@@ -163,6 +164,8 @@ def test_anthropic_requests_one_collection_tool(monkeypatch):
                 "Anthropic": {
                     "model": {
                         "max_tokens": 1000,
+                        "extended_thinking": True,
+                        "max_thinking_budget": 59000,
                         "cost": {"input": 0, "output": 0},
                     }
                 }
@@ -170,30 +173,55 @@ def test_anthropic_requests_one_collection_tool(monkeypatch):
         },
     )
 
-    collection, _, _, _ = anthropic.variations_gen("brief", "model")
+    collection, _, _, _ = anthropic.variations_gen(
+        "brief", "model", use_thinking=use_thinking
+    )
 
     assert len(calls) == 1
     assert (
         calls[0]["tools"][0]["input_schema"] == VariationCollection.model_json_schema()
     )
     assert len(collection.variations) == 1
+    if use_thinking:
+        assert calls[0]["thinking"] == {"type": "enabled", "budget_tokens": 59000}
+    else:
+        assert "thinking" not in calls[0]
+    assert "output_config" not in calls[0]
 
 
-@pytest.mark.parametrize("effort", [None, "unsupported"])
-def test_google_variations_reject_invalid_effort_before_client_initialization(
-    monkeypatch, effort
+@pytest.mark.parametrize(
+    ("adapter", "initializer", "provider", "model"),
+    [
+        (openai, "initialize_openai_client", "OpenAI", "gpt-6-astra"),
+        (google, "initialize_gemini_client", "Google", "gemini-3.8-flash"),
+        (anthropic, "initialize_anthropic_client", "Anthropic", "claude-haiku-5-5"),
+        (anthropic, "initialize_anthropic_client", "Anthropic", "claude-sonnet-5-5"),
+    ],
+)
+@pytest.mark.parametrize(
+    "effort_kwargs",
+    [
+        {},
+        {"effort": None},
+        {"effort": ""},
+        {"effort": "unsupported"},
+        {"effort": "minimal"},
+    ],
+    ids=["omitted", "none", "empty", "unsupported", "model-unsupported"],
+)
+def test_provider_variations_reject_invalid_effort_before_client_initialization(
+    monkeypatch, adapter, initializer, provider, model, effort_kwargs
 ):
     initialize_client = Mock()
-    monkeypatch.setattr(google, "initialize_gemini_client", initialize_client)
+    monkeypatch.setattr(adapter, initializer, initialize_client)
 
     with pytest.raises(ValueError, match="Invalid effort") as error:
-        google.variations_gen(
-            "brief", "gemini-3.8-flash", use_thinking=True, effort=effort
-        )
+        adapter.variations_gen("brief", model, use_thinking=True, **effort_kwargs)
 
+    options = google.utils.get_model_info()["models"][provider][model]["effort_options"]
     assert str(error.value) == (
-        f"Invalid effort {effort!r} for gemini-3.8-flash. "
-        "Expected one of: low, medium, high"
+        f"Invalid effort {effort_kwargs.get('effort')!r} for {model}. "
+        f"Expected one of: {', '.join(options)}"
     )
     initialize_client.assert_not_called()
 

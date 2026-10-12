@@ -29,6 +29,7 @@ from conductor_core.errors import (
     ProviderTimeoutError,
 )
 from conductor_core.provider_types import ProviderMessage
+from conductor_core.providers._reasoning import _resolve_discrete_effort
 from conductor_core.providers._variations import VariationCollection
 from conductor_core.variations import VariationUsage
 
@@ -294,12 +295,19 @@ def loop_gen(
     model: str,
     temp: float = 0.0,
     use_thinking: bool = False,
-    effort: str | None = "low",
+    effort: str | None = None,
     api_key: str | None = None,
     system_prompt: str | None = None,
     request_timeout: float | None = None,
 ) -> tuple[objects.Loop, list[ProviderMessage], float | None]:
     """Generate a MIDI loop using the specified Anthropic model and prompt."""
+    if Anthropic is None:
+        raise ImportError("Install conductor-core[anthropic] to use Anthropic models.")
+    model_config = utils.get_model_info()["models"]["Anthropic"][model]
+    effort = _resolve_discrete_effort(
+        model, model_config.get("effort_options") or [], use_thinking, effort
+    )
+
     client = initialize_anthropic_client(
         api_key=api_key,
         **({"timeout": request_timeout} if request_timeout is not None else {}),
@@ -313,8 +321,6 @@ def loop_gen(
         }
     ]
 
-    model_info = utils.get_model_info()
-    model_config = model_info["models"]["Anthropic"][model]
     api_params: _AnthropicRequest = {
         "model": model,
         "max_tokens": model_config["max_tokens"],
@@ -372,7 +378,7 @@ def variations_gen(
     model: str,
     temp: float = 0.0,
     use_thinking: bool = False,
-    effort: str | None = "low",
+    effort: str | None = None,
     api_key: str | None = None,
     system_prompt: str | None = None,
     request_timeout: float | None = None,
@@ -380,12 +386,18 @@ def variations_gen(
     VariationCollection, list[ProviderMessage], float | None, VariationUsage | None
 ]:
     """Generate an ordered collection of loops in one Anthropic response."""
+    if Anthropic is None:
+        raise ImportError("Install conductor-core[anthropic] to use Anthropic models.")
+    model_config = utils.get_model_info()["models"]["Anthropic"][model]
+    effort = _resolve_discrete_effort(
+        model, model_config.get("effort_options") or [], use_thinking, effort
+    )
+
     client = initialize_anthropic_client(
         api_key=api_key,
         **({"timeout": request_timeout} if request_timeout is not None else {}),
     )
     loop_prompt = system_prompt or utils.get_variation_prompt()
-    model_config = utils.get_model_info()["models"]["Anthropic"][model]
     api_params: _AnthropicRequest = {
         "model": model,
         "max_tokens": model_config["max_tokens"],
