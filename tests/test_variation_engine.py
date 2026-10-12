@@ -73,7 +73,7 @@ def test_oversized_batch_is_rejected_before_provider_or_storage(
     allocate.assert_not_called()
     save_manifest.assert_not_called()
     assert not root.exists()
-    assert not (tmp_path / "variations").exists()
+    assert not (tmp_path / "generations" / "variations").exists()
     assert [event.status for event in events] == ["started", "failed"]
     assert events[0].batch_id is not None
     assert events[0].batch_id == events[1].batch_id
@@ -202,7 +202,7 @@ def test_generate_variations_persists_ordered_children_and_one_manifest(
     assert all(
         not (directory / "messages.json").exists() for directory in generation_dirs
     )
-    assert len(list((tmp_path / "variations").glob("*.json"))) == 1
+    assert len(list((tmp_path / "generations" / "variations").glob("*.json"))) == 1
 
     record = engine.store.get_variation_history(result.metadata.batch_id).record
     assert record is not None
@@ -269,7 +269,7 @@ def test_wrong_count_returns_failure_without_artifacts_or_manifest(
     assert result.items == ()
     assert [event.status for event in events] == ["started", "failed"]
     assert not (tmp_path / "generations").exists()
-    assert not (tmp_path / "variations").exists()
+    assert not (tmp_path / "generations" / "variations").exists()
 
 
 def test_collection_validation_error_creates_no_artifacts(monkeypatch, tmp_path):
@@ -286,7 +286,7 @@ def test_collection_validation_error_creates_no_artifacts(monkeypatch, tmp_path)
         engine.generate_variations(request(), progress_callback=events.append)
     assert [event.status for event in events] == ["started", "failed"]
     assert not (tmp_path / "generations").exists()
-    assert not (tmp_path / "variations").exists()
+    assert not (tmp_path / "generations" / "variations").exists()
 
 
 def test_late_persistence_failure_preserves_finalized_predecessor(
@@ -317,4 +317,4 @@ def test_late_persistence_failure_preserves_finalized_predecessor(
     generation_dirs = list((tmp_path / "generations").glob("gen_*"))
     assert len(generation_dirs) == 1
     assert (generation_dirs[0] / "metadata.json").exists()
-    assert not (tmp_path / "variations").exists()
+    assert not (tmp_path / "generations" / "variations").exists()

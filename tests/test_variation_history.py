@@ -47,7 +47,7 @@ def test_save_manifest_is_versioned_atomic_and_contains_only_batch_index(
 
     record = store.save_variation_history(_metadata(), [first.id, second.id])
 
-    manifest_path = generation_root.parent / "variations" / "batch_batch-one.json"
+    manifest_path = generation_root / "variations" / "batch_batch-one.json"
     payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert payload["schema_version"] == 1
     assert datetime.fromisoformat(
@@ -100,7 +100,7 @@ def test_generation_retention_does_not_mutate_manifest(tmp_path, monkeypatch):
     first = _finalize(store, "one", monkeypatch)
     second = _finalize(store, "two", monkeypatch)
     store.save_variation_history(_metadata(), [first.id, second.id])
-    manifest_path = tmp_path / "variations" / "batch_batch-one.json"
+    manifest_path = tmp_path / "generations" / "variations" / "batch_batch-one.json"
     original = manifest_path.read_bytes()
 
     _finalize(store, "three", monkeypatch)
@@ -119,8 +119,8 @@ def test_manifest_lifecycle_never_deletes_generation_artifacts(tmp_path, monkeyp
     generations = [_finalize(store, value, monkeypatch) for value in ("one", "two")]
     store.save_variation_history(_metadata("older"), [item.id for item in generations])
     store.save_variation_history(_metadata("newer"), [item.id for item in generations])
-    older_path = tmp_path / "variations" / "batch_older.json"
-    newer_path = tmp_path / "variations" / "batch_newer.json"
+    older_path = tmp_path / "generations" / "variations" / "batch_older.json"
+    newer_path = tmp_path / "generations" / "variations" / "batch_newer.json"
     older_payload = json.loads(older_path.read_text(encoding="utf-8"))
     newer_payload = json.loads(newer_path.read_text(encoding="utf-8"))
     older_payload["created_at"] = (
@@ -163,14 +163,14 @@ def test_save_preserves_missing_ids_and_rejects_duplicate_wrong_count_and_unsafe
     with pytest.raises(ValueError, match="path component"):
         store.get_variation_history("../escape")
 
-    assert list((tmp_path / "variations").glob("*.json")) == []
+    assert list((tmp_path / "generations" / "variations").glob("*.json")) == []
 
 
 def test_strict_manifest_loader_skips_unknown_versions_and_extra_fields(
     tmp_path, caplog
 ):
-    variations = tmp_path / "variations"
-    variations.mkdir()
+    variations = tmp_path / "generations" / "variations"
+    variations.mkdir(parents=True)
     base = {
         **_metadata(),
         "schema_version": 2,
@@ -194,7 +194,7 @@ def test_strict_manifest_loader_skips_unknown_versions_and_extra_fields(
     )
 
 
-def test_module_level_variation_helpers_use_default_sibling_directory(
+def test_module_level_variation_helpers_use_default_artifact_root(
     tmp_path, monkeypatch
 ):
     monkeypatch.setenv("CONDUCTOR_CORE_DATA_DIR", str(tmp_path))
@@ -211,6 +211,94 @@ def test_module_level_variation_helpers_use_default_sibling_directory(
     assert storage.clear_variation_history() == 0
 
 
+def test_neighboring_stores_isolate_batches_and_generation_references(
+    tmp_path, monkeypatch
+):
+    first = storage.FilesystemArtifactStore(tmp_path / "a", max_generations=None)
+    second = storage.FilesystemArtifactStore(tmp_path / "b", max_generations=None)
+    first_generations = [
+        _finalize(first, value, monkeypatch) for value in ("one", "two")
+    ]
+    original = first.save_variation_history(_metadata(), ["one", "two"])
+    first_path = tmp_path / "a" / "variations" / "batch_batch-one.json"
+    first_bytes = first_path.read_bytes()
+
+    # An empty neighboring store must neither see nor remove the first batch.
+    assert second.list_variation_history().records == ()
+    assert second.get_variation_history("batch-one").record is None
+    assert second.delete_variation_history("batch-one") is False
+    assert second.clear_variation_history() == 0
+    assert not (tmp_path / "b").exists()
+    assert first.get_variation_history("batch-one").record == original
+
+    second_generations = [
+        _finalize(second, value, monkeypatch) for value in ("one", "two")
+    ]
+    second.save_variation_history(
+        {**_metadata(), "messages": [{"role": "user", "content": "second store"}]},
+        ["one", "two"],
+    )
+    assert first_path.read_bytes() == first_bytes
+    assert first.get_variation_history("batch-one").record.generations == tuple(
+        first_generations
+    )
+    assert second.get_variation_history("batch-one").record.generations == tuple(
+        second_generations
+    )
+    assert first.list_variation_history().records == (original,)
+    assert second.list_variation_history().records[0].manifest.messages != (
+        original.manifest.messages
+    )
+
+    assert second.delete_variation_history("batch-one") is True
+    assert first_path.read_bytes() == first_bytes
+    second.save_variation_history(_metadata(), ["one", "two"])
+    assert second.clear_variation_history() == 1
+    assert first_path.read_bytes() == first_bytes
+    assert first.clear_variation_history() == 1
+    assert first.load_history() == list(reversed(first_generations))
+    assert second.load_history() == list(reversed(second_generations))
+
+
+def test_legacy_sibling_history_is_untouched_until_manually_moved(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("CONDUCTOR_CORE_DATA_DIR", str(tmp_path))
+    store = storage.FilesystemArtifactStore()
+    legacy_dir = tmp_path / "variations"
+    legacy_dir.mkdir()
+    legacy = legacy_dir / "batch_batch-one.json"
+    legacy.write_text(
+        json.dumps(
+            {
+                **_metadata(),
+                "schema_version": 1,
+                "created_at": "2026-09-27T12:00:00+00:00",
+                "generation_ids": ["one", "two"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    before = (legacy.read_bytes(), legacy.stat().st_mtime_ns)
+
+    assert store.list_variation_history().records == ()
+    assert storage.list_variation_history().records == ()
+    assert store.get_variation_history("batch-one").record is None
+    assert store.delete_variation_history("batch-one") is False
+    assert store.clear_variation_history() == 0
+    assert (legacy.read_bytes(), legacy.stat().st_mtime_ns) == before
+    assert not (tmp_path / "generations").exists()
+
+    destination = tmp_path / "generations" / "variations" / legacy.name
+    destination.parent.mkdir(parents=True)
+    legacy.rename(destination)
+    record = store.get_variation_history("batch-one").record
+    assert record is not None
+    assert record.missing_generation_ids == ("one", "two")
+    assert storage.list_variation_history().records == (record,)
+    assert destination.read_bytes() == before[0]
+
+
 def test_lookup_distinguishes_absent_and_malformed_manifests_without_writes(tmp_path):
     store = storage.FilesystemArtifactStore(tmp_path / "generations")
     absent = store.get_variation_history("absent")
@@ -219,11 +307,11 @@ def test_lookup_distinguishes_absent_and_malformed_manifests_without_writes(tmp_
     assert absent.record is None
     assert [item.code for item in absent.diagnostics] == ["manifest_missing"]
     assert empty.records == empty.diagnostics == ()
-    assert not (tmp_path / "variations").exists()
+    assert not (tmp_path / "generations" / "variations").exists()
     assert not (tmp_path / "generations").exists()
 
-    variations = tmp_path / "variations"
-    variations.mkdir()
+    variations = tmp_path / "generations" / "variations"
+    variations.mkdir(parents=True)
     malformed = variations / "batch_bad.json"
     malformed.write_text("{broken", encoding="utf-8")
     before = malformed.read_bytes()
@@ -252,7 +340,7 @@ def test_listing_keeps_valid_neighbors_and_reports_invalid_references(
     metadata_path = tmp_path / "generations" / "gen_invalid" / "metadata.json"
     metadata_path.write_text("{}", encoding="utf-8")
     assert store.delete_generation("missing")
-    bad_path = tmp_path / "variations" / "batch_bad.json"
+    bad_path = tmp_path / "generations" / "variations" / "batch_bad.json"
     bad_path.write_text('{"schema_version": 2}', encoding="utf-8")
     before = {
         path.relative_to(tmp_path): path.read_bytes()
@@ -289,8 +377,8 @@ def test_listing_returns_all_batches_and_diagnostics_in_deterministic_order(
 ):
     monkeypatch.setenv("CONDUCTOR_CORE_DATA_DIR", str(tmp_path))
     store = storage.FilesystemArtifactStore(tmp_path / "generations")
-    variations = tmp_path / "variations"
-    variations.mkdir()
+    variations = tmp_path / "generations" / "variations"
+    variations.mkdir(parents=True)
     manifest = {
         **_metadata(),
         "schema_version": 1,
@@ -325,8 +413,8 @@ def test_listing_returns_all_batches_and_diagnostics_in_deterministic_order(
 
 def test_clear_variation_history_reaches_all_batches(tmp_path):
     store = storage.FilesystemArtifactStore(tmp_path / "generations")
-    variations = tmp_path / "variations"
-    variations.mkdir()
+    variations = tmp_path / "generations" / "variations"
+    variations.mkdir(parents=True)
     manifest = {
         **_metadata(),
         "schema_version": 1,
@@ -345,8 +433,8 @@ def test_clear_variation_history_reaches_all_batches(tmp_path):
 
 def test_listing_orders_extreme_and_timezone_aware_dates(tmp_path):
     store = storage.FilesystemArtifactStore(tmp_path / "generations")
-    variations = tmp_path / "variations"
-    variations.mkdir()
+    variations = tmp_path / "generations" / "variations"
+    variations.mkdir(parents=True)
     manifest = {
         **_metadata(),
         "schema_version": 1,
@@ -374,8 +462,8 @@ def test_listing_orders_extreme_and_timezone_aware_dates(tmp_path):
 
 def test_listing_uses_file_time_for_legacy_naive_manifest(tmp_path):
     store = storage.FilesystemArtifactStore(tmp_path / "generations")
-    variations = tmp_path / "variations"
-    variations.mkdir()
+    variations = tmp_path / "generations" / "variations"
+    variations.mkdir(parents=True)
     manifest = {
         **_metadata(),
         "schema_version": 1,
@@ -413,8 +501,8 @@ def test_listing_uses_file_time_for_legacy_naive_manifest(tmp_path):
 
 def test_listing_returns_all_malformed_and_reference_diagnostics(tmp_path):
     store = storage.FilesystemArtifactStore(tmp_path / "generations")
-    variations = tmp_path / "variations"
-    variations.mkdir()
+    variations = tmp_path / "generations" / "variations"
+    variations.mkdir(parents=True)
     valid = {
         **_metadata("good"),
         "schema_version": 1,
@@ -445,8 +533,8 @@ def test_listing_returns_all_malformed_and_reference_diagnostics(tmp_path):
 
 def test_listing_skips_unreadable_neighbor_and_is_read_only(tmp_path, monkeypatch):
     store = storage.FilesystemArtifactStore(tmp_path / "generations")
-    variations = tmp_path / "variations"
-    variations.mkdir()
+    variations = tmp_path / "generations" / "variations"
+    variations.mkdir(parents=True)
     manifest = {
         **_metadata(),
         "schema_version": 1,
@@ -489,8 +577,8 @@ def test_listing_skips_unreadable_neighbor_and_is_read_only(tmp_path, monkeypatc
 
 def test_listing_refreshes_and_matches_top_level_helper(tmp_path, monkeypatch):
     monkeypatch.setenv("CONDUCTOR_CORE_DATA_DIR", str(tmp_path))
-    variations = tmp_path / "variations"
-    variations.mkdir()
+    variations = tmp_path / "generations" / "variations"
+    variations.mkdir(parents=True)
     manifest = {
         **_metadata("first"),
         "schema_version": 1,
