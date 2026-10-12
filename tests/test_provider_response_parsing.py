@@ -80,6 +80,18 @@ def _fail_save_messages(*args, **kwargs):
     raise AssertionError("provider adapters should not write message logs")
 
 
+class _AnthropicStream:
+    def __init__(self, events):
+        self.events = events
+        self.closed = False
+
+    def __iter__(self):
+        return iter(self.events)
+
+    def close(self):
+        self.closed = True
+
+
 def _anthropic_completion(payload):
     usage = SimpleNamespace(
         input_tokens=100,
@@ -87,13 +99,164 @@ def _anthropic_completion(payload):
         cache_creation_input_tokens=0,
         cache_read_input_tokens=0,
     )
+    return _AnthropicStream(
+        [
+            SimpleNamespace(type="message_start", message=SimpleNamespace(usage=usage)),
+            SimpleNamespace(
+                type="content_block_start",
+                index=0,
+                content_block=SimpleNamespace(type="tool_use", name="build_MIDI_loop"),
+            ),
+            SimpleNamespace(
+                type="content_block_delta",
+                index=0,
+                delta=SimpleNamespace(partial_json=payload),
+            ),
+            SimpleNamespace(type="content_block_stop", index=0),
+            SimpleNamespace(type="message_stop"),
+        ]
+    )
+
+
+def _anthropic_tool_block(index, name, payload):
+    midpoint = len(payload) // 2
     return [
-        SimpleNamespace(type="message_start", message=SimpleNamespace(usage=usage)),
         SimpleNamespace(
-            type="content_block_delta", delta=SimpleNamespace(partial_json=payload)
+            type="content_block_start",
+            index=index,
+            content_block=SimpleNamespace(type="tool_use", name=name, input={}),
         ),
+        SimpleNamespace(
+            type="content_block_delta",
+            index=index,
+            delta=SimpleNamespace(partial_json=payload[:midpoint]),
+        ),
+        SimpleNamespace(
+            type="content_block_delta",
+            index=index,
+            delta=SimpleNamespace(partial_json=payload[midpoint:]),
+        ),
+        SimpleNamespace(type="content_block_stop", index=index),
+    ]
+
+
+@pytest.mark.parametrize("generation", ["loop_gen", "variations_gen"])
+def test_claude_generation_rejects_multiple_tool_calls(monkeypatch, generation):
+    tool_name = (
+        "build_MIDI_loop" if generation == "loop_gen" else "build_MIDI_variations"
+    )
+    payload = _loop_payload()
+    if generation == "variations_gen":
+        payload = {"variations": [payload]}
+    payload_json = json.dumps(payload)
+    completion = _AnthropicStream(
+        [
+            *_anthropic_tool_block(1, tool_name, payload_json),
+            *_anthropic_tool_block(3, tool_name, payload_json),
+        ]
+    )
+    client = SimpleNamespace(
+        messages=SimpleNamespace(create=lambda **kwargs: completion)
+    )
+    monkeypatch.setattr(
+        claude_api, "initialize_anthropic_client", lambda **kwargs: client
+    )
+
+    with pytest.raises(ValueError, match="multiple tool calls") as raised:
+        getattr(claude_api, generation)("write music", "claude-sonnet-4-5")
+
+    assert f"{tool_name} (block index 1)" in str(raised.value)
+    assert f"{tool_name} (block index 3)" in str(raised.value)
+    assert completion.closed
+
+
+@pytest.mark.parametrize("generation", ["loop_gen", "variations_gen"])
+def test_claude_generation_closes_stream_after_message_stop(monkeypatch, generation):
+    tool_name = (
+        "build_MIDI_loop" if generation == "loop_gen" else "build_MIDI_variations"
+    )
+    payload = _loop_payload()
+    if generation == "variations_gen":
+        payload = {"variations": [payload]}
+    completion = _AnthropicStream(
+        [
+            *_anthropic_tool_block(0, tool_name, json.dumps(payload)),
+            SimpleNamespace(type="message_stop"),
+        ]
+    )
+    client = SimpleNamespace(
+        messages=SimpleNamespace(create=lambda **kwargs: completion)
+    )
+    monkeypatch.setattr(
+        claude_api, "initialize_anthropic_client", lambda **kwargs: client
+    )
+
+    getattr(claude_api, generation)("write music", "claude-sonnet-4-5")
+
+    assert completion.closed
+
+
+def test_claude_streaming_preserves_fragmented_tool_json_and_other_blocks():
+    tool_name = "build_MIDI_loop"
+    payload_json = json.dumps(_loop_payload())
+    completion = [
+        SimpleNamespace(
+            type="content_block_start",
+            index=0,
+            content_block=SimpleNamespace(type="thinking"),
+        ),
+        SimpleNamespace(
+            type="content_block_delta",
+            index=0,
+            delta=SimpleNamespace(thinking="reason"),
+        ),
+        SimpleNamespace(type="content_block_stop", index=0),
+        SimpleNamespace(
+            type="content_block_start",
+            index=1,
+            content_block=SimpleNamespace(type="text"),
+        ),
+        SimpleNamespace(
+            type="content_block_delta", index=1, delta=SimpleNamespace(text="music")
+        ),
+        SimpleNamespace(type="content_block_stop", index=1),
+        *_anthropic_tool_block(2, tool_name, payload_json),
         SimpleNamespace(type="message_stop"),
     ]
+
+    output = claude_api.process_streaming_response(completion, tool_name)
+
+    assert output["loop"] == payload_json
+    assert output["thinking_content"] == "reason"
+    assert output["text"] == "music"
+
+
+def test_claude_streaming_rejects_unexpected_tool_name():
+    completion = _anthropic_tool_block(4, "other_tool", json.dumps(_loop_payload()))
+
+    with pytest.raises(
+        ValueError,
+        match=r"unexpected tool other_tool \(block index 4\); expected build_MIDI_loop",
+    ):
+        claude_api.process_streaming_response(completion, "build_MIDI_loop")
+
+
+@pytest.mark.parametrize("state", ["not_started", "wrong_index", "stopped"])
+def test_claude_streaming_rejects_json_outside_active_tool_block(state):
+    block = _anthropic_tool_block(2, "build_MIDI_loop", "{}")
+    completion = [] if state == "not_started" else [block[0]]
+    if state == "stopped":
+        completion.append(block[-1])
+    completion.append(
+        SimpleNamespace(
+            type="content_block_delta",
+            index=3 if state == "wrong_index" else 2,
+            delta=SimpleNamespace(partial_json="{}"),
+        )
+    )
+
+    with pytest.raises(ValueError, match="does not belong to an active tool call"):
+        claude_api.process_streaming_response(completion, "build_MIDI_loop")
 
 
 def test_openai_extract_reasoning_ignores_missing_summary():
@@ -562,7 +725,10 @@ def test_claude_opus_5_uses_adaptive_thinking_and_effort(monkeypatch):
     assert captured["thinking"] == {"type": "adaptive"}
     assert captured["output_config"] == {"effort": "max"}
     assert "temperature" not in captured
-    assert captured["tool_choice"] == {"type": "auto"}
+    assert captured["tool_choice"] == {
+        "type": "auto",
+        "disable_parallel_tool_use": True,
+    }
 
 
 @pytest.mark.parametrize(
@@ -588,7 +754,10 @@ def test_claude_uses_metadata_driven_always_on_thinking(monkeypatch, model):
     assert "thinking" not in captured
     assert "temperature" not in captured
     assert captured["output_config"] == {"effort": "max"}
-    assert captured["tool_choice"] == {"type": "auto"}
+    assert captured["tool_choice"] == {
+        "type": "auto",
+        "disable_parallel_tool_use": True,
+    }
 
 
 @pytest.mark.parametrize(
@@ -612,7 +781,10 @@ def test_claude_always_on_thinking_off_uses_lowest_effort(monkeypatch, model):
 
     assert captured["output_config"] == {"effort": "low"}
     assert "thinking" not in captured
-    assert captured["tool_choice"] == {"type": "auto"}
+    assert captured["tool_choice"] == {
+        "type": "auto",
+        "disable_parallel_tool_use": True,
+    }
 
 
 def test_claude_sonnet_5_5_thinking_off_uses_between_tools(monkeypatch):
@@ -635,7 +807,10 @@ def test_claude_sonnet_5_5_thinking_off_uses_between_tools(monkeypatch):
 
     assert captured["thinking"] == {"type": "between_tools"}
     assert captured["output_config"] == {"effort": "low"}
-    assert captured["tool_choice"] == {"type": "auto"}
+    assert captured["tool_choice"] == {
+        "type": "auto",
+        "disable_parallel_tool_use": True,
+    }
     assert "extra_body" not in captured
 
 
@@ -675,7 +850,11 @@ def test_claude_thinking_off_disables_adaptive_thinking(
     tool_name = request["tools"][0]["name"]
     assert request["thinking"] == {"type": "disabled"}
     assert "output_config" not in request
-    assert request["tool_choice"] == {"type": "tool", "name": tool_name}
+    assert request["tool_choice"] == {
+        "type": "tool",
+        "name": tool_name,
+        "disable_parallel_tool_use": True,
+    }
     assert "temperature" not in request
     assert request.get("extra_body", {}).get("temperature") == expected_temperature
 
@@ -713,6 +892,7 @@ def test_claude_thinking_off_always_forces_the_output_tool(
     assert request["tool_choice"] == {
         "type": "tool",
         "name": request["tools"][0]["name"],
+        "disable_parallel_tool_use": True,
     }
     assert request.get("thinking", {"type": "disabled"}) == {"type": "disabled"}
 
@@ -933,7 +1113,10 @@ def test_direct_discrete_thinking_requests_respect_toggle_and_effort(
         assert thinking.thinking_budget is None
     elif use_thinking or always_on:
         assert captured["output_config"] == {"effort": expected_effort}
-        assert captured["tool_choice"] == {"type": "auto"}
+        assert captured["tool_choice"] == {
+            "type": "auto",
+            "disable_parallel_tool_use": True,
+        }
         if not always_on:
             assert captured["thinking"] == {"type": "adaptive"}
         elif not use_thinking:
@@ -944,6 +1127,7 @@ def test_direct_discrete_thinking_requests_respect_toggle_and_effort(
         assert captured["tool_choice"] == {
             "type": "tool",
             "name": captured["tools"][0]["name"],
+            "disable_parallel_tool_use": True,
         }
 
 

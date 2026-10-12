@@ -143,14 +143,25 @@ def test_anthropic_requests_one_collection_tool(monkeypatch, use_thinking):
     payload = json.dumps({"variations": [_loop_payload()]})
     completion = [
         SimpleNamespace(
+            type="content_block_start",
+            index=0,
+            content_block=SimpleNamespace(
+                type="tool_use", name="build_MIDI_variations"
+            ),
+        ),
+        SimpleNamespace(
             type="content_block_delta",
+            index=0,
             delta=SimpleNamespace(partial_json=payload),
         ),
+        SimpleNamespace(type="content_block_stop", index=0),
         SimpleNamespace(type="message_stop"),
     ]
     client = SimpleNamespace(
         messages=SimpleNamespace(
-            create=lambda **kwargs: calls.append(kwargs) or completion
+            create=lambda **kwargs: (
+                calls.append(kwargs) or (event for event in completion)
+            )
         )
     )
     monkeypatch.setattr(
@@ -353,14 +364,25 @@ def test_opus_5_5_variations_use_always_on_thinking(monkeypatch, use_thinking, e
     payload = json.dumps({"variations": [_loop_payload()]})
     completion = [
         SimpleNamespace(
+            type="content_block_start",
+            index=0,
+            content_block=SimpleNamespace(
+                type="tool_use", name="build_MIDI_variations"
+            ),
+        ),
+        SimpleNamespace(
             type="content_block_delta",
+            index=0,
             delta=SimpleNamespace(partial_json=payload),
         ),
+        SimpleNamespace(type="content_block_stop", index=0),
         SimpleNamespace(type="message_stop"),
     ]
     client = SimpleNamespace(
         messages=SimpleNamespace(
-            create=lambda **kwargs: calls.append(kwargs) or completion
+            create=lambda **kwargs: (
+                calls.append(kwargs) or (event for event in completion)
+            )
         )
     )
     monkeypatch.setattr(
@@ -374,6 +396,9 @@ def test_opus_5_5_variations_use_always_on_thinking(monkeypatch, use_thinking, e
     assert len(collection.variations) == 1
     assert calls[0]["max_tokens"] == 128000
     assert calls[0]["output_config"] == {"effort": effort}
-    assert calls[0]["tool_choice"] == {"type": "auto"}
+    assert calls[0]["tool_choice"] == {
+        "type": "auto",
+        "disable_parallel_tool_use": True,
+    }
     assert "temperature" not in calls[0]
     assert "thinking" not in calls[0]
