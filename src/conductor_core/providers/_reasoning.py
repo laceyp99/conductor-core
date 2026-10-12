@@ -1,4 +1,4 @@
-"""Shared discrete-effort validation for direct hosted-provider calls."""
+"""Shared discrete-effort validation for routed and direct provider calls."""
 
 
 def _resolve_discrete_effort(

@@ -13,6 +13,7 @@ from conductor_core.providers import anthropic as claude_api
 from conductor_core.providers import google as gemini_api
 from conductor_core.providers import ollama as ollama_api
 from conductor_core.providers import openai as openai_api
+from conductor_core.providers._reasoning import _resolve_discrete_effort
 from conductor_core.variations import VariationUsage
 
 logger = logging.getLogger(__name__)
@@ -47,14 +48,9 @@ def _resolve_reasoning_effort(
 ) -> str | None:
     """Validate reasoning options and return the effective provider effort."""
     effort_options = model_config.get("effort_options") or []
-    if effort_options and not use_thinking:
-        return effort_options[0]
-
-    if effort_options and effort not in effort_options:
-        supported_values = ", ".join(effort_options)
-        raise ValueError(
-            f"Invalid effort {effort!r} for {model_choice}. Expected one of: {supported_values}"
-        )
+    effort = _resolve_discrete_effort(
+        model_choice, effort_options, use_thinking, effort
+    )
     if not effort_options and effort not in (None, "low"):
         logger.warning(
             "Effort %r was requested for %s, but this model does not support "
