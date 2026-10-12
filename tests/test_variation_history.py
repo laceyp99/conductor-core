@@ -69,6 +69,30 @@ def test_save_manifest_is_versioned_atomic_and_contains_only_batch_index(
     assert record.invalid_generation_ids == ()
 
 
+def test_variation_history_returns_legacy_generation_in_utc_without_rewriting(
+    tmp_path, monkeypatch
+):
+    root = tmp_path / "generations"
+    store = storage.FilesystemArtifactStore(root, max_generations=None)
+    first = _finalize(store, "one", monkeypatch)
+    second = _finalize(store, "two", monkeypatch)
+    legacy_time = datetime(2026, 1, 1, 12)
+    metadata_path = root / "gen_one" / "metadata.json"
+    payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+    payload["timestamp"] = legacy_time.isoformat()
+    metadata_path.write_text(json.dumps(payload), encoding="utf-8")
+    original_bytes = metadata_path.read_bytes()
+
+    saved = store.save_variation_history(_metadata(), [first.id, second.id])
+    looked_up = store.get_variation_history("batch-one").record
+    listed = store.list_variation_history().records[0]
+
+    assert looked_up == listed == saved
+    assert saved.generations[0].timestamp == legacy_time.astimezone(timezone.utc)
+    assert all(item.timestamp.utcoffset() == timedelta(0) for item in saved.generations)
+    assert metadata_path.read_bytes() == original_bytes
+
+
 def test_loading_preserves_order_and_explicitly_reports_deleted_generations(
     tmp_path, monkeypatch
 ):

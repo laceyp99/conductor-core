@@ -145,7 +145,7 @@ class GenerationMetadata(BaseModel):
 
     Attributes:
         id: Unique identifier (timestamp-based).
-        timestamp: When the generation was created.
+        timestamp: UTC finalization time; timezone-free stored values use local time.
         prompt: User's description/prompt.
         key: Musical key (C, D, etc.).
         scale: Major or minor.
@@ -284,12 +284,12 @@ def _ensure_generations_dir(artifact_root: str | Path | None = None) -> None:
 
 
 def _generate_id() -> str:
-    """Generate a unique ID for a generation based on timestamp.
+    """Generate a unique ID for a generation based on UTC time.
 
     Returns:
         str: A unique identifier string.
     """
-    return datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    return datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
 
 
 def _get_generation_dir(gen_id: str, artifact_root: str | Path | None = None) -> str:
@@ -777,6 +777,9 @@ def _load_generation_metadata(
     with open(metadata_path, encoding="utf-8") as metadata_file:
         metadata = GenerationMetadata(**json.load(metadata_file))
 
+    # Legacy timezone-free timestamps represent local time; normalize in memory.
+    metadata.timestamp = metadata.timestamp.astimezone(timezone.utc)
+
     if metadata.id != gen_id:
         raise ValueError(
             f"metadata generation ID {metadata.id!r} does not match directory ID {gen_id!r}"
@@ -948,7 +951,7 @@ def _finalize_generation(
 
     metadata = GenerationMetadata(
         id=workspace.id,
-        timestamp=datetime.now(),
+        timestamp=datetime.now(timezone.utc),
         prompt=prompt,
         key=key,
         scale=scale,
