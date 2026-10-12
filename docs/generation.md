@@ -72,6 +72,12 @@ using thinking budgets retain their provider-specific limits. Because `effort`
 defaults to `None`, callers enabling thinking for a model with discrete options
 must select a supported value.
 
+Direct Google adapter calls (`loop_gen` and `variations_gen`) follow the same
+rule. When thinking is enabled for a model with discrete options, an omitted
+or unsupported effort raises `ValueError` before client initialization or any
+provider request. The error names the model, rejected value, and supported
+options so callers can correct their reasoning controls.
+
 Models with `temperature_supported: false` reject a caller-selected
 temperature, so Core never sends one and ignores the requested `temperature`.
 Many reasoning models behave this way.

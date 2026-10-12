@@ -1,5 +1,6 @@
 import json
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 from pydantic import ValidationError
@@ -178,7 +179,71 @@ def test_anthropic_requests_one_collection_tool(monkeypatch):
     assert len(collection.variations) == 1
 
 
-def test_google_requests_one_collection_schema(monkeypatch):
+@pytest.mark.parametrize("effort", [None, "unsupported"])
+def test_google_variations_reject_invalid_effort_before_client_initialization(
+    monkeypatch, effort
+):
+    initialize_client = Mock()
+    monkeypatch.setattr(google, "initialize_gemini_client", initialize_client)
+
+    with pytest.raises(ValueError, match="Invalid effort") as error:
+        google.variations_gen(
+            "brief", "gemini-3.8-flash", use_thinking=True, effort=effort
+        )
+
+    assert str(error.value) == (
+        f"Invalid effort {effort!r} for gemini-3.8-flash. "
+        "Expected one of: low, medium, high"
+    )
+    initialize_client.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("model_config", "use_thinking", "effort", "expected_level", "expected_budget"),
+    [
+        ({"extended_thinking": False}, None, None, None, None),
+        *[
+            (
+                {
+                    "extended_thinking": True,
+                    "effort_options": ["low", "medium", "high"],
+                },
+                use_thinking,
+                effort,
+                expected_level,
+                None,
+            )
+            for use_thinking, effort, expected_level in [
+                (True, "high", "HIGH"),
+                (True, "medium", "MEDIUM"),
+                (False, "high", "LOW"),
+                (False, None, "LOW"),
+                (False, "unsupported", "LOW"),
+                (None, "high", "LOW"),
+                (None, None, "LOW"),
+                (None, "unsupported", "LOW"),
+            ]
+        ],
+        *[
+            (
+                {
+                    "extended_thinking": True,
+                    "min_thinking_budget": minimum,
+                    "max_thinking_budget": maximum,
+                },
+                use_thinking,
+                None,
+                None,
+                maximum if use_thinking else minimum,
+            )
+            for minimum, maximum in [(128, 32768), (0, -1)]
+            for use_thinking in [True, False, None]
+        ],
+    ],
+)
+def test_google_requests_one_collection_schema(
+    monkeypatch, model_config, use_thinking, effort, expected_level, expected_budget
+):
     calls = []
     content = json.dumps({"variations": [_loop_payload()]})
     response = SimpleNamespace(
@@ -200,10 +265,15 @@ def test_google_requests_one_collection_schema(monkeypatch):
     monkeypatch.setattr(
         google.utils,
         "get_model_info",
-        lambda: {"models": {"Google": {"model": {"extended_thinking": False}}}},
+        lambda: {"models": {"Google": {"model": model_config}}},
     )
 
-    collection, _, cost, usage = google.variations_gen("brief", "model")
+    collection, _, cost, usage = google.variations_gen(
+        "brief",
+        "model",
+        use_thinking=use_thinking,
+        **({"effort": effort} if effort is not None else {}),
+    )
 
     assert len(calls) == 1
     assert (
@@ -211,6 +281,18 @@ def test_google_requests_one_collection_schema(monkeypatch):
         == VariationCollection.model_json_schema()
     )
     assert len(collection.variations) == 1
+    assert collection.variations[0] == Loop.model_validate(_loop_payload())
+    thinking = calls[0]["config"].get("thinking_config")
+    if expected_level is not None:
+        assert thinking.thinking_level.value == expected_level
+        assert thinking.thinking_budget is None
+        assert thinking.include_thoughts is True
+    elif expected_budget is not None:
+        assert thinking.thinking_budget == expected_budget
+        assert thinking.thinking_level is None
+        assert thinking.include_thoughts is True
+    else:
+        assert thinking is None
     assert cost is None
     assert usage is None
 

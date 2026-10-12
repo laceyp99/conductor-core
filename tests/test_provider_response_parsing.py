@@ -1,6 +1,7 @@
 import json
 import logging
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -913,50 +914,23 @@ def test_openai_loop_gen_does_not_write_message_log(monkeypatch):
     assert cost == 0
 
 
-def test_gemini_loop_gen_logs_unsupported_effort(monkeypatch, caplog, capsys):
-    response = SimpleNamespace(
-        candidates=[
-            SimpleNamespace(
-                content=SimpleNamespace(
-                    parts=[
-                        SimpleNamespace(text=json.dumps(_loop_payload()), thought=False)
-                    ]
-                )
-            )
-        ],
-        usage_metadata=SimpleNamespace(
-            cached_content_token_count=0,
-            prompt_token_count=0,
-            candidates_token_count=0,
-            thoughts_token_count=0,
-        ),
-    )
-    fake_client = SimpleNamespace(
-        models=SimpleNamespace(generate_content=lambda **kwargs: response)
-    )
+@pytest.mark.parametrize("effort", [None, "unsupported"])
+def test_gemini_loop_rejects_invalid_effort_before_client_initialization(
+    monkeypatch, effort
+):
+    initialize_client = Mock()
+    monkeypatch.setattr(gemini_api, "initialize_gemini_client", initialize_client)
 
-    monkeypatch.setattr(
-        gemini_api, "initialize_gemini_client", lambda api_key: fake_client
-    )
-
-    monkeypatch.setattr(gemini_api.utils, "get_loop_prompt", lambda: "system prompt")
-    monkeypatch.setattr(gemini_api.utils, "save_messages_to_json", _fail_save_messages)
-
-    with caplog.at_level(logging.WARNING, logger=gemini_api.__name__):
-        midi_loop, messages, cost = gemini_api.loop_gen(
-            "write a loop",
-            "gemini-3.1-flash-lite",
-            use_thinking=True,
-            effort="bogus",
+    with pytest.raises(ValueError, match="Invalid effort") as error:
+        gemini_api.loop_gen(
+            "write a loop", "gemini-3.8-flash", use_thinking=True, effort=effort
         )
 
-    assert isinstance(midi_loop, objects.Loop)
-    assert messages[-1]["content"] == json.dumps(_loop_payload())
-    assert cost == 0
-    assert capsys.readouterr().out == ""
-    assert (
-        "Effort 'bogus' is not supported by model gemini-3.1-flash-lite" in caplog.text
+    assert str(error.value) == (
+        f"Invalid effort {effort!r} for gemini-3.8-flash. "
+        "Expected one of: low, medium, high"
     )
+    initialize_client.assert_not_called()
 
 
 def test_gemini_loop_gen_omits_unsupported_temperature(monkeypatch):
@@ -1004,15 +978,15 @@ def test_gemini_loop_gen_omits_unsupported_temperature(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ("provider", "initializer"),
+    ("provider", "initializer", "model"),
     [
-        (openai_api, "initialize_openai_client"),
-        (gemini_api, "initialize_gemini_client"),
-        (claude_api, "initialize_anthropic_client"),
+        (openai_api, "initialize_openai_client", "gpt-4o-mini"),
+        (gemini_api, "initialize_gemini_client", "gemini-3.8-flash"),
+        (claude_api, "initialize_anthropic_client", "claude-sonnet-4-5"),
     ],
 )
 def test_provider_loop_gen_propagates_client_initialization_type_errors(
-    monkeypatch, provider, initializer
+    monkeypatch, provider, initializer, model
 ):
     def raise_type_error(*, api_key):
         assert api_key == "injected-key"
@@ -1021,7 +995,7 @@ def test_provider_loop_gen_propagates_client_initialization_type_errors(
     monkeypatch.setattr(provider, initializer, raise_type_error)
 
     with pytest.raises(TypeError, match="client initialization failed"):
-        provider.loop_gen("write a loop", "test-model", api_key="injected-key")
+        provider.loop_gen("write a loop", model, api_key="injected-key")
 
 
 def test_ollama_loop_gen_rejects_missing_content(monkeypatch):

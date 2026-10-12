@@ -142,6 +142,18 @@ def loop_gen(
     request_timeout: float | None = None,
 ) -> tuple[objects.Loop, list[ProviderMessage], float]:
     """Generate a MIDI loop using the specified Gemini model and prompt."""
+    if genai is None:
+        raise ImportError("Install conductor-core[google] to use Google models.")
+    model_config = utils.get_model_info()["models"]["Google"][model]
+    effort_options = model_config.get("effort_options", [])
+    if effort_options and not use_thinking:
+        effort = effort_options[0]
+    if effort_options and effort not in effort_options:
+        supported_values = ", ".join(effort_options)
+        raise ValueError(
+            f"Invalid effort {effort!r} for {model}. Expected one of: {supported_values}"
+        )
+
     client = initialize_gemini_client(
         api_key=api_key,
         **({"timeout": request_timeout} if request_timeout is not None else {}),
@@ -151,8 +163,6 @@ def loop_gen(
     assert httpx is not None
     loop_prompt = system_prompt or utils.get_loop_prompt()
 
-    model_info = utils.get_model_info()
-    model_config = model_info["models"]["Google"][model]
     config: GenerateContentConfigDict = {
         "system_instruction": loop_prompt,
         "response_mime_type": "application/json",
@@ -161,23 +171,12 @@ def loop_gen(
     if model_config.get("temperature_supported", True):
         config["temperature"] = temp
     model_with_thinking = model_config["extended_thinking"]
-    effort_options = model_config.get("effort_options", [])
-    if effort_options and not use_thinking:
-        effort = effort_options[0]
-
     if effort_options:
-        if effort in effort_options:
-            # The SDK accepts model instances at runtime, though its dict type omits them.
-            config["thinking_config"] = cast(
-                "ThinkingConfigDict",
-                types.ThinkingConfig(thinking_level=effort, include_thoughts=True),
-            )
-        else:
-            logger.warning(
-                "Effort %r is not supported by model %s; using default thinking configuration.",
-                effort,
-                model,
-            )
+        # The SDK accepts model instances at runtime, though its dict type omits them.
+        config["thinking_config"] = cast(
+            "ThinkingConfigDict",
+            types.ThinkingConfig(thinking_level=effort, include_thoughts=True),
+        )
     elif model_with_thinking and use_thinking:
         config["thinking_config"] = cast(
             "ThinkingConfigDict",
@@ -231,6 +230,18 @@ def variations_gen(
     VariationCollection, list[ProviderMessage], float | None, VariationUsage | None
 ]:
     """Generate an ordered collection of loops in one Gemini response."""
+    if genai is None:
+        raise ImportError("Install conductor-core[google] to use Google models.")
+    model_config = utils.get_model_info()["models"]["Google"][model]
+    effort_options = model_config.get("effort_options", [])
+    if effort_options and not use_thinking:
+        effort = effort_options[0]
+    if effort_options and effort not in effort_options:
+        supported_values = ", ".join(effort_options)
+        raise ValueError(
+            f"Invalid effort {effort!r} for {model}. Expected one of: {supported_values}"
+        )
+
     client = initialize_gemini_client(
         api_key=api_key,
         **({"timeout": request_timeout} if request_timeout is not None else {}),
@@ -239,7 +250,6 @@ def variations_gen(
     assert genai_errors is not None
     assert httpx is not None
     loop_prompt = system_prompt or utils.get_variation_prompt()
-    model_config = utils.get_model_info()["models"]["Google"][model]
     config: GenerateContentConfigDict = {
         "system_instruction": loop_prompt,
         "response_mime_type": "application/json",
@@ -247,10 +257,7 @@ def variations_gen(
     }
     if model_config.get("temperature_supported", True):
         config["temperature"] = temp
-    effort_options = model_config.get("effort_options", [])
-    if effort_options and not use_thinking:
-        effort = effort_options[0]
-    if effort_options and effort in effort_options:
+    if effort_options:
         config["thinking_config"] = cast(
             "ThinkingConfigDict",
             types.ThinkingConfig(thinking_level=effort, include_thoughts=True),

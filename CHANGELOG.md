@@ -8,6 +8,16 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-10-12
+
+### Fixed
+
+- Direct Gemini variation calls now reject omitted or unsupported reasoning
+  effort with `ValueError` when thinking is enabled for a discrete-effort model,
+  instead of failing with a missing thinking-budget key. Direct single-loop
+  calls also raise `ValueError` rather than warning and using provider defaults.
+  Both adapters validate effort before initializing the provider client.
+
 ## [0.10.0] - 2026-10-11
 
 ### Changed
