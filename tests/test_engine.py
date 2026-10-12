@@ -187,6 +187,49 @@ def test_engine_generates_persisted_artifacts_with_mocked_provider(
     ]
 
 
+def test_engine_retains_current_generation_when_prior_timestamp_is_in_future(
+    monkeypatch, tmp_path, sample_loop
+):
+    monkeypatch.setattr(
+        engine_module.routing,
+        "generate_midi",
+        lambda **kwargs: LoopProviderResult(
+            loop=sample_loop,
+            messages=[{"role": "user", "content": "prompt"}],
+            cost=0.25,
+            provider="OpenAI",
+        ),
+    )
+    engine = LoopGenerationEngine(
+        EngineConfig.from_defaults(
+            artifact_root=tmp_path / "generations", max_generations=1
+        )
+    )
+    request = GenerationRequest(
+        key="C",
+        scale="Major",
+        description="warm rhodes loop",
+        model="gpt-4o-mini",
+        render_audio=False,
+    )
+    prior = engine.generate(request)
+    prior_directory = Path(prior.midi_path).parent
+    prior_metadata_path = prior_directory / "metadata.json"
+    prior_metadata = json.loads(prior_metadata_path.read_text(encoding="utf-8"))
+    prior_metadata["timestamp"] = "2099-01-01T00:00:00"
+    prior_metadata_path.write_text(json.dumps(prior_metadata), encoding="utf-8")
+
+    current = engine.generate(request)
+
+    assert current.generation_id != prior.generation_id
+    assert Path(current.midi_path).is_file()
+    assert current.metadata.messages_path is not None
+    assert Path(current.metadata.messages_path).is_file()
+    assert (Path(current.midi_path).parent / "metadata.json").is_file()
+    assert engine.store.get_generation(current.generation_id) == current.metadata
+    assert not prior_directory.exists()
+
+
 def test_engine_records_resolved_default_soundfont(
     monkeypatch,
     tmp_path,

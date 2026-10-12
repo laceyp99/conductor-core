@@ -268,7 +268,10 @@ def test_finalize_generation_requires_direct_written_midi(
     assert not (isolated_history_dir / "gen_fixed_id" / "metadata.json").exists()
 
 
-def test_finalize_generation_rejects_protection_exceeding_capacity(tmp_path):
+@pytest.mark.parametrize("include_current", [False, True])
+def test_finalize_generation_rejects_protection_exceeding_capacity(
+    tmp_path, include_current
+):
     store = history.FilesystemArtifactStore(tmp_path / "generations", max_generations=1)
     workspace = store.create_generation_workspace()
     Path(workspace.midi_path).write_bytes(b"midi")
@@ -282,11 +285,44 @@ def test_finalize_generation_rejects_protection_exceeding_capacity(tmp_path):
             "model",
             "OpenAI",
             0.0,
-            protected_generation_ids=(workspace.id, "other"),
+            protected_generation_ids=(workspace.id, "other")
+            if include_current
+            else ("other",),
         )
 
     assert not Path(workspace.metadata_path).exists()
     assert Path(workspace.midi_path).is_file()
+
+
+def test_finalize_generation_merges_and_deduplicates_protection(tmp_path):
+    root = tmp_path / "generations"
+    store = history.FilesystemArtifactStore(root, max_generations=3)
+    prior_directories = {
+        gen_id: _write_generation_metadata(
+            root, gen_id=gen_id, timestamp=datetime(year, 1, 1)
+        )
+        for gen_id, year in [("protected", 2000), ("older", 2098), ("newer", 2099)]
+    }
+    workspace = store.create_generation_workspace()
+    Path(workspace.midi_path).write_bytes(b"midi")
+
+    metadata = store.finalize_generation(
+        workspace,
+        "prompt",
+        "C",
+        "major",
+        "model",
+        "OpenAI",
+        0.0,
+        protected_generation_ids=("protected", "protected", workspace.id, workspace.id),
+    )
+
+    assert store.get_generation(workspace.id) == metadata
+    assert Path(workspace.midi_path).is_file()
+    assert Path(workspace.metadata_path).is_file()
+    assert prior_directories["protected"].is_dir()
+    assert prior_directories["newer"].is_dir()
+    assert not prior_directories["older"].exists()
 
 
 def test_finalize_generation_replaces_hard_linked_metadata_without_overwriting_target(

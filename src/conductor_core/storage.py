@@ -912,12 +912,12 @@ def _finalize_generation(
 ) -> GenerationMetadata:
     """Finalize a generation using an explicit artifact root."""
     max_generations = _validate_max_generations(max_generations)
-    if (
-        max_generations is not None
-        and len(set(protected_generation_ids)) > max_generations
-    ):
-        raise ValueError("protected generation count exceeds max_generations")
     workspace = _validate_workspace(artifact_root, workspace)
+    protected_generation_ids = tuple(
+        dict.fromkeys((*protected_generation_ids, workspace.id))
+    )
+    if max_generations is not None and len(protected_generation_ids) > max_generations:
+        raise ValueError("protected generation count exceeds max_generations")
 
     try:
         _validate_artifact_file(workspace.midi_path, required=True)
