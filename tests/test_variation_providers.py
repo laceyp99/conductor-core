@@ -199,6 +199,72 @@ def test_anthropic_requests_one_collection_tool(monkeypatch, use_thinking):
     assert "output_config" not in calls[0]
 
 
+def test_anthropic_variation_usage_includes_cache_tokens(monkeypatch):
+    payload = json.dumps({"variations": [_loop_payload(), _loop_payload()]})
+    start_usage = SimpleNamespace(
+        input_tokens=10,
+        output_tokens=1,
+        cache_read_input_tokens=90,
+        cache_creation_input_tokens=5,
+        cache_creation=SimpleNamespace(
+            ephemeral_5m_input_tokens=0, ephemeral_1h_input_tokens=5
+        ),
+    )
+    completion = [
+        SimpleNamespace(
+            type="message_start", message=SimpleNamespace(usage=start_usage)
+        ),
+        SimpleNamespace(
+            type="content_block_start",
+            index=0,
+            content_block=SimpleNamespace(
+                type="tool_use", name="build_MIDI_variations"
+            ),
+        ),
+        SimpleNamespace(
+            type="content_block_delta",
+            index=0,
+            delta=SimpleNamespace(partial_json=payload),
+        ),
+        SimpleNamespace(type="content_block_stop", index=0),
+        SimpleNamespace(type="message_delta", usage=SimpleNamespace(output_tokens=20)),
+        SimpleNamespace(type="message_stop"),
+    ]
+    client = SimpleNamespace(
+        messages=SimpleNamespace(
+            create=lambda **kwargs: (event for event in completion)
+        )
+    )
+    monkeypatch.setattr(
+        anthropic, "initialize_anthropic_client", lambda **kwargs: client
+    )
+    monkeypatch.setattr(
+        anthropic.utils,
+        "get_model_info",
+        lambda: {
+            "models": {
+                "Anthropic": {
+                    "model": {
+                        "max_tokens": 1000,
+                        "cost": {
+                            "input": 1,
+                            "output": 2,
+                            "1h cache input": 4,
+                            "cache hits/refreshes": 8,
+                        },
+                    }
+                }
+            }
+        },
+    )
+
+    _, _, cost, usage = anthropic.variations_gen("brief", "model")
+
+    assert usage == VariationUsage(input_tokens=105, output_tokens=20, total_tokens=125)
+    # Billing keeps each category at its own rate; the 1h split is not re-added.
+    assert cost == pytest.approx((10 * 1 + 20 * 2 + 5 * 4 + 90 * 8) / 1_000_000)
+
+
 def _fake_gemini_variations(monkeypatch, model_config):
     """Capture Gemini variation requests made against fake model metadata."""
     calls = []

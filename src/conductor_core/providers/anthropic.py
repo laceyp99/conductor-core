@@ -179,6 +179,18 @@ def initialize_anthropic_client(
         _raise_anthropic_error(exc, "client initialization")
 
 
+def _token_counts(output) -> dict[str, int]:
+    """Return non-negative usage counts shared by pricing and reported usage."""
+    keys = (
+        "input_tokens",
+        "output_tokens",
+        "cache_creation",
+        "cache_read",
+        "cache_creation_1h",
+    )
+    return {key: max(0, output.get(key, 0) or 0) for key in keys}
+
+
 def calc_price(model, output) -> float | None:
     """Calculate the cost for a completion based on token usage."""
     model_info = utils.get_model_info()
@@ -194,11 +206,12 @@ def calc_price(model, output) -> float | None:
     cached_1hour = model_cost.get("1h cache input", 0) / 1000000
     cache_hits = model_cost.get("cache hits/refreshes", 0) / 1000000
 
-    input_tokens = max(0, output.get("input_tokens", 0) or 0)
-    output_tokens = max(0, output.get("output_tokens", 0) or 0)
-    cache_creation = max(0, output.get("cache_creation", 0) or 0)
-    cache_read = max(0, output.get("cache_read", 0) or 0)
-    reported_1hour = max(0, output.get("cache_creation_1h", 0) or 0)
+    counts = _token_counts(output)
+    input_tokens = counts["input_tokens"]
+    output_tokens = counts["output_tokens"]
+    cache_creation = counts["cache_creation"]
+    cache_read = counts["cache_read"]
+    reported_1hour = counts["cache_creation_1h"]
 
     # The aggregate cache_creation count is authoritative. Bill the reported 1h
     # portion at the 1h rate and everything else at the 5m rate, so cache writes
@@ -478,8 +491,14 @@ def variations_gen(
     if output["thinking_content"]:
         messages.append({"role": "assistant", "content": output["thinking_content"]})
     messages.append({"role": "assistant", "content": output["loop"]})
-    input_tokens = output.get("input_tokens")
-    output_tokens = output.get("output_tokens")
+    # Normalize to inclusive input like the other providers: uncached input plus
+    # cache reads and aggregate cache writes, from the same counts calc_price
+    # bills. The 5m/1h split is part of cache_creation already.
+    counts = _token_counts(output)
+    input_tokens = (
+        counts["input_tokens"] + counts["cache_read"] + counts["cache_creation"]
+    )
+    output_tokens = counts["output_tokens"]
     usage = (
         VariationUsage(
             input_tokens=input_tokens,
