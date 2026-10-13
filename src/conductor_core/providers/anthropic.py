@@ -411,8 +411,10 @@ def loop_gen(
         messages.append({"role": "assistant", "content": output["thinking_content"]})
     messages.append({"role": "assistant", "content": output["loop"]})
 
-    has_usage = output["input_tokens"] or output["output_tokens"]
-    cost = calc_price(model, output) if has_usage else None
+    # Same presence rule as variations: any billed input, cache, or output tokens.
+    counts = _token_counts(output)
+    billed = ("input_tokens", "cache_read", "cache_creation", "output_tokens")
+    cost = calc_price(model, output) if any(counts[key] for key in billed) else None
     return loop, messages, cost
 
 
