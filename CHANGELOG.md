@@ -8,7 +8,7 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
-## [0.11.1] - 2026-10-12
+## [0.11.2] - 2026-10-13
 
 ### Fixed
 
@@ -16,6 +16,15 @@ while its public API is still in initial development.
   omits usage metadata. The valid loop is saved and the result reports
   `cost=None`, matching variation generation. Anthropic single loops without
   reported usage now also return `cost=None` instead of `0.0`.
+
+## [0.11.1] - 2026-10-13
+
+### Fixed
+
+- Anthropic variation usage now counts cache reads and cache writes in
+  `input_tokens` and `total_tokens`, matching OpenAI and Google. Previously a
+  cached request reported only uncached input, so usage and cost described
+  different token totals. Cost calculation is unchanged.
 
 ## [0.11.0] - 2026-10-12
 
