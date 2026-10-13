@@ -8,7 +8,7 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
-## [0.11.1] - 2026-10-12
+## [0.11.1] - 2026-10-13
 
 ### Fixed
 
