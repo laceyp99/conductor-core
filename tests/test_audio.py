@@ -55,6 +55,29 @@ def test_list_soundfonts_returns_sorted_sf2_files(monkeypatch, tmp_path):
     assert soundfonts == ["Alpha.sf2", "zeta.sf2"]
 
 
+def test_soundfont_discovery_skips_directories_with_sf2_suffix(monkeypatch, tmp_path):
+    monkeypatch.setattr(audio, "SOUNDFONT_DIR", str(tmp_path))
+    (tmp_path / "FM-Piano1-20190916.sf2").mkdir()
+    expected = _write_file(tmp_path / "custom.sf2")
+
+    assert audio.list_soundfonts() == ["custom.sf2"]
+    assert audio.get_default_soundfont() == str(expected)
+    assert audio.resolve_soundfont("FM-Piano1-20190916.sf2") is None
+    assert audio.resolve_soundfont(str(tmp_path / "FM-Piano1-20190916.sf2")) is None
+
+
+def test_is_playback_available_rejects_directory_only_soundfonts(monkeypatch, tmp_path):
+    monkeypatch.setattr(audio, "SOUNDFONT_DIR", str(tmp_path))
+    monkeypatch.setattr(audio, "is_fluidsynth_available", lambda: True)
+    monkeypatch.setattr(audio, "is_ffmpeg_available", lambda: True)
+    (tmp_path / "piano.sf2").mkdir()
+
+    available, error = audio.is_playback_available()
+
+    assert available is False
+    assert error is not None
+
+
 def test_get_default_soundfont_prefers_known_candidates(monkeypatch, tmp_path):
     monkeypatch.setattr(audio, "SOUNDFONT_DIR", str(tmp_path))
     _write_file(tmp_path / "custom.sf2")
