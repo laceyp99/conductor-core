@@ -176,7 +176,7 @@ def loop_gen(
     api_key: str | None = None,
     system_prompt: str | None = None,
     request_timeout: float | None = None,
-) -> tuple[objects.Loop, list[ProviderMessage], float]:
+) -> tuple[objects.Loop, list[ProviderMessage], float | None]:
     """Generate a MIDI loop using the specified OpenAI model and prompt."""
     if OpenAI is None:
         raise ImportError("Install conductor-core[openai] to use OpenAI models.")
@@ -229,7 +229,8 @@ def loop_gen(
         {"role": "assistant", "content": response.output_parsed.model_dump_json()}
     )
 
-    return response.output_parsed, messages, calc_price(model, response)
+    cost = calc_price(model, response) if response.usage is not None else None
+    return response.output_parsed, messages, cost
 
 
 def variations_gen(

@@ -141,7 +141,7 @@ def loop_gen(
     api_key: str | None = None,
     system_prompt: str | None = None,
     request_timeout: float | None = None,
-) -> tuple[objects.Loop, list[ProviderMessage], float]:
+) -> tuple[objects.Loop, list[ProviderMessage], float | None]:
     """Generate a MIDI loop using the specified Gemini model and prompt."""
     if genai is None:
         raise ImportError("Install conductor-core[google] to use Google models.")
@@ -209,7 +209,9 @@ def loop_gen(
     if thinking_content:
         messages.insert(2, {"role": "assistant", "content": thinking_content})
 
-    return midi_loop, messages, calc_cost(model, response.usage_metadata)
+    usage = response.usage_metadata
+    cost = calc_cost(model, usage) if usage is not None else None
+    return midi_loop, messages, cost
 
 
 def variations_gen(

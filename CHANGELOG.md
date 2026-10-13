@@ -8,6 +8,15 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-10-12
+
+### Fixed
+
+- Single-loop generation no longer fails when an OpenAI or Google response
+  omits usage metadata. The valid loop is saved and the result reports
+  `cost=None`, matching variation generation. Anthropic single loops without
+  reported usage now also return `cost=None` instead of `0.0`.
+
 ## [0.11.0] - 2026-10-12
 
 ### Fixed

@@ -398,7 +398,9 @@ def loop_gen(
         messages.append({"role": "assistant", "content": output["thinking_content"]})
     messages.append({"role": "assistant", "content": output["loop"]})
 
-    return loop, messages, calc_price(model, output)
+    has_usage = output["input_tokens"] or output["output_tokens"]
+    cost = calc_price(model, output) if has_usage else None
+    return loop, messages, cost
 
 
 def variations_gen(
