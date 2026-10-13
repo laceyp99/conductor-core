@@ -1257,3 +1257,68 @@ def test_claude_unsupported_thinking_warns_once(monkeypatch, caplog):
     assert len(warnings) == 1
     assert warnings[0].name == "conductor_core.routing"
     assert "thinking" not in calls[0]
+
+
+def test_openai_loop_gen_returns_null_cost_without_usage(monkeypatch):
+    loop = objects.Loop.model_validate(_loop_payload())
+    response = SimpleNamespace(output=[], output_parsed=loop, usage=None)
+    fake_client = SimpleNamespace(
+        responses=SimpleNamespace(parse=lambda **kwargs: response)
+    )
+    monkeypatch.setattr(
+        openai_api, "initialize_openai_client", lambda api_key: fake_client
+    )
+
+    midi_loop, messages, cost = openai_api.loop_gen("write a loop", "gpt-4o-mini")
+
+    assert midi_loop == loop
+    assert objects.Loop.model_validate_json(messages[-1]["content"]) == loop
+    assert cost is None
+
+
+def test_gemini_loop_gen_returns_null_cost_without_usage(monkeypatch):
+    payload = json.dumps(_loop_payload())
+    response = SimpleNamespace(
+        candidates=[
+            SimpleNamespace(
+                content=SimpleNamespace(
+                    parts=[SimpleNamespace(text=payload, thought=False)]
+                )
+            )
+        ],
+        usage_metadata=None,
+    )
+    fake_client = SimpleNamespace(
+        models=SimpleNamespace(generate_content=lambda **kwargs: response)
+    )
+    monkeypatch.setattr(
+        gemini_api, "initialize_gemini_client", lambda api_key: fake_client
+    )
+
+    midi_loop, messages, cost = gemini_api.loop_gen(
+        "write a loop", "gemini-3.7-flash", use_thinking=False, effort="high"
+    )
+
+    assert isinstance(midi_loop, objects.Loop)
+    assert messages[-1] == {"role": "assistant", "content": payload}
+    assert cost is None
+
+
+def test_claude_loop_gen_returns_null_cost_without_usage(monkeypatch):
+    payload = json.dumps(_loop_payload())
+    completion = _anthropic_completion(payload)
+    completion.events = [
+        event for event in completion.events if event.type != "message_start"
+    ]
+    fake_client = SimpleNamespace(
+        messages=SimpleNamespace(create=lambda **kwargs: completion)
+    )
+    monkeypatch.setattr(
+        claude_api, "initialize_anthropic_client", lambda api_key: fake_client
+    )
+
+    midi_loop, messages, cost = claude_api.loop_gen("write a loop", "claude-sonnet-4-5")
+
+    assert isinstance(midi_loop, objects.Loop)
+    assert messages[-1] == {"role": "assistant", "content": payload}
+    assert cost is None
