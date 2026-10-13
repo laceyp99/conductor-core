@@ -119,7 +119,8 @@ def greater_than(left: str, right: str) -> bool:
         if left_numeric and right_numeric:
             return int(left_part) > int(right_part)
         if left_numeric != right_numeric:
-            return left_numeric
+            # SemVer 11.4.3: numeric identifiers sort below nonnumeric ones.
+            return not left_numeric
         return left_part > right_part
     return len(left_pre) > len(right_pre)
 

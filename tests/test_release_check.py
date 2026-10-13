@@ -1,4 +1,5 @@
 import importlib.util
+from itertools import pairwise
 from pathlib import Path
 
 import pytest
@@ -50,3 +51,24 @@ def test_changelog_accepts_visible_entries(release_check, tmp_path, monkeypatch,
     monkeypatch.setattr(release_check, "CHANGELOG_PATH", str(changelog))
 
     release_check.changelog_was_handled("0.8.4")
+
+
+# SemVer 2.0.0 section 11.4 example ordering, lowest to highest.
+SEMVER_ORDER = [
+    "1.0.0-alpha",
+    "1.0.0-alpha.1",
+    "1.0.0-alpha.beta",
+    "1.0.0-beta",
+    "1.0.0-beta.2",
+    "1.0.0-beta.11",
+    "1.0.0-rc.1",
+    "1.0.0",
+]
+
+
+@pytest.mark.parametrize(("lower", "higher"), list(pairwise(SEMVER_ORDER)))
+def test_greater_than_follows_semver_prerelease_precedence(
+    release_check, lower, higher
+):
+    assert release_check.greater_than(higher, lower)
+    assert not release_check.greater_than(lower, higher)
