@@ -57,6 +57,7 @@ def test_list_soundfonts_returns_sorted_sf2_files(monkeypatch, tmp_path):
 
 def test_soundfont_discovery_skips_directories_with_sf2_suffix(monkeypatch, tmp_path):
     monkeypatch.setattr(audio, "SOUNDFONT_DIR", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
     (tmp_path / "FM-Piano1-20190916.sf2").mkdir()
     expected = _write_file(tmp_path / "custom.sf2")
 
