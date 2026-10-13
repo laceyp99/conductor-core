@@ -478,8 +478,13 @@ def variations_gen(
     if output["thinking_content"]:
         messages.append({"role": "assistant", "content": output["thinking_content"]})
     messages.append({"role": "assistant", "content": output["loop"]})
-    input_tokens = output.get("input_tokens")
-    output_tokens = output.get("output_tokens")
+    # Normalize to inclusive input like the other providers: uncached input plus
+    # cache reads and aggregate cache writes. calc_price keeps the categories
+    # separate for billing; the 5m/1h split is part of cache_creation already.
+    input_tokens = (
+        output["input_tokens"] + output["cache_read"] + output["cache_creation"]
+    )
+    output_tokens = output["output_tokens"]
     usage = (
         VariationUsage(
             input_tokens=input_tokens,

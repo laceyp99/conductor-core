@@ -8,6 +8,15 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-10-12
+
+### Fixed
+
+- Anthropic variation usage now counts cache reads and cache writes in
+  `input_tokens` and `total_tokens`, matching OpenAI and Google. Previously a
+  cached request reported only uncached input, so usage and cost described
+  different token totals. Cost calculation is unchanged.
+
 ## [0.11.0] - 2026-10-12
 
 ### Fixed
