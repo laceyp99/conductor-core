@@ -59,6 +59,11 @@ DEFAULT_SOUNDFONT_CANDIDATES = [
 def _midi_duration_ms(midi_path: str) -> int:
     """Return the MIDI endpoint in milliseconds, including tempo changes."""
     midi = MidiFile(midi_path)
+    if midi.type == 2:
+        raise ValueError(
+            "MIDI format 2 is unsupported because its tracks are independent patterns; "
+            "extract a pattern into a format 0 or 1 file first."
+        )
     if midi.ticks_per_beat <= 0:
         raise ValueError(
             "MIDI duration requires a positive PPQ time division; "
@@ -368,6 +373,9 @@ def midi_to_mp3(
             logger.warning(f"Audio playback not available: {error}")
             raise AudioRenderingError(error or "Audio playback is not available")
 
+        # Validate the MIDI timeline before creating files or starting synthesis.
+        target_duration_ms = _midi_duration_ms(midi_path)
+
         # Determine output path
         if output_path is None:
             base_name = os.path.splitext(midi_path)[0]
@@ -409,7 +417,6 @@ def midi_to_mp3(
         # Convert WAV to MP3 using pydub
         logger.info(f"Converting WAV to MP3: {output_path}")
         audio = AudioSegment.from_wav(temp_wav_path)
-        target_duration_ms = _midi_duration_ms(midi_path)
         audio[:target_duration_ms].export(temp_mp3_path, format="mp3", bitrate="192k")
         os.replace(temp_mp3_path, output_path)
 

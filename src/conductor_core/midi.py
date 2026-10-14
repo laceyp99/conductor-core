@@ -219,9 +219,16 @@ def midi_to_loop(midi_filename: str | PathLike[str]) -> objects.Loop:
         midi_filename (str): The path to the MIDI file.
     Returns:
         A canonical ``Loop`` with numeric timing values.
+    Raises:
+        ValueError: If the file uses format 2 independent patterns or unsupported timing.
     """
     # Load the MIDI file and set some basic time parameters.
     midi = MidiFile(midi_filename)
+    if midi.type == 2:
+        raise ValueError(
+            "MIDI format 2 is unsupported because its tracks are independent patterns; "
+            "extract a pattern into a format 0 or 1 file first."
+        )
     ticks_per_beat = midi.ticks_per_beat
     _validate_import_ppq(ticks_per_beat)
     loop_end_tick = objects.BARS_PER_LOOP * 4 * ticks_per_beat

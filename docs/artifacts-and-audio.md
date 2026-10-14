@@ -127,6 +127,11 @@ for an
 offline example that normalizes note starts and durations to sixteenth-note
 integer positions.
 
+MIDI import and audio rendering support formats 0 and 1. Format 2 stores
+independent patterns without a shared timeline, so `midi_to_loop()` rejects it
+with `ValueError` and `midi_to_mp3()` reports `AudioRenderingError`. Extract the
+desired pattern into a format 0 or 1 file before using these utilities.
+
 MIDI export uses channel 0 and treats overlapping notes of the same MIDI pitch
 as retriggers: the earlier note ends when the next note starts, including across
 bar boundaries. Notes that touch without overlapping are unchanged. Simultaneous

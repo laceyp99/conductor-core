@@ -28,8 +28,8 @@ def _write_wav(path: str | Path, frames: bytes = b"\x00\x00") -> None:
         wav_file.writeframes(frames)
 
 
-def _write_midi(path: Path, *, tempo_changes=()) -> Path:
-    midi = MidiFile(ticks_per_beat=480)
+def _write_midi(path: Path, *, tempo_changes=(), midi_type=1) -> Path:
+    midi = MidiFile(type=midi_type, ticks_per_beat=480)
     track = MidiTrack()
     for delta, tempo in tempo_changes:
         track.append(MetaMessage("set_tempo", tempo=tempo, time=delta))
@@ -333,6 +333,7 @@ def test_midi_to_mp3_removes_partial_output_when_export_fails(monkeypatch, tmp_p
     assert not output_path.exists()
 
 
+@pytest.mark.parametrize("midi_type", [0, 1])
 @pytest.mark.parametrize(
     ("tempo_changes", "expected_duration_ms"),
     [
@@ -342,55 +343,64 @@ def test_midi_to_mp3_removes_partial_output_when_export_fails(monkeypatch, tmp_p
     ],
 )
 def test_midi_duration_includes_default_and_tempo_changes(
-    tmp_path, tempo_changes, expected_duration_ms
+    tmp_path, tempo_changes, expected_duration_ms, midi_type
 ):
-    midi_path = _write_midi(tmp_path / "loop.mid", tempo_changes=tempo_changes)
+    midi_path = _write_midi(
+        tmp_path / "loop.mid", tempo_changes=tempo_changes, midi_type=midi_type
+    )
 
     assert audio._midi_duration_ms(str(midi_path)) == expected_duration_ms
 
 
-def test_midi_to_mp3_wraps_corrupt_midi_duration_error(monkeypatch, tmp_path):
-    midi_path = _write_file(tmp_path / "loop.mid", b"not a MIDI file")
-    _write_file(tmp_path / "custom.sf2")
-    output_path = tmp_path / "loop.mp3"
+def test_midi_duration_rejects_format_2(tmp_path):
+    midi_path = _write_midi(tmp_path / "patterns.mid", midi_type=2)
 
-    monkeypatch.setattr(audio, "SOUNDFONT_DIR", str(tmp_path))
+    with pytest.raises(ValueError, match=r"MIDI format 2.*independent patterns"):
+        audio._midi_duration_ms(str(midi_path))
+
+
+def test_midi_to_mp3_rejects_format_2_before_synthesis(monkeypatch, tmp_path):
+    midi_path = _write_midi(tmp_path / "patterns.mid", midi_type=2)
+    output_path = _write_file(tmp_path / "preview.mp3", b"existing preview")
     monkeypatch.setattr(
         audio, "is_playback_available", lambda soundfont_name=None: (True, None)
     )
+
+    def unexpected_render(*args):
+        pytest.fail("Format 2 must be rejected before synthesis")
+
+    monkeypatch.setattr(audio, "_render_midi_to_wav", unexpected_render)
+
+    with pytest.raises(
+        AudioRenderingError, match=r"MIDI format 2.*independent patterns"
+    ) as raised:
+        audio.midi_to_mp3(str(midi_path), output_path=str(output_path))
+
+    assert isinstance(raised.value.__cause__, ValueError)
+    assert output_path.read_bytes() == b"existing preview"
+    assert sorted(path.name for path in tmp_path.iterdir()) == [
+        "patterns.mid",
+        "preview.mp3",
+    ]
+
+
+def test_midi_to_mp3_wraps_corrupt_midi_duration_error(monkeypatch, tmp_path):
+    midi_path = _write_file(tmp_path / "loop.mid", b"not a MIDI file")
+    output_path = tmp_path / "loop.mp3"
+
     monkeypatch.setattr(
-        audio,
-        "_render_midi_to_wav",
-        lambda midi_path, wav_path, soundfont_path: _write_wav(wav_path),
+        audio, "is_playback_available", lambda soundfont_name=None: (True, None)
     )
 
-    class FakeAudioSegment:
-        @staticmethod
-        def from_wav(temp_wav_path):
-            class FakeAudio:
-                def __getitem__(self, selection):
-                    return self
-
-                def export(self, target_output_path, format, bitrate):
-                    Path(target_output_path).write_bytes(b"mp3")
-
-            return FakeAudio()
-
-    monkeypatch.setattr(audio, "AudioSegment", FakeAudioSegment)
-
     with pytest.raises(AudioRenderingError) as raised:
-        audio.midi_to_mp3(
-            str(midi_path),
-            output_path=str(output_path),
-            soundfont_name="custom.sf2",
-        )
+        audio.midi_to_mp3(str(midi_path), output_path=str(output_path))
 
     assert raised.value.__cause__ is not None
     assert not output_path.exists()
 
 
 def test_midi_to_mp3_reports_fluidsynth_process_failure(monkeypatch, tmp_path):
-    midi_path = _write_file(tmp_path / "loop.mid")
+    midi_path = _write_midi(tmp_path / "loop.mid")
     _write_file(tmp_path / "custom.sf2")
     output_path = tmp_path / "loop.mp3"
 
@@ -430,7 +440,7 @@ def test_midi_to_mp3_reports_fluidsynth_process_failure(monkeypatch, tmp_path):
 
 
 def test_midi_to_mp3_reports_fluidsynth_timeout(monkeypatch, tmp_path):
-    midi_path = _write_file(tmp_path / "loop.mid")
+    midi_path = _write_midi(tmp_path / "loop.mid")
     _write_file(tmp_path / "custom.sf2")
     output_path = tmp_path / "loop.mp3"
 
@@ -459,7 +469,7 @@ def test_midi_to_mp3_reports_fluidsynth_timeout(monkeypatch, tmp_path):
 
 
 def test_midi_to_mp3_rejects_wav_without_audio_frames(monkeypatch, tmp_path):
-    midi_path = _write_file(tmp_path / "loop.mid")
+    midi_path = _write_midi(tmp_path / "loop.mid")
     _write_file(tmp_path / "custom.sf2")
     output_path = tmp_path / "loop.mp3"
 

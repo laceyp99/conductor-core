@@ -8,6 +8,14 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.12.2] - 2026-10-14
+
+### Fixed
+
+- MIDI import and audio rendering now reject format 2 files, whose tracks are
+  independent patterns, instead of silently treating them as simultaneous tracks.
+  Extract a pattern into a format 0 or 1 file before importing or rendering it.
+
 ## [0.12.1] - 2026-10-13
 
 ### Fixed
