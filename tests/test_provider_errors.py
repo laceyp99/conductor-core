@@ -230,6 +230,7 @@ def test_anthropic_stream_normalizes_timeout_error(monkeypatch, generation):
     assert raised.value.operation == "stream"
     assert raised.value.__cause__ is original
     assert completion.closed
+    client.close.assert_called_once_with()
 
 
 def test_google_request_normalizes_rate_limit_error(monkeypatch):

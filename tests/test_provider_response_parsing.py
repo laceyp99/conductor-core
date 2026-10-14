@@ -171,6 +171,7 @@ def test_claude_generation_rejects_multiple_tool_calls(monkeypatch, generation):
     assert f"{tool_name} (block index 1)" in str(raised.value)
     assert f"{tool_name} (block index 3)" in str(raised.value)
     assert completion.closed
+    client.close.assert_called_once_with()
 
 
 @pytest.mark.parametrize("generation", ["loop_gen", "variations_gen"])

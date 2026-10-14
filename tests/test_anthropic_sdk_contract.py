@@ -14,11 +14,8 @@ from conductor_core.providers import anthropic
 
 
 @pytest.mark.parametrize("generation", ["loop_gen", "variations_gen"])
-@pytest.mark.parametrize(
-    "outcome", ["success", "invalid_payload", "wrong_tool", "stream_error"]
-)
 def test_anthropic_generation_closes_sdk_response_and_client(
-    monkeypatch, sample_loop, generation, outcome
+    monkeypatch, sample_loop, generation
 ):
     import httpx
     from anthropic import Stream
@@ -30,8 +27,6 @@ def test_anthropic_generation_closes_sdk_response_and_client(
     payload = sample_loop.model_dump()
     if generation == "variations_gen":
         payload = {"variations": [payload]}
-    if outcome == "invalid_payload":
-        payload = {}
     events = [
         {
             "type": "content_block_start",
@@ -39,7 +34,7 @@ def test_anthropic_generation_closes_sdk_response_and_client(
             "content_block": {
                 "type": "tool_use",
                 "id": "tool-1",
-                "name": "unexpected_tool" if outcome == "wrong_tool" else tool_name,
+                "name": tool_name,
                 "input": {},
             },
         },
@@ -51,13 +46,10 @@ def test_anthropic_generation_closes_sdk_response_and_client(
         {"type": "content_block_stop", "index": 0},
         {"type": "message_stop"},
     ]
-    original = RuntimeError("synthetic stream failure")
 
     class ResponseBody(httpx.SyncByteStream):
         def __iter__(self):
             for event in events:
-                if outcome == "stream_error":
-                    raise original
                 yield f"event: {event['type']}\ndata: {json.dumps(event)}\n\n".encode()
 
     # A synthetic streaming body exercises the installed SDK without a request.
@@ -68,16 +60,9 @@ def test_anthropic_generation_closes_sdk_response_and_client(
     monkeypatch.setattr(anthropic, "initialize_anthropic_client", lambda **_: client)
 
     try:
-        if outcome == "success":
-            result = getattr(anthropic, generation)("write music", "claude-sonnet-4-5")
-            loop = result[0] if generation == "loop_gen" else result[0].variations[0]
-            assert loop == sample_loop
-        else:
-            error_type = RuntimeError if outcome == "stream_error" else ValueError
-            with pytest.raises(error_type) as raised:
-                getattr(anthropic, generation)("write music", "claude-sonnet-4-5")
-            if outcome == "stream_error":
-                assert raised.value is original
+        result = getattr(anthropic, generation)("write music", "claude-sonnet-4-5")
+        loop = result[0] if generation == "loop_gen" else result[0].variations[0]
+        assert loop == sample_loop
         assert response.is_closed
         assert client.is_closed()
     finally:
