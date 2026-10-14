@@ -8,13 +8,21 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
-## [0.12.2] - 2026-10-14
+## [0.12.3] - 2026-10-14
 
 ### Fixed
 
 - Anthropic loop and variation generation now closes its internally created
   HTTP client after each request, including request and stream failures.
   Streaming responses continue to close immediately after parsing or failure.
+
+## [0.12.2] - 2026-10-14
+
+### Fixed
+
+- MIDI import and audio rendering now reject format 2 files, whose tracks are
+  independent patterns, instead of silently treating them as simultaneous tracks.
+  Extract a pattern into a format 0 or 1 file before importing or rendering it.
 
 ## [0.12.1] - 2026-10-13
 

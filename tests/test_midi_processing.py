@@ -347,8 +347,12 @@ def test_loop_to_midi_rejects_ppq_without_an_exact_sixteenth_grid(
     assert midi.tracks == []
 
 
-def test_midi_to_loop_round_trips_integer_timing(sample_loop, midi_builder):
+@pytest.mark.parametrize("midi_type", [0, 1])
+def test_midi_to_loop_round_trips_integer_timing(sample_loop, midi_builder, midi_type):
     midi_path = midi_builder(sample_loop)
+    midi = MidiFile(midi_path)
+    midi.type = midi_type
+    midi.save(midi_path)
 
     loop = midi_to_loop(str(midi_path))
 
@@ -368,6 +372,24 @@ def test_midi_to_loop_round_trips_integer_timing(sample_loop, midi_builder):
         bar.notes[0].time.duration == 16
         for bar in [loop.Bar_1, loop.Bar_2, loop.Bar_3, loop.Bar_4]
     )
+
+
+def test_midi_to_loop_rejects_independent_format_2_patterns(tmp_path):
+    midi = MidiFile(type=2, ticks_per_beat=480)
+    for pitch, duration in [(60, 480), (64, 960)]:
+        midi.tracks.append(
+            MidiTrack(
+                [
+                    Message("note_on", note=pitch, velocity=80, time=0),
+                    Message("note_off", note=pitch, time=duration),
+                ]
+            )
+        )
+    path = tmp_path / "patterns.mid"
+    midi.save(path)
+
+    with pytest.raises(ValueError, match=r"MIDI format 2.*independent patterns"):
+        midi_to_loop(path)
 
 
 @pytest.mark.parametrize("note_off_type", ["note_off", "note_on"])
