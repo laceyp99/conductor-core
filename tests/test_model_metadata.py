@@ -5,7 +5,7 @@ from conductor_core import music
 
 def test_model_info_results_are_isolated_from_caller_mutations():
     first = music.get_model_info()
-    model_name = "gemini-3.7-flash"
+    model_name = "gemini-3.8-flash"
     first_model = first["models"]["Google"][model_name]
 
     first["caller_only"] = True
@@ -61,17 +61,23 @@ def test_selectable_cloud_models_have_normalized_rate_limits():
                 ), f"{provider}/{model} {field}"
 
 
-def test_gemini_3_7_flash_capabilities_match_google_documentation():
-    model_config = music.get_model_info()["models"]["Google"]["gemini-3.7-flash"]
+def test_gemini_4_argon_capabilities_match_google_documentation():
+    model_config = music.get_model_info()["models"]["Google"]["gemini-4-argon"]
 
     assert model_config["extended_thinking"] is True
+    assert model_config["thinking_off"] == "lowest_effort"
     assert model_config["effort_options"] == ["low", "medium", "high"]
     assert model_config["temperature_supported"] is False
-    assert model_config["max_tokens"] == 65536
+    assert model_config["max_tokens"] == 32768
     assert model_config["cost"] == {
-        "input": 0.75,
-        "cache": {"text": 0.075, "storage hour": 0.50},
-        "output": 3.75,
+        "input": 2.00,
+        "cache": {"text": 0.10},
+        "output": 10.00,
+    }
+    assert model_config["rate_limits"] == {
+        "RPM": 1000,
+        "TPM": 2000000,
+        "RPD": None,
     }
 
 

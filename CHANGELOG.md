@@ -8,7 +8,7 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
-## [0.11.3] - 2026-10-13
+## [0.12.1] - 2026-10-13
 
 ### Fixed
 
@@ -16,6 +16,27 @@ while its public API is still in initial development.
   Previously such a directory could be listed, chosen as the default
   SoundFont, and make `is_playback_available()` report success before audio
   rendering failed.
+
+## [0.12.0] - 2026-10-13
+
+### Added
+
+- Gemini 4 Argon (`gemini-4-argon`) with three thinking effort levels,
+  omitted temperature, a 32,768-token non-streaming limit, and introductory
+  token pricing through November 30, 2026. Rate limits are 1,000 RPM,
+  2,000,000 TPM, and unlimited RPD (represented as `null`). Long decode is
+  not enabled.
+
+### Fixed
+
+- Claude Sonnet 5.5 cache-read cost now uses $0.10 per million tokens,
+  matching Anthropic's October 7, 2026 reduction from $0.20.
+
+### Removed
+
+- Gemini 3.5 Flash and 3.7 Flash from model selection after Google's
+  October 8, 2026 deprecation and automatic redirection. Select Gemini 3.6
+  Flash or 3.8 Flash directly. Existing generation history remains readable.
 
 ## [0.11.2] - 2026-10-13
 

@@ -423,7 +423,16 @@ def test_openai_calc_price_clamps_null_or_negative_output_tokens(output_tokens):
     assert cost == pytest.approx(100 * 0.15 / 1_000_000)
 
 
-def test_claude_calc_price_uses_reported_cache_creation_and_reads():
+@pytest.mark.parametrize(
+    ("model", "input_rate", "output_rate", "write_rate", "read_rate"),
+    [
+        ("claude-sonnet-4-5", 3.00, 15.00, 3.75, 0.30),
+        ("claude-sonnet-5-5", 2.00, 10.00, 2.50, 0.10),
+    ],
+)
+def test_claude_calc_price_uses_reported_cache_creation_and_reads(
+    model, input_rate, output_rate, write_rate, read_rate
+):
     output = {
         "input_tokens": 1000,
         "output_tokens": 200,
@@ -431,13 +440,13 @@ def test_claude_calc_price_uses_reported_cache_creation_and_reads():
         "cache_read": 400,
     }
 
-    cost = claude_api.calc_price("claude-sonnet-4-5", output)
+    cost = claude_api.calc_price(model, output)
 
     expected = (
-        (1000 * 3.00 / 1_000_000)
-        + (200 * 15.00 / 1_000_000)
-        + (300 * 3.75 / 1_000_000)
-        + (400 * 0.30 / 1_000_000)
+        (1000 * input_rate / 1_000_000)
+        + (200 * output_rate / 1_000_000)
+        + (300 * write_rate / 1_000_000)
+        + (400 * read_rate / 1_000_000)
     )
     assert cost == pytest.approx(expected)
 
@@ -973,7 +982,7 @@ def test_gemini_disabled_thinking_uses_lowest_effort(monkeypatch):
 
     midi_loop, _, _ = gemini_api.loop_gen(
         "write a loop",
-        "gemini-3.7-flash",
+        "gemini-3.8-flash",
         use_thinking=False,
         effort="high",
     )
@@ -1175,7 +1184,7 @@ def test_gemini_loop_gen_omits_unsupported_temperature(monkeypatch):
 
     gemini_api.loop_gen(
         "write a loop",
-        "gemini-3.7-flash",
+        "gemini-3.8-flash",
         temp=0.7,
         use_thinking=True,
         effort="medium",
@@ -1296,7 +1305,7 @@ def test_gemini_loop_gen_returns_null_cost_without_usage(monkeypatch):
     )
 
     midi_loop, messages, cost = gemini_api.loop_gen(
-        "write a loop", "gemini-3.7-flash", use_thinking=False, effort="high"
+        "write a loop", "gemini-3.8-flash", use_thinking=False, effort="high"
     )
 
     assert isinstance(midi_loop, objects.Loop)

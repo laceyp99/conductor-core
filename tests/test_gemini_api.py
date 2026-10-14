@@ -35,7 +35,13 @@ def test_calc_cost_uses_standard_rate_above_legacy_threshold():
     assert cost == pytest.approx(expected)
 
 
-def test_calc_cost_includes_thought_tokens_at_output_rate():
+@pytest.mark.parametrize(
+    ("model", "input_rate", "output_rate", "cache_rate"),
+    [("gemini-2.5-flash", 0.30, 2.50, 0.03), ("gemini-4-argon", 2.00, 10.00, 0.10)],
+)
+def test_calc_cost_includes_thought_tokens_at_output_rate(
+    model, input_rate, output_rate, cache_rate
+):
     usage = SimpleNamespace(
         prompt_token_count=1000,
         candidates_token_count=200,
@@ -43,12 +49,12 @@ def test_calc_cost_includes_thought_tokens_at_output_rate():
         cached_content_token_count=400,
     )
 
-    cost = gemini_api.calc_cost("gemini-2.5-flash", usage)
+    cost = gemini_api.calc_cost(model, usage)
 
     expected = (
-        (600 * 0.30 / 1_000_000)
-        + ((200 + 300) * 2.50 / 1_000_000)
-        + (400 * 0.03 / 1_000_000)
+        (600 * input_rate / 1_000_000)
+        + ((200 + 300) * output_rate / 1_000_000)
+        + (400 * cache_rate / 1_000_000)
     )
     assert cost == pytest.approx(expected)
 
