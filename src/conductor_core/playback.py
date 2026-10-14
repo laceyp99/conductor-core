@@ -194,7 +194,7 @@ def _find_soundfont_file(soundfont_name: str) -> str | None:
     requested_name = os.path.basename(soundfont_name)
     for soundfont_dir in _soundfont_search_dirs():
         candidate_path = os.path.join(soundfont_dir, requested_name)
-        if os.path.exists(candidate_path):
+        if os.path.isfile(candidate_path):
             return candidate_path
 
     for resource in _packaged_soundfont_files():
@@ -214,7 +214,10 @@ def list_soundfonts() -> list[str]:
         if not os.path.exists(soundfont_dir):
             continue
         names.update(
-            file for file in os.listdir(soundfont_dir) if file.lower().endswith(".sf2")
+            file
+            for file in os.listdir(soundfont_dir)
+            if file.lower().endswith(".sf2")
+            and os.path.isfile(os.path.join(soundfont_dir, file))
         )
     names.update(resource.name for resource in _packaged_soundfont_files())
     return sorted(names, key=str.lower)
@@ -252,7 +255,7 @@ def resolve_soundfont(soundfont_name: str | None = None) -> str | None:
         str | None: Path to a SoundFont file if found, None otherwise.
     """
     if soundfont_name:
-        if os.path.exists(soundfont_name):
+        if os.path.isfile(soundfont_name):
             return soundfont_name
 
         requested_path = _find_soundfont_file(soundfont_name)

@@ -8,6 +8,15 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-10-13
+
+### Fixed
+
+- SoundFont discovery now ignores directories whose names end in `.sf2`.
+  Previously such a directory could be listed, chosen as the default
+  SoundFont, and make `is_playback_available()` report success before audio
+  rendering failed.
+
 ## [0.12.0] - 2026-10-13
 
 ### Added
