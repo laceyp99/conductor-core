@@ -2,6 +2,7 @@
 
 import json
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -26,7 +27,9 @@ def _capture(calls):
 def _sent_temperature(provider, model, generation, monkeypatch):
     calls = []
     if provider == "Anthropic":
-        client = SimpleNamespace(messages=SimpleNamespace(create=_capture(calls)))
+        client = SimpleNamespace(
+            close=Mock(), messages=SimpleNamespace(create=_capture(calls))
+        )
         monkeypatch.setattr(
             anthropic, "initialize_anthropic_client", lambda **kwargs: client
         )

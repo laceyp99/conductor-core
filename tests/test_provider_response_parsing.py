@@ -159,7 +159,7 @@ def test_claude_generation_rejects_multiple_tool_calls(monkeypatch, generation):
         ]
     )
     client = SimpleNamespace(
-        messages=SimpleNamespace(create=lambda **kwargs: completion)
+        close=Mock(), messages=SimpleNamespace(create=lambda **kwargs: completion)
     )
     monkeypatch.setattr(
         claude_api, "initialize_anthropic_client", lambda **kwargs: client
@@ -188,7 +188,7 @@ def test_claude_generation_closes_stream_after_message_stop(monkeypatch, generat
         ]
     )
     client = SimpleNamespace(
-        messages=SimpleNamespace(create=lambda **kwargs: completion)
+        close=Mock(), messages=SimpleNamespace(create=lambda **kwargs: completion)
     )
     monkeypatch.setattr(
         claude_api, "initialize_anthropic_client", lambda **kwargs: client
@@ -674,7 +674,9 @@ def test_claude_loop_gen_omits_cache_control_for_short_system_prompt(monkeypatch
         captured.update(kwargs)
         return _anthropic_completion(payload)
 
-    fake_client = SimpleNamespace(messages=SimpleNamespace(create=fake_create))
+    fake_client = SimpleNamespace(
+        close=Mock(), messages=SimpleNamespace(create=fake_create)
+    )
     monkeypatch.setattr(
         claude_api, "initialize_anthropic_client", lambda api_key: fake_client
     )
@@ -702,7 +704,9 @@ def test_claude_loop_gen_adds_cache_control_for_large_system_prompt(monkeypatch)
         captured.update(kwargs)
         return _anthropic_completion(payload)
 
-    fake_client = SimpleNamespace(messages=SimpleNamespace(create=fake_create))
+    fake_client = SimpleNamespace(
+        close=Mock(), messages=SimpleNamespace(create=fake_create)
+    )
     long_prompt = "x" * claude_api.ANTHROPIC_CACHE_CONTROL_MIN_CHARS
     monkeypatch.setattr(
         claude_api, "initialize_anthropic_client", lambda api_key: fake_client
@@ -723,7 +727,9 @@ def test_claude_opus_5_uses_adaptive_thinking_and_effort(monkeypatch):
         captured.update(kwargs)
         return _anthropic_completion(payload)
 
-    fake_client = SimpleNamespace(messages=SimpleNamespace(create=fake_create))
+    fake_client = SimpleNamespace(
+        close=Mock(), messages=SimpleNamespace(create=fake_create)
+    )
     monkeypatch.setattr(
         claude_api, "initialize_anthropic_client", lambda api_key: fake_client
     )
@@ -754,7 +760,9 @@ def test_claude_uses_metadata_driven_always_on_thinking(monkeypatch, model):
         captured.update(kwargs)
         return _anthropic_completion(payload)
 
-    fake_client = SimpleNamespace(messages=SimpleNamespace(create=fake_create))
+    fake_client = SimpleNamespace(
+        close=Mock(), messages=SimpleNamespace(create=fake_create)
+    )
     monkeypatch.setattr(
         claude_api, "initialize_anthropic_client", lambda api_key: fake_client
     )
@@ -783,7 +791,9 @@ def test_claude_always_on_thinking_off_uses_lowest_effort(monkeypatch, model):
         captured.update(kwargs)
         return _anthropic_completion(payload)
 
-    fake_client = SimpleNamespace(messages=SimpleNamespace(create=fake_create))
+    fake_client = SimpleNamespace(
+        close=Mock(), messages=SimpleNamespace(create=fake_create)
+    )
     monkeypatch.setattr(
         claude_api, "initialize_anthropic_client", lambda api_key: fake_client
     )
@@ -807,7 +817,9 @@ def test_claude_sonnet_5_5_thinking_off_uses_between_tools(monkeypatch):
         captured.update(kwargs)
         return _anthropic_completion(payload)
 
-    fake_client = SimpleNamespace(messages=SimpleNamespace(create=fake_create))
+    fake_client = SimpleNamespace(
+        close=Mock(), messages=SimpleNamespace(create=fake_create)
+    )
     monkeypatch.setattr(
         claude_api, "initialize_anthropic_client", lambda api_key: fake_client
     )
@@ -847,7 +859,9 @@ def test_claude_thinking_off_disables_adaptive_thinking(
         calls.append(kwargs)
         raise _RequestCaptured
 
-    fake_client = SimpleNamespace(messages=SimpleNamespace(create=fake_create))
+    fake_client = SimpleNamespace(
+        close=Mock(), messages=SimpleNamespace(create=fake_create)
+    )
     monkeypatch.setattr(
         claude_api, "initialize_anthropic_client", lambda api_key: fake_client
     )
@@ -889,7 +903,9 @@ def test_claude_thinking_off_always_forces_the_output_tool(
         calls.append(kwargs)
         raise _RequestCaptured
 
-    fake_client = SimpleNamespace(messages=SimpleNamespace(create=fake_create))
+    fake_client = SimpleNamespace(
+        close=Mock(), messages=SimpleNamespace(create=fake_create)
+    )
     monkeypatch.setattr(
         claude_api, "initialize_anthropic_client", lambda api_key: fake_client
     )
@@ -1047,7 +1063,9 @@ def test_claude_budget_thinking_respects_toggle(monkeypatch, use_thinking):
         captured.update(kwargs)
         return _anthropic_completion(payload)
 
-    fake_client = SimpleNamespace(messages=SimpleNamespace(create=fake_create))
+    fake_client = SimpleNamespace(
+        close=Mock(), messages=SimpleNamespace(create=fake_create)
+    )
     monkeypatch.setattr(
         claude_api, "initialize_anthropic_client", lambda api_key: fake_client
     )
@@ -1084,6 +1102,7 @@ def test_direct_disabled_thinking_ignores_invalid_effort(
         raise _RequestCaptured
 
     client = SimpleNamespace(
+        close=Mock(),
         responses=SimpleNamespace(parse=capture_request),
         models=SimpleNamespace(generate_content=capture_request),
         messages=SimpleNamespace(create=capture_request),
@@ -1254,7 +1273,9 @@ def test_claude_unsupported_thinking_warns_once(monkeypatch, caplog):
         calls.append(kwargs)
         raise _RequestCaptured
 
-    fake_client = SimpleNamespace(messages=SimpleNamespace(create=fake_create))
+    fake_client = SimpleNamespace(
+        close=Mock(), messages=SimpleNamespace(create=fake_create)
+    )
     monkeypatch.setattr(
         claude_api, "initialize_anthropic_client", lambda **kwargs: fake_client
     )
@@ -1320,7 +1341,7 @@ def test_claude_loop_gen_returns_null_cost_without_usage(monkeypatch):
         event for event in completion.events if event.type != "message_start"
     ]
     fake_client = SimpleNamespace(
-        messages=SimpleNamespace(create=lambda **kwargs: completion)
+        close=Mock(), messages=SimpleNamespace(create=lambda **kwargs: completion)
     )
     monkeypatch.setattr(
         claude_api, "initialize_anthropic_client", lambda api_key: fake_client

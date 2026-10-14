@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -215,7 +216,7 @@ def test_anthropic_stream_normalizes_timeout_error(monkeypatch, generation):
 
     completion = FailingStream()
     client = SimpleNamespace(
-        messages=SimpleNamespace(create=lambda **kwargs: completion)
+        close=Mock(), messages=SimpleNamespace(create=lambda **kwargs: completion)
     )
     monkeypatch.setattr(anthropic_api, "APITimeoutError", AnthropicTimeoutError)
     monkeypatch.setattr(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+from contextlib import closing
 from typing import TYPE_CHECKING, Literal, NoReturn
 
 from typing_extensions import NotRequired, TypedDict
@@ -343,10 +344,6 @@ def loop_gen(
         model, model_config.get("effort_options") or [], use_thinking, effort
     )
 
-    client = initialize_anthropic_client(
-        api_key=api_key,
-        **({"timeout": request_timeout} if request_timeout is not None else {}),
-    )
     loop_prompt = system_prompt or utils.get_loop_prompt()
     tools: list[ToolUnionParam] = [
         {
@@ -371,31 +368,37 @@ def loop_gen(
     }
     _apply_thinking_params(api_params, model_config, temp, use_thinking, effort)
 
-    try:
-        completion = client.messages.create(**api_params)
-    except (
-        AuthenticationError,
-        RateLimitError,
-        APITimeoutError,
-        APIConnectionError,
-        APIError,
-    ) as exc:
-        logger.error("Anthropic request failed: %s", exc)
-        _raise_anthropic_error(exc, "request")
+    with closing(
+        initialize_anthropic_client(
+            api_key=api_key,
+            **({"timeout": request_timeout} if request_timeout is not None else {}),
+        )
+    ) as client:
+        try:
+            completion = client.messages.create(**api_params)
+        except (
+            AuthenticationError,
+            RateLimitError,
+            APITimeoutError,
+            APIConnectionError,
+            APIError,
+        ) as exc:
+            logger.error("Anthropic request failed: %s", exc)
+            _raise_anthropic_error(exc, "request")
 
-    try:
-        output = process_streaming_response(completion, "build_MIDI_loop")
-    except (
-        AuthenticationError,
-        RateLimitError,
-        APITimeoutError,
-        APIConnectionError,
-        APIError,
-    ) as exc:
-        logger.error("Anthropic stream failed: %s", exc)
-        _raise_anthropic_error(exc, "stream")
-    finally:
-        completion.close()
+        try:
+            output = process_streaming_response(completion, "build_MIDI_loop")
+        except (
+            AuthenticationError,
+            RateLimitError,
+            APITimeoutError,
+            APIConnectionError,
+            APIError,
+        ) as exc:
+            logger.error("Anthropic stream failed: %s", exc)
+            _raise_anthropic_error(exc, "stream")
+        finally:
+            completion.close()
     if not output["loop"]:
         raise ValueError(
             f"Model {model} did not call the build_MIDI_loop tool. "
@@ -438,10 +441,6 @@ def variations_gen(
         model, model_config.get("effort_options") or [], use_thinking, effort
     )
 
-    client = initialize_anthropic_client(
-        api_key=api_key,
-        **({"timeout": request_timeout} if request_timeout is not None else {}),
-    )
     loop_prompt = system_prompt or utils.get_variation_prompt()
     api_params: _AnthropicRequest = {
         "model": model,
@@ -463,28 +462,34 @@ def variations_gen(
         "stream": True,
     }
     _apply_thinking_params(api_params, model_config, temp, use_thinking, effort)
-    try:
-        completion = client.messages.create(**api_params)
-    except (
-        AuthenticationError,
-        RateLimitError,
-        APITimeoutError,
-        APIConnectionError,
-        APIError,
-    ) as exc:
-        _raise_anthropic_error(exc, "request")
-    try:
-        output = process_streaming_response(completion, "build_MIDI_variations")
-    except (
-        AuthenticationError,
-        RateLimitError,
-        APITimeoutError,
-        APIConnectionError,
-        APIError,
-    ) as exc:
-        _raise_anthropic_error(exc, "stream")
-    finally:
-        completion.close()
+    with closing(
+        initialize_anthropic_client(
+            api_key=api_key,
+            **({"timeout": request_timeout} if request_timeout is not None else {}),
+        )
+    ) as client:
+        try:
+            completion = client.messages.create(**api_params)
+        except (
+            AuthenticationError,
+            RateLimitError,
+            APITimeoutError,
+            APIConnectionError,
+            APIError,
+        ) as exc:
+            _raise_anthropic_error(exc, "request")
+        try:
+            output = process_streaming_response(completion, "build_MIDI_variations")
+        except (
+            AuthenticationError,
+            RateLimitError,
+            APITimeoutError,
+            APIConnectionError,
+            APIError,
+        ) as exc:
+            _raise_anthropic_error(exc, "stream")
+        finally:
+            completion.close()
     if not output["loop"]:
         raise ValueError(f"Model {model} did not call the build_MIDI_variations tool.")
     collection = VariationCollection.model_validate_json(output["loop"])

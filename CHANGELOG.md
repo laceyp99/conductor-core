@@ -8,6 +8,14 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.12.2] - 2026-10-14
+
+### Fixed
+
+- Anthropic loop and variation generation now closes its internally created
+  HTTP client after each request, including request and stream failures.
+  Streaming responses continue to close immediately after parsing or failure.
+
 ## [0.12.1] - 2026-10-13
 
 ### Fixed
