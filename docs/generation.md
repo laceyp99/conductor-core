@@ -81,7 +81,7 @@ their reasoning controls. This also applies to Anthropic calls that previously
 used an implicit `"low"` effort. Budget-based models do not require an effort
 selection.
 
-Models with `temperature_supported: false` reject a caller-selected
+Models with `temperature_supported: false` reject or ignore a caller-selected
 temperature, so Core never sends one and ignores the requested `temperature`.
 Many reasoning models behave this way.
 
@@ -162,7 +162,10 @@ metadata request fails, Core reports an inspection error.
 Packaged cloud models expose `RPM`, `TPM`, and `RPD`. `RPM` is a conservative
 positive-integer baseline for the lowest generally supported account tier.
 `TPM` and `RPD` are positive integers when a comparable baseline is recorded
-and `null` when it is unknown or cannot be represented consistently. Core
+and `null` when unknown, unlimited, or not consistently representable. Metadata
+alone does not distinguish unknown from unlimited; consumers should verify
+active account quotas before scheduling requests. See Google's
+[rate-limit guide](https://ai.google.dev/gemini-api/docs/rate-limits). Core
 exposes this metadata but does not schedule or retry requests from it.
 
 ## Prompt customization

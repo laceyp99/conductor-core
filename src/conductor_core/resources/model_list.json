@@ -447,7 +447,7 @@
                     "input": 2.00,
                     "5m cache input": 2.50,
                     "1h cache input": 4.00,
-                    "cache hits/refreshes": 0.20,
+                    "cache hits/refreshes": 0.10,
                     "output": 10.00
                 },
                 "rate_limits": {
@@ -689,27 +689,26 @@
             }
         },
         "Google": {
-            "gemini-3.8-flash": {
+            "gemini-4-argon": {
                 "extended_thinking": true,
                 "thinking_off": "lowest_effort",
                 "effort_options": ["low", "medium", "high"],
                 "temperature_supported": false,
-                "max_tokens": 65536,
+                "max_tokens": 32768,
                 "cost": {
-                    "input": 0.75,
+                    "input": 2.00,
                     "cache": {
-                        "text": 0.075,
-                        "storage hour": 0.50
+                        "text": 0.10
                     },
-                    "output": 3.75
+                    "output": 10.00
                 },
                 "rate_limits": {
                     "RPM": 1000,
                     "TPM": 2000000,
-                    "RPD": 10000
+                    "RPD": null
                 }
             },
-            "gemini-3.7-flash": {
+            "gemini-3.8-flash": {
                 "extended_thinking": true,
                 "thinking_off": "lowest_effort",
                 "effort_options": ["low", "medium", "high"],
@@ -741,25 +740,6 @@
                         "storage hour": 0.50
                     },
                     "output": 3.75
-                },
-                "rate_limits": {
-                    "RPM": 1000,
-                    "TPM": 2000000,
-                    "RPD": 10000
-                }
-            },
-            "gemini-3.5-flash": {
-                "extended_thinking": true,
-                "thinking_off": "lowest_effort",
-                "effort_options": ["minimal", "low", "medium", "high"],
-                "max_tokens": 65536,
-                "cost": {
-                    "input": 1.50,
-                    "cache": {
-                        "text": 0.15,
-                        "storage hour": 1.00
-                    },
-                    "output": 9.00
                 },
                 "rate_limits": {
                     "RPM": 1000,
