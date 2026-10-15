@@ -1,5 +1,6 @@
 import json
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 from pydantic import ValidationError
@@ -157,11 +158,12 @@ def test_anthropic_requests_one_collection_tool(monkeypatch, use_thinking):
         SimpleNamespace(type="message_stop"),
     ]
     client = SimpleNamespace(
+        close=Mock(),
         messages=SimpleNamespace(
             create=lambda **kwargs: (
                 calls.append(kwargs) or (event for event in completion)
             )
-        )
+        ),
     )
     monkeypatch.setattr(
         anthropic, "initialize_anthropic_client", lambda **kwargs: client
@@ -231,9 +233,10 @@ def test_anthropic_variation_usage_includes_cache_tokens(monkeypatch):
         SimpleNamespace(type="message_stop"),
     ]
     client = SimpleNamespace(
+        close=Mock(),
         messages=SimpleNamespace(
             create=lambda **kwargs: (event for event in completion)
-        )
+        ),
     )
     monkeypatch.setattr(
         anthropic, "initialize_anthropic_client", lambda **kwargs: client
@@ -397,11 +400,12 @@ def test_opus_5_5_variations_use_always_on_thinking(monkeypatch, use_thinking, e
         SimpleNamespace(type="message_stop"),
     ]
     client = SimpleNamespace(
+        close=Mock(),
         messages=SimpleNamespace(
             create=lambda **kwargs: (
                 calls.append(kwargs) or (event for event in completion)
             )
-        )
+        ),
     )
     monkeypatch.setattr(
         anthropic, "initialize_anthropic_client", lambda **kwargs: client

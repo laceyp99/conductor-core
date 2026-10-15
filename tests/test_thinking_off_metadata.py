@@ -1,6 +1,7 @@
 """Offline checks that thinking_off metadata matches thinking-off requests."""
 
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -23,7 +24,9 @@ def _capture(calls):
 def _thinking_off_request(provider, model, generation, monkeypatch):
     calls = []
     if provider == "Anthropic":
-        client = SimpleNamespace(messages=SimpleNamespace(create=_capture(calls)))
+        client = SimpleNamespace(
+            close=Mock(), messages=SimpleNamespace(create=_capture(calls))
+        )
         monkeypatch.setattr(
             anthropic, "initialize_anthropic_client", lambda **kwargs: client
         )

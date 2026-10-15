@@ -1,7 +1,9 @@
 """Check Core's Anthropic requests against the installed SDK without network calls."""
 
 import inspect
+import json
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -9,6 +11,86 @@ pytest.importorskip("anthropic")
 
 from conductor_core import music
 from conductor_core.providers import anthropic
+
+
+@pytest.mark.parametrize("generation", ["loop_gen", "variations_gen"])
+def test_anthropic_generation_closes_sdk_response_and_client(
+    monkeypatch, sample_loop, generation
+):
+    import httpx
+    from anthropic import Stream
+    from anthropic.types import RawMessageStreamEvent
+
+    tool_name = (
+        "build_MIDI_loop" if generation == "loop_gen" else "build_MIDI_variations"
+    )
+    payload = sample_loop.model_dump()
+    if generation == "variations_gen":
+        payload = {"variations": [payload]}
+    events = [
+        {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+                "type": "tool_use",
+                "id": "tool-1",
+                "name": tool_name,
+                "input": {},
+            },
+        },
+        {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {"type": "input_json_delta", "partial_json": json.dumps(payload)},
+        },
+        {"type": "content_block_stop", "index": 0},
+        {"type": "message_stop"},
+    ]
+
+    class ResponseBody(httpx.SyncByteStream):
+        def __iter__(self):
+            for event in events:
+                yield f"event: {event['type']}\ndata: {json.dumps(event)}\n\n".encode()
+
+    # A synthetic streaming body exercises the installed SDK without a request.
+    response = httpx.Response(200, stream=ResponseBody())
+    client = anthropic.Anthropic(api_key="unused")
+    stream = Stream(cast_to=RawMessageStreamEvent, response=response, client=client)
+    monkeypatch.setattr(client.messages, "create", lambda **_: stream)
+    monkeypatch.setattr(anthropic, "initialize_anthropic_client", lambda **_: client)
+
+    try:
+        result = getattr(anthropic, generation)("write music", "claude-sonnet-4-5")
+        loop = result[0] if generation == "loop_gen" else result[0].variations[0]
+        assert loop == sample_loop
+        assert response.is_closed
+        assert client.is_closed()
+    finally:
+        stream.close()
+        client.close()
+
+
+@pytest.mark.parametrize("generation", ["loop_gen", "variations_gen"])
+def test_anthropic_generation_closes_client_when_request_fails(monkeypatch, generation):
+    from conductor_core.errors import ProviderTimeoutError
+
+    client = anthropic.Anthropic(api_key="unused")
+    original = anthropic.APITimeoutError(request=Mock())
+
+    def fail_request(**kwargs):
+        raise original
+
+    monkeypatch.setattr(client.messages, "create", fail_request)
+    monkeypatch.setattr(anthropic, "initialize_anthropic_client", lambda **_: client)
+
+    try:
+        with pytest.raises(ProviderTimeoutError) as raised:
+            getattr(anthropic, generation)("write music", "claude-sonnet-4-5")
+        assert raised.value.operation == "request"
+        assert raised.value.__cause__ is original
+        assert client.is_closed()
+    finally:
+        client.close()
 
 
 def test_anthropic_rejects_unknown_reasoning_effort():
@@ -49,8 +131,8 @@ class _RequestCaptured(Exception):
 def test_anthropic_request_matches_installed_sdk_signature(
     monkeypatch, model, use_thinking, generation
 ):
-    sdk_create = anthropic.Anthropic(api_key="unused").messages.create
-    sdk_signature = inspect.signature(sdk_create)
+    with anthropic.Anthropic(api_key="unused") as sdk_client:
+        sdk_signature = inspect.signature(sdk_client.messages.create)
     captured = {}
 
     def capture_create(**kwargs):
@@ -58,7 +140,9 @@ def test_anthropic_request_matches_installed_sdk_signature(
         captured.update(kwargs)
         raise _RequestCaptured
 
-    client = SimpleNamespace(messages=SimpleNamespace(create=capture_create))
+    client = SimpleNamespace(
+        close=Mock(), messages=SimpleNamespace(create=capture_create)
+    )
     monkeypatch.setattr(anthropic, "initialize_anthropic_client", lambda **_: client)
     generate = anthropic.loop_gen if generation == "loop" else anthropic.variations_gen
     model_config = music.get_model_info()["models"]["Anthropic"][model]
@@ -74,6 +158,7 @@ def test_anthropic_request_matches_installed_sdk_signature(
         )
 
     assert captured["tool_choice"]["disable_parallel_tool_use"] is True
+    client.close.assert_called_once_with()
     assert "temperature" not in captured
     if model_config.get("temperature_supported", True):
         expected = 1.0 if use_thinking else 0.4
