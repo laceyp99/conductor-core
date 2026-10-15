@@ -53,6 +53,52 @@ def test_changelog_accepts_visible_entries(release_check, tmp_path, monkeypatch,
     release_check.changelog_was_handled("0.8.4")
 
 
+@pytest.mark.parametrize(
+    "suffix",
+    [
+        "",
+        " - not-a-date",
+        " - 2026-2-03",
+        " - 20261010",
+        " - 2026-10-10T12:00:00",
+        " - 2026-02-29",
+        " - 2026-04-31",
+        " - 0000-01-01",
+    ],
+)
+def test_changelog_rejects_invalid_heading_dates(
+    release_check, tmp_path, monkeypatch, capsys, suffix
+):
+    changelog = tmp_path / "CHANGELOG.md"
+    text = f"## [0.8.4]{suffix}\n\n- Fixed MIDI export.\n"
+    changelog.write_text(text, encoding="utf-8")
+    monkeypatch.setattr(release_check, "CHANGELOG_PATH", str(changelog))
+
+    # The gate and release publication use the same date validation.
+    with pytest.raises(SystemExit, match="1"):
+        release_check.changelog_was_handled("0.8.4")
+    with pytest.raises(SystemExit, match="1"):
+        release_check.section_body(text, "0.8.4")
+    assert "[0.8.4] heading needs a valid YYYY-MM-DD date" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("heading_date", ["2026-10-10", "2024-02-29"])
+def test_changelog_accepts_valid_heading_dates(
+    release_check, tmp_path, monkeypatch, heading_date
+):
+    changelog = tmp_path / "CHANGELOG.md"
+    text = (
+        "## [Unreleased]\n\n- Future changes.\n\n"
+        f"## [0.8.4] - {heading_date}\n\n- Fixed MIDI export.\n\n"
+        "## [0.8.3] - not-a-date\n\n- Older notes.\n"
+    )
+    changelog.write_text(text, encoding="utf-8")
+    monkeypatch.setattr(release_check, "CHANGELOG_PATH", str(changelog))
+
+    release_check.changelog_was_handled("0.8.4")
+    assert release_check.section_body(text, "0.8.4").strip() == "- Fixed MIDI export."
+
+
 # SemVer 2.0.0 section 11.4 example ordering, lowest to highest.
 SEMVER_ORDER = [
     "1.0.0-alpha",
