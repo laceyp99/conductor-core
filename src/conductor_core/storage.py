@@ -518,7 +518,7 @@ def _save_variation_history(
     metadata: object,
     generation_ids: list[str] | tuple[str, ...],
 ) -> VariationHistoryRecord:
-    """Atomically persist one successful variation batch manifest."""
+    """Atomically create a batch manifest, raising FileExistsError on ID reuse."""
     values = _metadata_values(metadata)
     ordered_ids = tuple(generation_ids)
     for generation_id in ordered_ids:
@@ -555,7 +555,8 @@ def _save_variation_history(
     try:
         with os.fdopen(file_descriptor, "w", encoding="utf-8") as manifest_file:
             manifest_file.write(manifest.model_dump_json(indent=2))
-        os.replace(temporary_path, manifest_path)
+        # Publish the complete file without replacing a concurrently created batch.
+        os.link(temporary_path, manifest_path)
     finally:
         if os.path.exists(temporary_path):
             os.unlink(temporary_path)

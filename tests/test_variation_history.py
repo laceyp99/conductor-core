@@ -1,7 +1,9 @@
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from threading import Barrier
 
 import pytest
 
@@ -67,6 +69,62 @@ def test_save_manifest_is_versioned_atomic_and_contains_only_batch_index(
     assert [item.id for item in record.generations] == ["one", "two"]
     assert record.missing_generation_ids == ()
     assert record.invalid_generation_ids == ()
+
+
+@pytest.mark.parametrize(
+    "replay", [False, True], ids=["different-content", "identical"]
+)
+def test_save_rejects_existing_batch_without_changing_history(
+    tmp_path, monkeypatch, replay
+):
+    store = storage.FilesystemArtifactStore(tmp_path, max_generations=None)
+    for gen_id in ("one", "two", "three", "four"):
+        _finalize(store, gen_id, monkeypatch)
+    original = store.save_variation_history(_metadata(), ["one", "two"])
+    manifest_path = tmp_path / "variations" / "batch_batch-one.json"
+    original_bytes = manifest_path.read_bytes()
+    original_mtime = manifest_path.stat().st_mtime_ns
+
+    with pytest.raises(FileExistsError):
+        store.save_variation_history(
+            _metadata(), ["one", "two"] if replay else ["three", "four"]
+        )
+
+    assert manifest_path.read_bytes() == original_bytes
+    assert manifest_path.stat().st_mtime_ns == original_mtime
+    assert store.get_variation_history("batch-one").record == original
+    assert store.list_variation_history().records == (original,)
+    assert not list(manifest_path.parent.glob(".variation-*.tmp"))
+
+
+def test_concurrent_batch_creation_publishes_only_one_complete_manifest(
+    tmp_path, monkeypatch
+):
+    store = storage.FilesystemArtifactStore(tmp_path, max_generations=None)
+    barrier = Barrier(2)
+    original_link = os.link
+
+    def competing_link(source, destination):
+        barrier.wait(timeout=10)
+        original_link(source, destination)
+
+    monkeypatch.setattr(storage.os, "link", competing_link)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [
+            executor.submit(store.save_variation_history, _metadata(), ids)
+            for ids in (["one", "two"], ["three", "four"])
+        ]
+    winners = [future.result() for future in futures if future.exception() is None]
+    collisions = [
+        future.exception()
+        for future in futures
+        if isinstance(future.exception(), FileExistsError)
+    ]
+
+    assert len(winners) == len(collisions) == 1
+    assert store.get_variation_history("batch-one").record == winners[0]
+    assert store.list_variation_history().records == (winners[0],)
+    assert not list((tmp_path / "variations").glob(".variation-*.tmp"))
 
 
 def test_variation_history_returns_legacy_generation_in_utc_without_rewriting(
