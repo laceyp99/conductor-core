@@ -5,8 +5,8 @@ A non-skip pull request must:
 
 1. declare a valid Semantic Versioning version in ``pyproject.toml``,
 2. bump that version above the version on the base branch, and
-3. add a non-empty ``[x.y.z]`` section to ``CHANGELOG.md`` matching the new
-   version. The release workflow publishes that section as release notes.
+3. add a non-empty ``[x.y.z] - YYYY-MM-DD`` section to ``CHANGELOG.md`` matching
+   the new version. The release workflow publishes that section as release notes.
 
 Pull requests are skipped when they carry the ``skip-release`` label or use a
 Conventional Commit title whose type is test, ci, docs, style, or chore. The
@@ -20,6 +20,7 @@ import os
 import re
 import subprocess
 import sys
+from datetime import date
 from pathlib import Path
 from typing import NoReturn
 
@@ -136,11 +137,20 @@ def sections(text: str) -> list[tuple[str, int]]:
 
 
 def section_body(text: str, version: str) -> str | None:
+    """Return the selected release's notes, rejecting an invalid heading date."""
     lines = text.splitlines()
     found = sections(text)
     for position, (label, start) in enumerate(found):
         if label != version:
             continue
+        match = HEADING.fullmatch(lines[start])
+        heading_date = (match.group("date") or "").strip()
+        try:
+            if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", heading_date):
+                raise ValueError("expected YYYY-MM-DD")
+            date.fromisoformat(heading_date)
+        except ValueError:
+            fail(f"{CHANGELOG_PATH} [{version}] heading needs a valid YYYY-MM-DD date.")
         end = found[position + 1][1] if position + 1 < len(found) else len(lines)
         return "\n".join(lines[start + 1 : end])
     return None
