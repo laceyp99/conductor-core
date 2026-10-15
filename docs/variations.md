@@ -112,6 +112,10 @@ variation history, including when roots share a parent directory. It contains
 the ordered generation IDs and batch request metadata, not copied MIDI, audio,
 or `Loop` data.
 
+`save_variation_history()` raises `FileExistsError` if the batch ID already
+exists, including an identical replay. Creation is atomic; a rejected save
+leaves the original manifest and its creation timestamp unchanged.
+
 ### Read and manage batches
 
 Use `list_variation_history()`, `get_variation_history()`,

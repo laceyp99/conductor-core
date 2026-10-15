@@ -8,6 +8,14 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.12.4] - 2026-10-15
+
+### Fixed
+
+- Saving variation history now raises `FileExistsError` when a batch ID already
+  exists, including identical retries, preserving the original manifest and
+  timestamp even when saves race.
+
 ## [0.12.3] - 2026-10-14
 
 ### Fixed
