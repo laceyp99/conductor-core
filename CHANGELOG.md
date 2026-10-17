@@ -15,6 +15,9 @@ while its public API is still in initial development.
 - Saving variation history now raises `FileExistsError` when a batch ID already
   exists, including identical retries, preserving the original manifest and
   timestamp even when saves race.
+- Published variation manifests remain readable before temporary-file cleanup
+  and after interrupted cleanup. Manifests accept arbitrary hard links; generation
+  metadata, MIDI, audio, and messages retain their hard-link restrictions.
 
 ## [0.12.3] - 2026-10-14
 

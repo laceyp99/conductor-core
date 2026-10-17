@@ -116,6 +116,14 @@ or `Loop` data.
 exists, including an identical replay. Creation is atomic; a rejected save
 leaves the original manifest and its creation timestamp unchanged.
 
+The artifact filesystem must support hard links. Manifests accept hard links,
+including the temporary name used during publication and links created outside
+Core. A leftover temporary name does not prevent reading a published batch.
+Changes made through another hard link also change the manifest; immutability
+means Core does not overwrite it, rather than filesystem-enforced protection.
+Symbolic links, reparse points, and non-regular files remain rejected. Generation
+metadata, MIDI, audio, and message files continue to reject hard links.
+
 ### Read and manage batches
 
 Use `list_variation_history()`, `get_variation_history()`,

@@ -407,8 +407,10 @@ def _validate_workspace(
     return canonical
 
 
-def _validate_artifact_file(path: str, *, required: bool) -> str | None:
-    """Return a regular, single-link artifact path without following links."""
+def _validate_artifact_file(
+    path: str, *, required: bool, allow_hard_links: bool = False
+) -> str | None:
+    """Validate a regular artifact, rejecting hard links unless explicitly allowed."""
     try:
         file_stat = os.lstat(path)
     except FileNotFoundError:
@@ -424,7 +426,7 @@ def _validate_artifact_file(path: str, *, required: bool) -> str | None:
         )
     if not stat.S_ISREG(file_stat.st_mode):
         raise ValueError(f"artifact path must be a regular file: {path}")
-    if file_stat.st_nlink != 1:
+    if not allow_hard_links and file_stat.st_nlink != 1:
         raise ValueError(f"artifact path must not be hard linked: {path}")
 
     return path
@@ -567,7 +569,11 @@ def _load_variation_manifest(
     artifact_root: str | Path, batch_id: str
 ) -> VariationHistoryManifest:
     path = _get_variation_manifest_path(artifact_root, batch_id)
-    validated_path = _validate_artifact_file(str(path), required=True)
+    # Create-only publication links the completed file before removing its temp
+    # name. Manifests also accept other hard links; generation artifacts do not.
+    validated_path = _validate_artifact_file(
+        str(path), required=True, allow_hard_links=True
+    )
     assert validated_path is not None
     with open(validated_path, encoding="utf-8") as manifest_file:
         manifest = VariationHistoryManifest(**json.load(manifest_file))
