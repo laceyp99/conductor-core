@@ -61,6 +61,9 @@ Every pull request must carry its own release metadata. The required
 - adds a non-empty `## [x.y.z] - YYYY-MM-DD` section to `CHANGELOG.md`
   matching the new version.
 
+The selected section must use a real calendar date in `YYYY-MM-DD` format.
+Both the PR check and release publication reject missing or invalid dates.
+
 The version bump is your choice: use `patch` for backward-compatible fixes,
 `minor` for new backward-compatible features, and `major` for breaking changes.
 Keep changelog entries user-facing; omit them for test-only, CI, formatting, or
