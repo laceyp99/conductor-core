@@ -136,7 +136,7 @@ def test_concurrent_batch_creation_publishes_only_one_complete_manifest(
 
 
 def test_manifest_remains_readable_when_publication_cleanup_fails(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, caplog
 ):
     store = storage.FilesystemArtifactStore(tmp_path, max_generations=None)
     original_unlink = os.unlink
@@ -148,19 +148,60 @@ def test_manifest_remains_readable_when_publication_cleanup_fails(
 
     with monkeypatch.context() as cleanup_patch:
         cleanup_patch.setattr(storage.os, "unlink", fail_cleanup)
-        with pytest.raises(PermissionError, match="cleanup failed"):
-            store.save_variation_history(_metadata(), ["one", "two"])
+        with caplog.at_level("WARNING", logger="conductor_core.storage"):
+            saved = store.save_variation_history(_metadata(), ["one", "two"])
 
     manifest_path = tmp_path / "variations" / "batch_batch-one.json"
     original_bytes = manifest_path.read_bytes()
     assert len(list(manifest_path.parent.glob(".variation-*.tmp"))) == 1
     record = store.get_variation_history("batch-one").record
     assert record is not None
+    assert record == saved
     assert record.manifest.generation_ids == ("one", "two")
     assert store.list_variation_history().records == (record,)
     with pytest.raises(FileExistsError):
         store.save_variation_history(_metadata(), ["three", "four"])
     assert manifest_path.read_bytes() == original_bytes
+    assert any(
+        entry.levelname == "WARNING"
+        and "Failed to remove temporary variation manifest" in entry.message
+        and "temporary-file cleanup failed" in entry.message
+        for entry in caplog.records
+    )
+
+
+def test_duplicate_batch_error_survives_cleanup_failure(tmp_path, monkeypatch, caplog):
+    store = storage.FilesystemArtifactStore(tmp_path, max_generations=None)
+    original = store.save_variation_history(_metadata(), ["one", "two"])
+    manifest_path = tmp_path / "variations" / "batch_batch-one.json"
+    original_bytes = manifest_path.read_bytes()
+    original_mtime = manifest_path.stat().st_mtime_ns
+    original_unlink = os.unlink
+
+    def fail_cleanup(path):
+        if Path(path).name.startswith(".variation-"):
+            raise PermissionError("temporary-file cleanup failed")
+        original_unlink(path)
+
+    with monkeypatch.context() as cleanup_patch:
+        cleanup_patch.setattr(storage.os, "unlink", fail_cleanup)
+        with (
+            caplog.at_level("WARNING", logger="conductor_core.storage"),
+            pytest.raises(FileExistsError),
+        ):
+            store.save_variation_history(_metadata(), ["three", "four"])
+
+    assert manifest_path.read_bytes() == original_bytes
+    assert manifest_path.stat().st_mtime_ns == original_mtime
+    assert store.get_variation_history("batch-one").record == original
+    assert store.list_variation_history().records == (original,)
+    assert len(list(manifest_path.parent.glob(".variation-*.tmp"))) == 1
+    assert any(
+        entry.levelname == "WARNING"
+        and "Failed to remove temporary variation manifest" in entry.message
+        and "temporary-file cleanup failed" in entry.message
+        for entry in caplog.records
+    )
 
 
 def test_manifest_accepts_an_arbitrary_external_hard_link(tmp_path):

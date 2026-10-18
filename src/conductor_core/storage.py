@@ -560,8 +560,16 @@ def _save_variation_history(
         # Publish the complete file without replacing a concurrently created batch.
         os.link(temporary_path, manifest_path)
     finally:
-        if os.path.exists(temporary_path):
+        try:
             os.unlink(temporary_path)
+        except FileNotFoundError:
+            pass
+        except OSError as exc:
+            logger.warning(
+                "Failed to remove temporary variation manifest %s: %s",
+                temporary_path,
+                exc,
+            )
     return _resolve_variation_manifest(artifact_root, manifest)
 
 
