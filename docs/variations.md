@@ -112,6 +112,20 @@ variation history, including when roots share a parent directory. It contains
 the ordered generation IDs and batch request metadata, not copied MIDI, audio,
 or `Loop` data.
 
+`save_variation_history()` raises `FileExistsError` if the batch ID already
+exists, including an identical replay. Creation is atomic; a rejected save
+leaves the original manifest and its creation timestamp unchanged.
+
+The artifact filesystem must support hard links. Manifests accept hard links,
+including the temporary name used during publication and links created outside
+Core. A leftover temporary name does not prevent reading a published batch.
+Temporary-file cleanup failures are logged as warnings. A published batch still
+returns successfully; if publication fails, its original error is preserved.
+Changes made through another hard link also change the manifest; immutability
+means Core does not overwrite it, rather than filesystem-enforced protection.
+Symbolic links, reparse points, and non-regular files remain rejected. Generation
+metadata, MIDI, audio, and message files continue to reject hard links.
+
 ### Read and manage batches
 
 Use `list_variation_history()`, `get_variation_history()`,

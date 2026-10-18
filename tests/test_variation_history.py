@@ -1,7 +1,9 @@
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from threading import Barrier
 
 import pytest
 
@@ -67,6 +69,146 @@ def test_save_manifest_is_versioned_atomic_and_contains_only_batch_index(
     assert [item.id for item in record.generations] == ["one", "two"]
     assert record.missing_generation_ids == ()
     assert record.invalid_generation_ids == ()
+
+
+@pytest.mark.parametrize(
+    "replay", [False, True], ids=["different-content", "identical"]
+)
+def test_save_rejects_existing_batch_without_changing_history(
+    tmp_path, monkeypatch, replay
+):
+    store = storage.FilesystemArtifactStore(tmp_path, max_generations=None)
+    for gen_id in ("one", "two", "three", "four"):
+        _finalize(store, gen_id, monkeypatch)
+    original = store.save_variation_history(_metadata(), ["one", "two"])
+    manifest_path = tmp_path / "variations" / "batch_batch-one.json"
+    original_bytes = manifest_path.read_bytes()
+    original_mtime = manifest_path.stat().st_mtime_ns
+
+    with pytest.raises(FileExistsError):
+        store.save_variation_history(
+            _metadata(), ["one", "two"] if replay else ["three", "four"]
+        )
+
+    assert manifest_path.read_bytes() == original_bytes
+    assert manifest_path.stat().st_mtime_ns == original_mtime
+    assert store.get_variation_history("batch-one").record == original
+    assert not list(manifest_path.parent.glob(".variation-*.tmp"))
+
+
+def test_concurrent_batch_creation_publishes_only_one_complete_manifest(
+    tmp_path, monkeypatch
+):
+    store = storage.FilesystemArtifactStore(tmp_path, max_generations=None)
+    barrier = Barrier(2)
+    original_link = os.link
+
+    def competing_link(source, destination):
+        barrier.wait(timeout=10)
+        original_link(source, destination)
+        # Read before unlinking the temporary name, while the file has two links.
+        lookup = store.get_variation_history("batch-one")
+        assert lookup.record is not None
+        assert lookup.record.manifest.generation_ids in (
+            ("one", "two"),
+            ("three", "four"),
+        )
+        assert store.list_variation_history().records == (lookup.record,)
+
+    monkeypatch.setattr(storage.os, "link", competing_link)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [
+            executor.submit(store.save_variation_history, _metadata(), ids)
+            for ids in (["one", "two"], ["three", "four"])
+        ]
+    winners = [future.result() for future in futures if future.exception() is None]
+    collisions = [
+        future.exception()
+        for future in futures
+        if isinstance(future.exception(), FileExistsError)
+    ]
+
+    assert len(winners) == len(collisions) == 1
+    assert store.get_variation_history("batch-one").record == winners[0]
+    assert not list((tmp_path / "variations").glob(".variation-*.tmp"))
+
+
+def test_manifest_remains_readable_when_publication_cleanup_fails(
+    tmp_path, monkeypatch, caplog
+):
+    store = storage.FilesystemArtifactStore(tmp_path, max_generations=None)
+    original_unlink = os.unlink
+
+    def fail_cleanup(path):
+        if Path(path).name.startswith(".variation-"):
+            raise PermissionError("temporary-file cleanup failed")
+        original_unlink(path)
+
+    with monkeypatch.context() as cleanup_patch:
+        cleanup_patch.setattr(storage.os, "unlink", fail_cleanup)
+        with caplog.at_level("WARNING", logger="conductor_core.storage"):
+            saved = store.save_variation_history(_metadata(), ["one", "two"])
+
+    manifest_path = tmp_path / "variations" / "batch_batch-one.json"
+    assert len(list(manifest_path.parent.glob(".variation-*.tmp"))) == 1
+    assert saved.manifest.generation_ids == ("one", "two")
+    assert store.get_variation_history("batch-one").record == saved
+    assert any(
+        entry.levelname == "WARNING"
+        and "Failed to remove temporary variation manifest" in entry.message
+        for entry in caplog.records
+    )
+
+
+def test_duplicate_batch_error_survives_cleanup_failure(tmp_path, monkeypatch, caplog):
+    store = storage.FilesystemArtifactStore(tmp_path, max_generations=None)
+    store.save_variation_history(_metadata(), ["one", "two"])
+    manifest_path = tmp_path / "variations" / "batch_batch-one.json"
+    original_bytes = manifest_path.read_bytes()
+    original_unlink = os.unlink
+
+    def fail_cleanup(path):
+        if Path(path).name.startswith(".variation-"):
+            raise PermissionError("temporary-file cleanup failed")
+        original_unlink(path)
+
+    with monkeypatch.context() as cleanup_patch:
+        cleanup_patch.setattr(storage.os, "unlink", fail_cleanup)
+        with (
+            caplog.at_level("WARNING", logger="conductor_core.storage"),
+            pytest.raises(FileExistsError),
+        ):
+            store.save_variation_history(_metadata(), ["three", "four"])
+
+    assert manifest_path.read_bytes() == original_bytes
+    assert any(
+        entry.levelname == "WARNING"
+        and "Failed to remove temporary variation manifest" in entry.message
+        for entry in caplog.records
+    )
+
+
+def test_manifest_accepts_an_arbitrary_external_hard_link(tmp_path):
+    store = storage.FilesystemArtifactStore(tmp_path / "generations")
+    record = store.save_variation_history(_metadata(), ["one", "two"])
+    manifest_path = tmp_path / "generations" / "variations" / "batch_batch-one.json"
+    os.link(manifest_path, tmp_path / "external.json")
+
+    assert store.get_variation_history("batch-one").record == record
+
+
+@pytest.mark.parametrize(
+    "filename", ["metadata.json", "loop.mid", "loop.mp3", "messages.json"]
+)
+def test_generation_artifacts_still_reject_hard_links(tmp_path, monkeypatch, filename):
+    store = storage.FilesystemArtifactStore(tmp_path / "generations")
+    generation = _finalize(store, "one", monkeypatch)
+    artifact_path = tmp_path / "generations" / "gen_one" / filename
+    if not artifact_path.exists():
+        artifact_path.write_bytes(b"artifact")
+    os.link(artifact_path, tmp_path / "external")
+
+    assert store.get_generation(generation.id) is None
 
 
 def test_variation_history_returns_legacy_generation_in_utc_without_rewriting(
