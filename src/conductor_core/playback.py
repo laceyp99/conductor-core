@@ -129,8 +129,6 @@ def _encode_wav_to_mp3(wav_path: str, mp3_path: str, duration_ms: int) -> None:
         wav_path,
         "-t",
         f"{duration_ms / 1000:.3f}",
-        "-c:a",
-        "libmp3lame",
         "-b:a",
         "192k",
         "-f",

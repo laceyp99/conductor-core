@@ -275,8 +275,6 @@ def test_midi_to_mp3_uses_requested_soundfont(monkeypatch, tmp_path):
         _fluidsynth_output_path(synthesis_command),
         "-t",
         "8.000",
-        "-c:a",
-        "libmp3lame",
         "-b:a",
         "192k",
         "-f",

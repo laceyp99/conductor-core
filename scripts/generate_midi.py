@@ -3,7 +3,7 @@
 WARNING: Running this file makes a real provider request. It requires the provider's
 SDK and credentials, may send the musical description to that provider, and may
 incur usage charges. Audio rendering additionally requires FluidSynth and FFmpeg
-with the libmp3lame encoder on PATH.
+with MP3 encoding support on PATH.
 
 Edit the constants below, then run ``python scripts/generate_midi.py`` from the
 repository root. Importing this module does not make a provider call.
