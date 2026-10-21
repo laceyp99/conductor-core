@@ -8,6 +8,16 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.12.5] - 2026-10-20
+
+### Changed
+
+- Audio previews now use FFmpeg directly for 192 kbps MP3 encoding instead of
+  pydub. The `playback` extra remains accepted but installs no Python packages;
+  FluidSynth and FFmpeg with the `libmp3lame` encoder must be on `PATH`.
+- Documentation tools now use an opt-in `docs` dependency group, and diagrams
+  use MkDocs Material's native Mermaid integration.
+
 ## [0.12.4] - 2026-10-15
 
 ### Fixed

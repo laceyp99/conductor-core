@@ -4,8 +4,8 @@
 
 **Conductor Core** is pre-release. Pin it to a release tag and choose only the
 optional features your application needs. Use `providers` for every provider,
-a provider name such as `google` for one provider, and `playback` for audio
-helpers.
+a provider name such as `google` for one provider. Audio previews require
+FluidSynth and FFmpeg installed separately.
 
 === "uv"
 
@@ -21,9 +21,10 @@ helpers.
 
 Provider extras are `openai`, `anthropic`, `google`, and `ollama`. 
 
-Extras can be
-combined; for example, `[google,playback]` enables Gemini generation and audio
-previews.
+Extras can be combined to install several providers. The `playback` extra is
+retained for existing install commands but no longer adds Python dependencies.
+See [Audio previews](artifacts-and-audio.md#audio-previews) for external tools,
+or [local setup](development.md#set-up-the-environment) for Core plus Ollama.
 
 ## Generate a loop
 

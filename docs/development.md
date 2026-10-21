@@ -5,8 +5,7 @@
 Core uses [uv](https://docs.astral.sh/uv/) 0.11.16 or newer. 
 
 From the repository
-root, install Core, development tools, and all optional provider and playback
-dependencies:
+root, install Core, development tools, and all optional provider dependencies:
 
 ```powershell
 uv sync --all-extras
@@ -14,6 +13,25 @@ uv sync --all-extras
 
 You do not need to activate the environment. Use `uv sync` if you need only the
 base package and development tools.
+
+Documentation tools are opt-in through the `docs` dependency group. They are not
+installed by the default sync or by `--all-extras`.
+
+For a local runtime with only the Ollama Python integration, use:
+
+```powershell
+uv sync --locked --no-dev --extra ollama
+```
+
+This installs Core and the Ollama SDK without the other providers or development
+tools. It creates or syncs the checkout's `.venv`; uv may remove packages outside
+this profile from that environment. Install and run Ollama separately and
+download the model you want to use. Omit `--no-dev` when developing Core, and
+include `--no-dev --extra ollama` in subsequent `uv run --locked` commands to
+preserve this minimal runtime profile.
+
+This command does not install Ollama itself, model weights, FluidSynth, or FFmpeg.
+MIDI generation does not require the audio tools.
 
 ## Validate changes
 
@@ -88,18 +106,24 @@ count as user-facing changelog entries.
 
 ## Preview the documentation
 
-Install development dependencies, then serve the site locally:
+Install the opt-in documentation group, then serve the site locally:
 
 ```powershell
-uv sync --all-extras
-uv run mkdocs serve
+uv sync --locked --group docs
+uv run --locked --group docs mkdocs serve
 ```
 
 Build the static documentation and fail on warnings with:
 
 ```powershell
-uv run mkdocs build --strict
+uv run --locked --group docs mkdocs build --strict
 ```
+
+Mermaid diagrams use Material's native integration with PyMdown SuperFences.
+No separate Mermaid plugin is required. After changing diagram configuration,
+review the diagrams on the Generation and Artifacts and audio pages in your
+browser, including both light and dark themes. A successful build checks the
+Markdown conversion but does not verify browser-side diagram rendering.
 
 ## Examples
 

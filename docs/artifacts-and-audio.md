@@ -107,8 +107,11 @@ instant. Compare returned timestamps with other timezone-aware datetimes.
 
 ## Audio previews
 
-Set `render_audio=True` to render an MP3 after MIDI generation. Install the
-`playback` extra and place FluidSynth and FFmpeg on `PATH`. With no
+Set `render_audio=True` to render an MP3 after MIDI generation. Place FluidSynth
+and FFmpeg with the `libmp3lame` encoder on `PATH`. No extra Python audio packages
+are required; the `playback` extra remains accepted for existing install commands.
+Core invokes FluidSynth to synthesize WAV audio, then FFmpeg directly to trim and
+encode it as a 192 kbps MP3. Each process has a 30-second timeout. With no
 `soundfont_path`, Core uses its packaged SoundFont; set the request path or
 `EngineConfig.default_soundfont_path` to choose another.
 
