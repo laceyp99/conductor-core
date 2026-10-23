@@ -79,6 +79,27 @@ def _midi_duration_ms(midi_path: str) -> int:
     return round(duration_seconds * 1000)
 
 
+def _run_audio_tool(label: str, command: list[str], timeout: int) -> None:
+    """Run an audio tool with consistent timeout and process-error reporting."""
+    try:
+        completed_process = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise AudioRenderingError(f"{label} timed out after {timeout} seconds") from exc
+
+    if completed_process.returncode != 0:
+        detail = (completed_process.stderr or completed_process.stdout or "").strip()
+        message = f"{label} exited with code {completed_process.returncode}"
+        if detail:
+            message = f"{message}: {detail}"
+        raise AudioRenderingError(message)
+
+
 def _render_midi_to_wav(midi_path: str, wav_path: str, soundfont_path: str) -> None:
     """Render MIDI with FluidSynth and raise when the process reports failure."""
     command = [
@@ -95,25 +116,7 @@ def _render_midi_to_wav(midi_path: str, wav_path: str, soundfont_path: str) -> N
         soundfont_path,
         midi_path,
     ]
-    try:
-        completed_process = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=_FLUIDSYNTH_TIMEOUT_SECONDS,
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise AudioRenderingError(
-            f"FluidSynth timed out after {_FLUIDSYNTH_TIMEOUT_SECONDS} seconds"
-        ) from exc
-
-    if completed_process.returncode != 0:
-        detail = (completed_process.stderr or completed_process.stdout or "").strip()
-        message = f"FluidSynth exited with code {completed_process.returncode}"
-        if detail:
-            message = f"{message}: {detail}"
-        raise AudioRenderingError(message)
+    _run_audio_tool("FluidSynth", command, _FLUIDSYNTH_TIMEOUT_SECONDS)
 
 
 def _encode_wav_to_mp3(wav_path: str, mp3_path: str, duration_ms: int) -> None:
@@ -135,25 +138,7 @@ def _encode_wav_to_mp3(wav_path: str, mp3_path: str, duration_ms: int) -> None:
         "mp3",
         mp3_path,
     ]
-    try:
-        completed_process = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=_FFMPEG_TIMEOUT_SECONDS,
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise AudioRenderingError(
-            f"FFmpeg timed out after {_FFMPEG_TIMEOUT_SECONDS} seconds"
-        ) from exc
-
-    if completed_process.returncode != 0:
-        detail = (completed_process.stderr or completed_process.stdout or "").strip()
-        message = f"FFmpeg exited with code {completed_process.returncode}"
-        if detail:
-            message = f"{message}: {detail}"
-        raise AudioRenderingError(message)
+    _run_audio_tool("FFmpeg", command, _FFMPEG_TIMEOUT_SECONDS)
 
 
 def _validate_wav_has_audio(wav_path: str) -> None:
