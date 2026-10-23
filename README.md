@@ -24,7 +24,7 @@ should pin a release tag and review the [changelog](CHANGELOG.md) when upgrading
 
 Choose only the optional features your application needs. Use `providers` for
 all hosted and local model providers, a provider name such as `google` for one
-provider, and `playback` for audio helpers.
+provider. Audio previews need FluidSynth and FFmpeg installed separately.
 
 ```powershell
 uv add "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.8.3"
@@ -61,8 +61,8 @@ The detailed documentation is built with **MkDocs**:
 To preview the documentation locally, install the docs dependency group and start **MkDocs**:
 
 ```powershell
-uv sync --locked --all-extras
-uv run --locked --all-extras mkdocs serve
+uv sync --locked --group docs
+uv run --locked --group docs mkdocs serve
 ```
 
 Open http://127.0.0.1:8000/ in your browser.

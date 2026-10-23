@@ -1,7 +1,7 @@
 """Audio synthesis utilities for MIDI playback.
 
 This module provides functionality to convert MIDI files to MP3 audio
-using FluidSynth for synthesis and pydub for MP3 encoding.
+using FluidSynth for synthesis and FFmpeg for MP3 encoding.
 
 Requires:
     - FluidSynth system library installed
@@ -32,8 +32,6 @@ from conductor_core.errors import AudioRenderingError
 
 logger = logging.getLogger(__name__)
 
-AudioSegment = None
-
 # Optional filesystem override retained for applications that provide their own
 # packaged SoundFont directory. The built-in resource directory is resolved
 # lazily so importing Core also works from zipped and frozen distributions.
@@ -42,7 +40,8 @@ _EXTRA_SOUNDFONT_DIRS: list[str] = []
 _PACKAGED_SOUNDFONT_PATHS: dict[str, str] = {}
 _PACKAGED_SOUNDFONT_STACK = ExitStack()
 _PACKAGED_SOUNDFONT_LOCK = Lock()
-_FLUIDSYNTH_TIMEOUT_SECONDS = 30
+_FLUIDSYNTH_TIMEOUT_SECONDS = 5
+_FFMPEG_TIMEOUT_SECONDS = 5
 _DEFAULT_MIDI_TEMPO = 500_000
 atexit.register(_PACKAGED_SOUNDFONT_STACK.close)
 # Preferred SoundFont filenames searched in order.
@@ -80,6 +79,27 @@ def _midi_duration_ms(midi_path: str) -> int:
     return round(duration_seconds * 1000)
 
 
+def _run_audio_tool(label: str, command: list[str], timeout: int) -> None:
+    """Run an audio tool with consistent timeout and process-error reporting."""
+    try:
+        completed_process = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise AudioRenderingError(f"{label} timed out after {timeout} seconds") from exc
+
+    if completed_process.returncode != 0:
+        detail = (completed_process.stderr or completed_process.stdout or "").strip()
+        message = f"{label} exited with code {completed_process.returncode}"
+        if detail:
+            message = f"{message}: {detail}"
+        raise AudioRenderingError(message)
+
+
 def _render_midi_to_wav(midi_path: str, wav_path: str, soundfont_path: str) -> None:
     """Render MIDI with FluidSynth and raise when the process reports failure."""
     command = [
@@ -96,25 +116,29 @@ def _render_midi_to_wav(midi_path: str, wav_path: str, soundfont_path: str) -> N
         soundfont_path,
         midi_path,
     ]
-    try:
-        completed_process = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=_FLUIDSYNTH_TIMEOUT_SECONDS,
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise AudioRenderingError(
-            f"FluidSynth timed out after {_FLUIDSYNTH_TIMEOUT_SECONDS} seconds"
-        ) from exc
+    _run_audio_tool("FluidSynth", command, _FLUIDSYNTH_TIMEOUT_SECONDS)
 
-    if completed_process.returncode != 0:
-        detail = (completed_process.stderr or completed_process.stdout or "").strip()
-        message = f"FluidSynth exited with code {completed_process.returncode}"
-        if detail:
-            message = f"{message}: {detail}"
-        raise AudioRenderingError(message)
+
+def _encode_wav_to_mp3(wav_path: str, mp3_path: str, duration_ms: int) -> None:
+    """Trim the synthesized WAV to the MIDI endpoint and encode a temporary MP3."""
+    command = [
+        "ffmpeg",
+        "-nostdin",
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        wav_path,
+        "-t",
+        f"{duration_ms / 1000:.3f}",
+        "-b:a",
+        "192k",
+        "-f",
+        "mp3",
+        mp3_path,
+    ]
+    _run_audio_tool("FFmpeg", command, _FFMPEG_TIMEOUT_SECONDS)
 
 
 def _validate_wav_has_audio(wav_path: str) -> None:
@@ -407,17 +431,8 @@ def midi_to_mp3(
         _render_midi_to_wav(midi_path, temp_wav_path, soundfont_path)
         _validate_wav_has_audio(temp_wav_path)
 
-        global AudioSegment
-
-        if AudioSegment is None:
-            from pydub import AudioSegment as _AudioSegment
-
-            AudioSegment = _AudioSegment
-
-        # Convert WAV to MP3 using pydub
         logger.info(f"Converting WAV to MP3: {output_path}")
-        audio = AudioSegment.from_wav(temp_wav_path)
-        audio[:target_duration_ms].export(temp_mp3_path, format="mp3", bitrate="192k")
+        _encode_wav_to_mp3(temp_wav_path, temp_mp3_path, target_duration_ms)
         os.replace(temp_mp3_path, output_path)
 
         logger.info(f"Successfully created MP3: {output_path}")

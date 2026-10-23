@@ -5,8 +5,7 @@
 Core uses [uv](https://docs.astral.sh/uv/) 0.11.16 or newer. 
 
 From the repository
-root, install Core, development tools, and all optional provider and playback
-dependencies:
+root, install Core, development tools, and all optional provider dependencies:
 
 ```powershell
 uv sync --all-extras
@@ -14,6 +13,21 @@ uv sync --all-extras
 
 You do not need to activate the environment. Use `uv sync` if you need only the
 base package and development tools.
+
+Documentation tools are opt-in through the `docs` dependency group. They are not
+installed by the default sync or by `--all-extras`.
+
+For a local runtime with only the Ollama Python integration, use:
+
+```powershell
+uv sync --locked --no-dev --extra ollama
+```
+
+This syncs the checkout's `.venv` to Core and the Ollama Python SDK, including
+their dependencies. `--no-dev` excludes development tools; `--extra ollama`
+selects the Ollama integration. Sync removes packages outside that selection.
+Use the same flags with `uv run --locked` to keep this runtime-only environment,
+or omit `--no-dev` to include development tools.
 
 ## Validate changes
 
@@ -88,17 +102,17 @@ count as user-facing changelog entries.
 
 ## Preview the documentation
 
-Install development dependencies, then serve the site locally:
+Install the opt-in documentation group, then serve the site locally:
 
 ```powershell
-uv sync --all-extras
-uv run mkdocs serve
+uv sync --locked --group docs
+uv run --locked --group docs mkdocs serve
 ```
 
 Build the static documentation and fail on warnings with:
 
 ```powershell
-uv run mkdocs build --strict
+uv run --locked --group docs mkdocs build --strict
 ```
 
 ## Examples

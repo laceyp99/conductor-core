@@ -212,10 +212,10 @@ def test_midi_to_mp3_raises_when_playback_is_unavailable(monkeypatch, tmp_path):
 
 
 def test_midi_to_mp3_uses_requested_soundfont(monkeypatch, tmp_path):
-    midi_path = _write_midi(tmp_path / "loop.mid")
-    soundfont_path = _write_file(tmp_path / "custom.sf2")
-    output_path = tmp_path / "loop.mp3"
-    captured = {}
+    midi_path = _write_midi(tmp_path / "input loop.mid")
+    soundfont_path = _write_file(tmp_path / "custom piano.sf2")
+    output_path = tmp_path / "output loop.mp3"
+    calls = []
 
     monkeypatch.setattr(audio, "SOUNDFONT_DIR", str(tmp_path))
     monkeypatch.setattr(
@@ -223,40 +223,27 @@ def test_midi_to_mp3_uses_requested_soundfont(monkeypatch, tmp_path):
     )
 
     def fake_run(command, **kwargs):
-        captured["command"] = command
-        captured["run_kwargs"] = kwargs
-        _write_wav(_fluidsynth_output_path(command))
+        calls.append((command, kwargs))
+        if command[0] == "fluidsynth":
+            _write_wav(_fluidsynth_output_path(command))
+        else:
+            assert command[0] == "ffmpeg"
+            Path(command[-1]).write_bytes(b"mp3")
         return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
-    class FakeAudioSegment:
-        @staticmethod
-        def from_wav(temp_wav_path):
-            captured["temp_wav_path"] = temp_wav_path
-
-            class FakeExport:
-                def __getitem__(self, selection):
-                    captured["slice"] = selection
-                    return self
-
-                def export(self, target_output_path, format, bitrate):
-                    captured["output_path"] = target_output_path
-                    captured["format"] = format
-                    captured["bitrate"] = bitrate
-                    Path(target_output_path).write_bytes(b"mp3")
-
-            return FakeExport()
-
     monkeypatch.setattr(audio.subprocess, "run", fake_run)
-    monkeypatch.setattr(audio, "AudioSegment", FakeAudioSegment)
 
     rendered_path = audio.midi_to_mp3(
         str(midi_path),
         output_path=str(output_path),
-        soundfont_name="custom.sf2",
+        soundfont_name="custom piano.sf2",
     )
 
     assert rendered_path == str(output_path)
-    assert captured["command"] == [
+    assert len(calls) == 2
+    synthesis_command, synthesis_kwargs = calls[0]
+    encoding_command, encoding_kwargs = calls[1]
+    assert synthesis_command == [
         "fluidsynth",
         "-ni",
         "-T",
@@ -264,30 +251,58 @@ def test_midi_to_mp3_uses_requested_soundfont(monkeypatch, tmp_path):
         "-O",
         "s16",
         "-F",
-        _fluidsynth_output_path(captured["command"]),
+        _fluidsynth_output_path(synthesis_command),
         "-r",
         "44100",
         str(soundfont_path),
         str(midi_path),
     ]
-    assert captured["run_kwargs"] == {
+    assert synthesis_kwargs == {
         "capture_output": True,
         "text": True,
         "check": False,
         "timeout": audio._FLUIDSYNTH_TIMEOUT_SECONDS,
     }
-    rendered_temp_path = Path(captured["output_path"])
+    rendered_temp_path = Path(encoding_command[-1])
+    assert encoding_command == [
+        "ffmpeg",
+        "-nostdin",
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        _fluidsynth_output_path(synthesis_command),
+        "-t",
+        "8.000",
+        "-b:a",
+        "192k",
+        "-f",
+        "mp3",
+        str(rendered_temp_path),
+    ]
+    assert encoding_kwargs == {
+        "capture_output": True,
+        "text": True,
+        "check": False,
+        "timeout": audio._FFMPEG_TIMEOUT_SECONDS,
+    }
     assert rendered_temp_path.parent == output_path.parent
     assert rendered_temp_path != output_path
     assert not rendered_temp_path.exists()
-    assert captured["slice"] == slice(None, 8000, None)
+    assert not Path(_fluidsynth_output_path(synthesis_command)).exists()
     assert output_path.read_bytes() == b"mp3"
 
 
-def test_midi_to_mp3_removes_partial_output_when_export_fails(monkeypatch, tmp_path):
+@pytest.mark.parametrize("existing_output", [False, True])
+def test_midi_to_mp3_removes_partial_output_when_ffmpeg_fails(
+    monkeypatch, tmp_path, existing_output
+):
     midi_path = _write_midi(tmp_path / "loop.mid")
     _write_file(tmp_path / "custom.sf2")
     output_path = tmp_path / "loop.mp3"
+    if existing_output:
+        output_path.write_bytes(b"existing preview")
     partial_path = None
 
     monkeypatch.setattr(audio, "SOUNDFONT_DIR", str(tmp_path))
@@ -296,41 +311,67 @@ def test_midi_to_mp3_removes_partial_output_when_export_fails(monkeypatch, tmp_p
     )
 
     def fake_run(command, **kwargs):
-        _write_wav(_fluidsynth_output_path(command))
-        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
-
-    class FakeAudioSegment:
-        @staticmethod
-        def from_wav(temp_wav_path):
-            class FailedExport:
-                def __getitem__(self, selection):
-                    return self
-
-                def export(self, target_output_path, format, bitrate):
-                    nonlocal partial_path
-                    partial_path = Path(target_output_path)
-                    partial_path.write_bytes(b"partial")
-                    raise RuntimeError("export failed")
-
-            return FailedExport()
+        nonlocal partial_path
+        if command[0] == "fluidsynth":
+            _write_wav(_fluidsynth_output_path(command))
+            return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+        assert command[0] == "ffmpeg"
+        partial_path = Path(command[-1])
+        partial_path.write_bytes(b"partial")
+        return subprocess.CompletedProcess(
+            command, 1, stdout="", stderr="encode failed\n"
+        )
 
     monkeypatch.setattr(audio.subprocess, "run", fake_run)
-    monkeypatch.setattr(audio, "AudioSegment", FakeAudioSegment)
 
     with pytest.raises(
-        AudioRenderingError, match="RuntimeError: export failed"
-    ) as raised:
+        AudioRenderingError, match="FFmpeg exited with code 1: encode failed"
+    ):
         audio.midi_to_mp3(
             str(midi_path),
             output_path=str(output_path),
             soundfont_name="custom.sf2",
         )
 
-    assert isinstance(raised.value.__cause__, RuntimeError)
     assert partial_path is not None
     assert partial_path.parent == output_path.parent
     assert not partial_path.exists()
-    assert not output_path.exists()
+    if existing_output:
+        assert output_path.read_bytes() == b"existing preview"
+    else:
+        assert not output_path.exists()
+
+
+@pytest.mark.parametrize("output_stream", ["stderr", "stdout"])
+def test_encode_wav_to_mp3_reports_process_failure(monkeypatch, output_stream):
+    def fake_run(command, **kwargs):
+        assert command[0] == "ffmpeg"
+        output = {"stdout": "", "stderr": "", output_stream: "encoder unavailable\n"}
+        return subprocess.CompletedProcess(command, 2, **output)
+
+    monkeypatch.setattr(audio.subprocess, "run", fake_run)
+
+    with pytest.raises(
+        AudioRenderingError, match="FFmpeg exited with code 2: encoder unavailable"
+    ):
+        audio._encode_wav_to_mp3("input.wav", "output.mp3", 1234)
+
+
+def test_encode_wav_to_mp3_reports_timeout(monkeypatch):
+    def fake_run(command, **kwargs):
+        assert command[0] == "ffmpeg"
+        assert kwargs["timeout"] == 5
+        assert command[command.index("-t") + 1] == "1.234"
+        raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+
+    monkeypatch.setattr(audio.subprocess, "run", fake_run)
+
+    with pytest.raises(
+        AudioRenderingError, match="FFmpeg timed out after 5 seconds"
+    ) as raised:
+        audio._encode_wav_to_mp3("input.wav", "output.mp3", 1234)
+
+    assert isinstance(raised.value.__cause__, subprocess.TimeoutExpired)
 
 
 @pytest.mark.parametrize("midi_type", [0, 1])
@@ -410,6 +451,7 @@ def test_midi_to_mp3_reports_fluidsynth_process_failure(monkeypatch, tmp_path):
     )
 
     def fake_run(command, **kwargs):
+        assert command[0] == "fluidsynth"
         Path(_fluidsynth_output_path(command)).write_bytes(b"apparently valid output")
         return subprocess.CompletedProcess(
             command,
@@ -418,13 +460,7 @@ def test_midi_to_mp3_reports_fluidsynth_process_failure(monkeypatch, tmp_path):
             stderr="FluidSynth: failed to load SoundFont\n",
         )
 
-    class UnexpectedAudioSegment:
-        @staticmethod
-        def from_wav(temp_wav_path):
-            pytest.fail("Invalid WAV output should not be passed to pydub")
-
     monkeypatch.setattr(audio.subprocess, "run", fake_run)
-    monkeypatch.setattr(audio, "AudioSegment", UnexpectedAudioSegment)
 
     with pytest.raises(
         AudioRenderingError,
@@ -450,6 +486,7 @@ def test_midi_to_mp3_reports_fluidsynth_timeout(monkeypatch, tmp_path):
     )
 
     def fake_run(command, **kwargs):
+        assert command[0] == "fluidsynth"
         raise subprocess.TimeoutExpired(command, kwargs["timeout"])
 
     monkeypatch.setattr(audio.subprocess, "run", fake_run)
@@ -479,16 +516,11 @@ def test_midi_to_mp3_rejects_wav_without_audio_frames(monkeypatch, tmp_path):
     )
 
     def fake_run(command, **kwargs):
+        assert command[0] == "fluidsynth"
         _write_wav(_fluidsynth_output_path(command), frames=b"")
         return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
-    class UnexpectedAudioSegment:
-        @staticmethod
-        def from_wav(temp_wav_path):
-            pytest.fail("WAV output without audio frames should not be passed to pydub")
-
     monkeypatch.setattr(audio.subprocess, "run", fake_run)
-    monkeypatch.setattr(audio, "AudioSegment", UnexpectedAudioSegment)
 
     with pytest.raises(
         AudioRenderingError,
