@@ -23,15 +23,11 @@ For a local runtime with only the Ollama Python integration, use:
 uv sync --locked --no-dev --extra ollama
 ```
 
-This installs Core and the Ollama SDK without the other providers or development
-tools. It creates or syncs the checkout's `.venv`; uv may remove packages outside
-this profile from that environment. Install and run Ollama separately and
-download the model you want to use. Omit `--no-dev` when developing Core, and
-include `--no-dev --extra ollama` in subsequent `uv run --locked` commands to
-preserve this minimal runtime profile.
-
-This command does not install Ollama itself, model weights, FluidSynth, or FFmpeg.
-MIDI generation does not require the audio tools.
+This syncs the checkout's `.venv` to Core and the Ollama Python SDK, including
+their dependencies. `--no-dev` excludes development tools; `--extra ollama`
+selects the Ollama integration. Sync removes packages outside that selection.
+Use the same flags with `uv run --locked` to keep this runtime-only environment,
+or omit `--no-dev` to include development tools.
 
 ## Validate changes
 
@@ -118,12 +114,6 @@ Build the static documentation and fail on warnings with:
 ```powershell
 uv run --locked --group docs mkdocs build --strict
 ```
-
-Mermaid diagrams use Material's native integration with PyMdown SuperFences.
-No separate Mermaid plugin is required. After changing diagram configuration,
-review the diagrams on the Generation and Artifacts and audio pages in your
-browser, including both light and dark themes. A successful build checks the
-Markdown conversion but does not verify browser-side diagram rendering.
 
 ## Examples
 

@@ -21,8 +21,7 @@ FluidSynth and FFmpeg installed separately.
 
 Provider extras are `openai`, `anthropic`, `google`, and `ollama`. 
 
-Extras can be combined to install several providers. The `playback` extra is
-retained for existing install commands but no longer adds Python dependencies.
+Extras can be combined to install several providers.
 See [Audio previews](artifacts-and-audio.md#audio-previews) for external tools,
 or [local setup](development.md#set-up-the-environment) for Core plus Ollama.
 

@@ -51,8 +51,6 @@ openai = ["openai>=1.79.0"]
 anthropic = ["anthropic>=0.115.0"]
 google = ["google-genai>=1.65.0"]
 ollama = ["ollama>=0.6.1"]
-# Retained for consumers using [playback]; rendering now uses external tools only.
-playback = []
 providers = [
 	"anthropic>=0.115.0",
 	"google-genai>=1.65.0",

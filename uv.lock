@@ -349,7 +349,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.11.4,<3" },
     { name = "typing-extensions", specifier = ">=4.14.1" },
 ]
-provides-extras = ["openai", "anthropic", "google", "ollama", "playback", "providers"]
+provides-extras = ["openai", "anthropic", "google", "ollama", "providers"]
 
 [package.metadata.requires-dev]
 dev = [

@@ -13,8 +13,12 @@ while its public API is still in initial development.
 ### Changed
 
 - Audio previews now use FFmpeg directly for 192 kbps MP3 encoding instead of
-  pydub. The `playback` extra remains accepted but installs no Python packages;
-  FluidSynth and FFmpeg with MP3 encoding support must be on `PATH`.
+  pydub. FluidSynth and FFmpeg with MP3 encoding support must be on `PATH`.
+- FluidSynth synthesis and FFmpeg encoding each time out after 5 seconds.
+
+### Removed
+
+- Removed the `playback` install extra. Select only the provider extras you need.
 
 ## [0.12.4] - 2026-10-15
 
