@@ -20,17 +20,6 @@ flowchart LR
     warning --> result
 ```
 
-## Incomplete Anthropic responses
-
-Anthropic loop and variation generation requires the terminal `message_stop`
-event. If the stream ends before that event, Core raises
-`ProviderConnectionError` with `operation="stream"`, even if valid music has
-already arrived. The incomplete response is not returned as a successful
-generation with an unconfirmed cost. The response and client are still closed.
-
-Core does not automatically retry this failure. The interrupted request may
-already have incurred charges, and retrying may produce different music.
-
 ## Request options
 
 | Field | Purpose |
@@ -210,6 +199,15 @@ not retry. Lower or disable thinking, choose a model or server with a larger
 context, or set `ollama_num_ctx` on the request. Core never chooses a context
 size itself: larger windows use more memory and can prevent a model from
 loading.
+
+Anthropic loop and variation generation requires the terminal `message_stop`
+event. If the stream ends before that event, Core raises
+`ProviderConnectionError` with `operation="stream"`, even if valid music has
+already arrived. The incomplete response is not returned as a successful
+generation with an unconfirmed cost. The response and client are still closed.
+
+Core does not automatically retry this failure. The interrupted request may
+already have incurred charges, and retrying may produce different music.
 
 Provider, parsing, and MIDI conversion errors are raised to the caller. Core
 removes an unfinished generation workspace when an error occurs after allocation.
