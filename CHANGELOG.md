@@ -8,6 +8,14 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.12.6] - 2026-10-25
+
+### Fixed
+
+- Anthropic loop and variation generation now raises `ProviderConnectionError`
+  when a stream ends before `message_stop`, even if usable music has arrived,
+  instead of returning a successful result with potentially understated cost.
+
 ## [0.12.5] - 2026-10-20
 
 ### Changed

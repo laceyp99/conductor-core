@@ -190,6 +190,8 @@ key is missing or blank. Authentication failures raise
 `ProviderAuthenticationError`; other SDK failures use the public
 `ProviderError` hierarchy and identify the provider and operation.
 
+Anthropic loop and variation generation requires the terminal `message_stop` event. If the stream ends before that event, Core raises `ProviderConnectionError` with `operation="stream"`, even if valid music has already arrived. The incomplete response is not returned as a successful generation with an unconfirmed cost. The response and client are still closed. Core does not automatically retry this failure. The interrupted request may already have incurred charges, and retrying may produce different music.
+
 When an Ollama response stops because the prompt and response filled the
 model's context window, Core raises `ProviderContextLengthError`, a
 `ProviderRequestError` subclass, instead of a parsing error. Its `model`,
