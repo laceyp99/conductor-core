@@ -14,12 +14,15 @@ from conductor_core.providers import anthropic
 
 
 @pytest.mark.parametrize("generation", ["loop_gen", "variations_gen"])
-def test_anthropic_generation_closes_sdk_response_and_client(
-    monkeypatch, sample_loop, generation
+@pytest.mark.parametrize("stream_end", ["complete", "before_usage", "before_stop"])
+def test_anthropic_generation_requires_completion_and_closes_sdk_resources(
+    monkeypatch, sample_loop, generation, stream_end
 ):
     import httpx
     from anthropic import Stream
     from anthropic.types import RawMessageStreamEvent
+
+    from conductor_core.errors import ProviderConnectionError
 
     tool_name = (
         "build_MIDI_loop" if generation == "loop_gen" else "build_MIDI_variations"
@@ -28,6 +31,19 @@ def test_anthropic_generation_closes_sdk_response_and_client(
     if generation == "variations_gen":
         payload = {"variations": [payload]}
     events = [
+        {
+            "type": "message_start",
+            "message": {
+                "id": "msg-1",
+                "type": "message",
+                "role": "assistant",
+                "model": "claude-sonnet-4-5",
+                "content": [],
+                "stop_reason": None,
+                "stop_sequence": None,
+                "usage": {"input_tokens": 1000, "output_tokens": 7},
+            },
+        },
         {
             "type": "content_block_start",
             "index": 0,
@@ -44,8 +60,17 @@ def test_anthropic_generation_closes_sdk_response_and_client(
             "delta": {"type": "input_json_delta", "partial_json": json.dumps(payload)},
         },
         {"type": "content_block_stop", "index": 0},
-        {"type": "message_stop"},
     ]
+    if stream_end != "before_usage":
+        events.append(
+            {
+                "type": "message_delta",
+                "delta": {"stop_reason": "tool_use", "stop_sequence": None},
+                "usage": {"output_tokens": 1007},
+            }
+        )
+    if stream_end == "complete":
+        events.append({"type": "message_stop"})
 
     class ResponseBody(httpx.SyncByteStream):
         def __iter__(self):
@@ -60,9 +85,21 @@ def test_anthropic_generation_closes_sdk_response_and_client(
     monkeypatch.setattr(anthropic, "initialize_anthropic_client", lambda **_: client)
 
     try:
-        result = getattr(anthropic, generation)("write music", "claude-sonnet-4-5")
-        loop = result[0] if generation == "loop_gen" else result[0].variations[0]
-        assert loop == sample_loop
+        generate = getattr(anthropic, generation)
+        if stream_end == "complete":
+            result = generate("write music", "claude-sonnet-4-5")
+            loop = result[0] if generation == "loop_gen" else result[0].variations[0]
+            assert loop == sample_loop
+            assert result[2] == pytest.approx(0.018105)
+            if generation == "variations_gen":
+                assert result[3].input_tokens == 1000
+                assert result[3].output_tokens == 1007
+                assert result[3].total_tokens == 2007
+        else:
+            with pytest.raises(ProviderConnectionError, match="message_stop") as raised:
+                generate("write music", "claude-sonnet-4-5")
+            assert raised.value.provider == "Anthropic"
+            assert raised.value.operation == "stream"
         assert response.is_closed
         assert client.is_closed()
     finally:

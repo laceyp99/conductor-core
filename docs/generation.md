@@ -20,6 +20,17 @@ flowchart LR
     warning --> result
 ```
 
+## Incomplete Anthropic responses
+
+Anthropic loop and variation generation requires the terminal `message_stop`
+event. If the stream ends before that event, Core raises
+`ProviderConnectionError` with `operation="stream"`, even if valid music has
+already arrived. The incomplete response is not returned as a successful
+generation with an unconfirmed cost. The response and client are still closed.
+
+Core does not automatically retry this failure. The interrupted request may
+already have incurred charges, and retrying may produce different music.
+
 ## Request options
 
 | Field | Purpose |

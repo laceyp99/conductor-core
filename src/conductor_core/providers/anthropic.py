@@ -238,7 +238,7 @@ def build_system_prompt_block(loop_prompt):
 
 
 def process_streaming_response(completion, expected_tool_name: str | None = None):
-    """Extract text, tool JSON, and token usage from a streaming response."""
+    """Extract text, tool JSON, and usage; reject streams without message_stop."""
     output = {
         "loop": "",
         "text": "",
@@ -323,6 +323,12 @@ def process_streaming_response(completion, expected_tool_name: str | None = None
                 apply_usage(chunk.usage)
         elif chunk.type == "message_stop":
             break
+    else:
+        raise ProviderConnectionError(
+            "Anthropic",
+            "Incomplete response: stream ended before message_stop.",
+            operation="stream",
+        )
     return output
 
 
