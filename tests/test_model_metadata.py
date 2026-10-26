@@ -121,6 +121,46 @@ def test_gpt_6_astra_capabilities_match_openai_documentation():
 
 
 @pytest.mark.parametrize(
+    ("model", "expected_efforts", "expected_cost"),
+    [
+        (
+            "gpt-6.1-sol",
+            ["low", "medium", "high", "xhigh", "max"],
+            {
+                "input": 2.00,
+                "cached input": 0.10,
+                "cache write": 2.50,
+                "output": 10.00,
+            },
+        ),
+        (
+            "gpt-6.1-terra",
+            ["none", "low", "medium", "high", "xhigh", "max"],
+            {
+                "input": 1.00,
+                "cached input": 0.05,
+                "cache write": 1.25,
+                "output": 5.00,
+            },
+        ),
+    ],
+)
+def test_gpt_6_1_capabilities_match_openai_documentation(
+    model, expected_efforts, expected_cost
+):
+    model_config = music.get_model_info()["models"]["OpenAI"][model]
+
+    assert model_config["effort_options"] == expected_efforts
+    assert model_config["max_tokens"] == 128000
+    assert model_config["cost"] == expected_cost
+    assert model_config["rate_limits"] == {
+        "RPM": 5000,
+        "TPM": 1000000,
+        "RPD": None,
+    }
+
+
+@pytest.mark.parametrize(
     ("model", "expected_cost"),
     [
         (
