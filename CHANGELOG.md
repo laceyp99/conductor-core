@@ -8,6 +8,15 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.12.7] - 2026-10-26
+
+### Added
+
+- GPT-6.1 Sol and GPT-6.1 Terra model support with 128K output tokens,
+  standard token and cache pricing, and Build-tier rate limits. Terra accepts
+  six effort levels including `none`; Sol accepts `low` through `max`, so
+  turning thinking off selects `low`.
+
 ## [0.12.6] - 2026-10-25
 
 ### Fixed
