@@ -140,7 +140,10 @@ for inspection in status.models:
 ```
 
 `get_model_status(name)` returns one inspection record for an installed model,
-or `None` only when listing succeeded and the selected model was absent. Listing
+or `None` only when listing succeeded and the selected model was absent. Following
+Ollama's naming rules, an omitted tag means `latest`: `tiny` matches an installed
+`tiny:latest`, and the record's `name` is the installed name. Explicit tags, such
+as `qwen3:8b-q4_K_M`, and namespaces must match exactly. Listing
 and client initialization failures raise directly from both helpers. A missing
 optional SDK raises an actionable `ImportError` without breaking package imports.
 An empty `.models` tuple means a successful listing with no named models.
