@@ -227,8 +227,10 @@ def get_model_status(
 ) -> OllamaModelInspection | None:
     """Inspect one installed model; return None only if it was not listed.
 
-    Listing failures raise directly. An installed model's inspection failure
-    returns a record with unknown capabilities and the typed error.
+    An omitted tag means ``latest``, so ``tiny`` matches an installed
+    ``tiny:latest`` and the record carries the installed name. Listing failures
+    raise directly. An installed model's inspection failure returns a record
+    with unknown capabilities and the typed error.
     """
     host = _resolve_host(host_address)
     with closing(
@@ -237,9 +239,29 @@ def get_model_status(
             **({"timeout": request_timeout} if request_timeout is not None else {}),
         )
     ) as client:
-        if model_name not in _list_models(client):
+        requested = _with_default_tag(model_name)
+        installed = next(
+            (
+                name
+                for name in _list_models(client)
+                if _with_default_tag(name) == requested
+            ),
+            None,
+        )
+        if installed is None:
             return None
-        return _inspect_model(client, model_name, host)
+        return _inspect_model(client, installed, host)
+
+
+def _with_default_tag(model_name: str) -> str:
+    """Spell out Ollama's implied ``latest`` tag so equivalent names compare equal.
+
+    The tag follows the last ``:`` in the final path segment, so namespaces and
+    registry ports (``host:5000/user/model``) do not count as tags.
+    """
+    if ":" in model_name.rsplit("/", 1)[-1]:
+        return model_name
+    return f"{model_name}:latest"
 
 
 def _list_models(client) -> list[str]:

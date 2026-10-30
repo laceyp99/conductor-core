@@ -8,7 +8,7 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
-## [0.12.8] - 2026-10-30
+## [0.12.9] - 2026-10-30
 
 ### Fixed
 
@@ -20,6 +20,14 @@ while its public API is still in initial development.
 
 - The `ollama` and `providers` extras now require `ollama>=0.6.2`, the first
   SDK release with public client cleanup.
+
+## [0.12.8] - 2026-10-30
+
+### Fixed
+
+- Ollama loop and variation generation now accept an installed model selected
+  without its default tag, such as `tiny` for `tiny:latest`, instead of raising
+  `Invalid Model Selected`. Explicit tags and namespaces still match exactly.
 
 ## [0.12.7] - 2026-10-26
 

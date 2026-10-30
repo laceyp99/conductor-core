@@ -495,6 +495,89 @@ def test_model_status_skips_inspection_for_missing_model(monkeypatch):
     assert status is None
 
 
+@pytest.mark.parametrize(
+    ("installed", "requested"),
+    [
+        ("tiny:latest", "tiny"),
+        ("tiny:latest", "tiny:latest"),
+        ("tiny", "tiny:latest"),
+        ("qwen3:8b-q4_K_M", "qwen3:8b-q4_K_M"),
+        ("user/tiny:latest", "user/tiny"),
+        ("localhost:5000/user/tiny:latest", "localhost:5000/user/tiny"),
+    ],
+)
+def test_model_status_treats_omitted_tag_as_latest(monkeypatch, installed, requested):
+    shown = []
+    client = _counting_client(["other:latest", installed], shown)
+    monkeypatch.setattr(ollama, "initialize_ollama_client", lambda **kwargs: client)
+
+    status = ollama.get_model_status(requested)
+
+    assert shown == [installed]
+    assert status.name == installed
+
+
+@pytest.mark.parametrize(
+    ("installed", "requested"),
+    [
+        ("tiny:latest", "tiny:7b"),
+        ("tiny:7b", "tiny"),
+        ("qwen3:8b-q4_K_M", "qwen3:8b-q8_0"),
+        ("user/tiny:latest", "tiny"),
+    ],
+)
+def test_model_status_rejects_other_tags_and_namespaces(
+    monkeypatch, installed, requested
+):
+    shown = []
+    client = _counting_client([installed], shown)
+    monkeypatch.setattr(ollama, "initialize_ollama_client", lambda **kwargs: client)
+
+    assert ollama.get_model_status(requested) is None
+    assert shown == []
+
+
+@pytest.mark.parametrize("generator", ["generate_midi", "generate_variations"])
+def test_ollama_routing_accepts_untagged_installed_model(monkeypatch, generator):
+    model_info = {"models": {"OpenAI": {}, "Google": {}, "Anthropic": {}}}
+    monkeypatch.setattr(routing, "get_model_info", lambda: model_info)
+    content = (
+        json.dumps(_loop_payload())
+        if generator == "generate_midi"
+        else json.dumps({"variations": [_loop_payload()]})
+    )
+    chats = []
+    client = _counting_client(["tiny:latest"], [])
+    client.chat = lambda **kwargs: (
+        chats.append(kwargs)
+        or SimpleNamespace(message=SimpleNamespace(content=content, thinking=None))
+    )
+    monkeypatch.setattr(ollama, "initialize_ollama_client", lambda **kwargs: client)
+
+    if generator == "generate_midi":
+        routing.generate_midi("tiny", "prompt")
+    else:
+        routing.generate_variations("tiny", "prompt", 1)
+
+    assert chats[0]["model"] == "tiny"
+
+
+@pytest.mark.parametrize("generator", ["generate_midi", "generate_variations"])
+def test_ollama_routing_rejects_missing_model(monkeypatch, generator):
+    model_info = {"models": {"OpenAI": {}, "Google": {}, "Anthropic": {}}}
+    monkeypatch.setattr(routing, "get_model_info", lambda: model_info)
+    client = _counting_client(["tiny:latest"], [])
+    monkeypatch.setattr(ollama, "initialize_ollama_client", lambda **kwargs: client)
+
+    def request():
+        if generator == "generate_midi":
+            return routing.generate_midi("missing", "prompt")
+        return routing.generate_variations("missing", "prompt", 1)
+
+    with pytest.raises(ValueError, match="Invalid Model Selected"):
+        request()
+
+
 def test_model_status_reports_unavailable_server(monkeypatch):
     error = ollama.ProviderConnectionError("Ollama", "refused")
 
