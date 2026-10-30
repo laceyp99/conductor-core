@@ -6,7 +6,7 @@ A non-skip pull request must:
 1. declare a valid Semantic Versioning version in ``pyproject.toml``,
 2. bump that version above the version on the base branch, and
 3. add a non-empty ``[x.y.z] - YYYY-MM-DD`` section to ``CHANGELOG.md`` matching
-   the new version. The release workflow publishes that section as release notes.
+   the new version. Minor and major release pages publish that section as notes.
 
 Pull requests are skipped when they carry the ``skip-release`` label or use a
 Conventional Commit title whose type is test, ci, docs, style, or chore. The
@@ -156,6 +156,37 @@ def section_body(text: str, version: str) -> str | None:
     return None
 
 
+def is_patch(version: str) -> bool:
+    """Return whether a version is a patch, which gets a tag but no release page."""
+    key = parse_semver(version)
+    return key is not None and key[2] > 0
+
+
+def release_notes(text: str, version: str) -> str:
+    """Return release-page notes for a minor or major version.
+
+    Patch versions only get tags, so the notes also roll up each patch section
+    listed below this version until the previous minor or major release.
+    """
+    body = (section_body(text, version) or "").strip()
+    if not body:
+        fail(f"{CHANGELOG_PATH} has no [{version}] section")
+
+    found = sections(text)
+    start = next(i for i, (label, _) in enumerate(found) if label == version)
+    patches = []
+    for label, _ in found[start + 1 :]:
+        if not is_patch(label):
+            break
+        patch_body = (section_body(text, label) or "").strip()
+        # Nest the patch's own subheadings, e.g. "### Fixed", under its heading.
+        nested = re.sub(r"^#", "##", patch_body, flags=re.MULTILINE)
+        patches.append(f"### [{label}]\n\n{nested}")
+    if not patches:
+        return body
+    return "\n\n".join([body, "## Included patch releases", *patches])
+
+
 def entry_lines(body: str) -> list[str]:
     """Return non-empty lines after removing hidden HTML comment blocks."""
     body = re.sub(r"<!--.*?(?:-->|$)", "", body, flags=re.DOTALL)
@@ -176,7 +207,7 @@ def changelog_was_handled(new_version: str) -> None:
     if not entries:
         fail(
             f"{CHANGELOG_PATH} needs a [{new_version}] section with user-facing "
-            "entries. Merging publishes that section as the release notes."
+            "entries. Merging tags the version and keeps that section as its notes."
         )
 
     print(

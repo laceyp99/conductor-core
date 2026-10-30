@@ -1,8 +1,8 @@
 name: Release
 
-# Tags and publishes a GitHub release whenever main declares a version in
-# pyproject.toml that has no matching tag yet. Release notes come from the
-# matching CHANGELOG.md section, which release-check requires on each PR.
+# Tags every new version that main declares in pyproject.toml. Patch versions
+# only get a tag; minor and major versions also get a GitHub release whose notes
+# combine the matching CHANGELOG.md section with the patches since the last one.
 
 on:
   push:
@@ -38,11 +38,21 @@ jobs:
           python - "$version" > release-notes.md <<'PY'
           import sys
           sys.path.insert(0, ".github/scripts")
-          from release_check import section_body
-          body = section_body(open("CHANGELOG.md", encoding="utf-8").read(), sys.argv[1])
-          if not (body or "").strip():
-              sys.exit(f"CHANGELOG.md has no [{sys.argv[1]}] section")
-          print(body.strip())
+          from release_check import is_patch, release_notes, section_body
+          text = open("CHANGELOG.md", encoding="utf-8").read()
+          version = sys.argv[1]
+          if is_patch(version):
+              if not (section_body(text, version) or "").strip():
+                  sys.exit(f"CHANGELOG.md has no [{version}] section")
+          else:
+              print(release_notes(text, version))
           PY
+          # Empty notes mean a patch: tag it without a release page.
+          if [ ! -s release-notes.md ]; then
+            git tag "${tag}" "${GITHUB_SHA}"
+            git push origin "refs/tags/${tag}"
+            echo "Tagged patch ${tag}; release pages are published for minor and major versions."
+            exit 0
+          fi
           gh release create "${tag}" --target "${GITHUB_SHA}" \
             --title "Conductor Core ${tag}" --notes-file release-notes.md

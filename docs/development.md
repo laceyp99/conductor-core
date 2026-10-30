@@ -90,11 +90,16 @@ edits your branch.
 
 ## Publishing releases
 
-Merging to `main` publishes the release. The `Release` workflow reads the
-version from `pyproject.toml`; if no `vX.Y.Z` tag exists yet, it creates the
-tag and a GitHub release whose notes are that version's changelog section.
+Merging to `main` publishes the version. The `Release` workflow reads the
+version from `pyproject.toml`; if no `vX.Y.Z` tag exists yet, it creates one.
 Merges that keep the same version, such as skipped `docs` or `chore` changes,
 publish nothing. Consumers can pin the new tag right after the workflow runs.
+
+Only minor and major versions (`x.y.0`) also get a GitHub release page. Patch
+versions get a tag but no page. A release page's notes are that version's
+changelog section followed by each patch section published since the previous
+minor or major version. For example, `v0.13.0` also lists `0.12.1` through
+`0.12.9`.
 
 Release runs execute one at a time, with up to 100 pending runs queued so newer
 pushes do not replace waiting releases. HTML comments and subheadings do not

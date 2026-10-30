@@ -118,3 +118,37 @@ def test_greater_than_follows_semver_prerelease_precedence(
 ):
     assert release_check.greater_than(higher, lower)
     assert not release_check.greater_than(lower, higher)
+
+
+@pytest.mark.parametrize(
+    ("version", "expected"),
+    [("0.12.9", True), ("1.0.1-rc.1", True), ("0.13.0", False), ("1.0.0", False)],
+)
+def test_is_patch_only_matches_nonzero_patch_versions(release_check, version, expected):
+    assert release_check.is_patch(version) is expected
+
+
+def test_release_notes_roll_up_patches_since_previous_minor(release_check):
+    changelog = (
+        "## [Unreleased]\n\n"
+        "## [0.13.0] - 2026-11-01\n\n### Added\n\n- New feature.\n\n"
+        "## [0.12.2] - 2026-10-31\n\n### Fixed\n\n- Second fix.\n\n"
+        "## [0.12.1] - 2026-10-30\n\n### Fixed\n\n- First fix.\n\n"
+        "## [0.12.0] - 2026-10-29\n\n### Added\n\n- Old feature.\n"
+    )
+
+    assert release_check.release_notes(changelog, "0.13.0") == (
+        "### Added\n\n- New feature.\n\n"
+        "## Included patch releases\n\n"
+        "### [0.12.2]\n\n#### Fixed\n\n- Second fix.\n\n"
+        "### [0.12.1]\n\n#### Fixed\n\n- First fix."
+    )
+
+
+def test_release_notes_without_patches_use_only_the_version_section(release_check):
+    changelog = (
+        "## [0.13.0] - 2026-11-01\n\n- New feature.\n\n"
+        "## [0.12.0] - 2026-10-29\n\n- Old feature.\n"
+    )
+
+    assert release_check.release_notes(changelog, "0.13.0") == "- New feature."
