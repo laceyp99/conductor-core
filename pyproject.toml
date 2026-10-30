@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "conductor-core"
-version = "0.12.7"
+version = "0.12.8"
 description = "Reusable prompt-to-MIDI loop generation engine for Conductor"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -50,11 +50,11 @@ Issues = "https://github.com/laceyp99/conductor-core/issues"
 openai = ["openai>=1.79.0"]
 anthropic = ["anthropic>=0.115.0"]
 google = ["google-genai>=1.65.0"]
-ollama = ["ollama>=0.6.1"]
+ollama = ["ollama>=0.6.2"]
 providers = [
 	"anthropic>=0.115.0",
 	"google-genai>=1.65.0",
-	"ollama>=0.6.1",
+	"ollama>=0.6.2",
 	"openai>=1.79.0",
 ]
 

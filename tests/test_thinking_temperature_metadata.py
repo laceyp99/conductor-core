@@ -181,6 +181,7 @@ def test_ollama_thinking_fixed_temperature_matches_adapter_request(
     )
     completion = SimpleNamespace(message=SimpleNamespace(content=content))
     client = SimpleNamespace(
+        close=Mock(),
         list=lambda: SimpleNamespace(models=[SimpleNamespace(model="local-model")]),
         show=lambda name: SimpleNamespace(capabilities=["completion", "thinking"]),
         chat=lambda **kwargs: calls.append(kwargs) or completion,

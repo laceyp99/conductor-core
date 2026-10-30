@@ -3,6 +3,7 @@
 import json
 import logging
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -38,7 +39,9 @@ def _content(generation):
 
 def _generate(monkeypatch, generation, completion):
     calls = []
-    client = SimpleNamespace(chat=lambda **kwargs: calls.append(kwargs) or completion)
+    client = SimpleNamespace(
+        close=Mock(), chat=lambda **kwargs: calls.append(kwargs) or completion
+    )
     monkeypatch.setattr(ollama, "initialize_ollama_client", lambda **kwargs: client)
     function = ollama.loop_gen if generation == "loop" else ollama.variations_gen
     result = function(
@@ -130,6 +133,7 @@ def test_routing_forwards_ollama_num_ctx(monkeypatch, generation):
         ),
     )
     client = SimpleNamespace(
+        close=Mock(),
         list=lambda: SimpleNamespace(models=[SimpleNamespace(model="local-model")]),
         show=lambda name: SimpleNamespace(capabilities=["completion"]),
         chat=lambda **kwargs: calls.append(kwargs) or completion,
@@ -150,7 +154,9 @@ def test_context_error_reports_requested_num_ctx(monkeypatch):
         done_reason="length",
         message=SimpleNamespace(content="", thinking=None),
     )
-    client = SimpleNamespace(chat=lambda **kwargs: calls.append(kwargs) or completion)
+    client = SimpleNamespace(
+        close=Mock(), chat=lambda **kwargs: calls.append(kwargs) or completion
+    )
     monkeypatch.setattr(ollama, "initialize_ollama_client", lambda **kwargs: client)
 
     with pytest.raises(ProviderContextLengthError) as exc_info:

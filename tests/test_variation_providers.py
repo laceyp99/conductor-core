@@ -365,7 +365,9 @@ def test_ollama_requests_one_collection_format(monkeypatch):
         prompt_eval_count=4,
         eval_count=6,
     )
-    client = SimpleNamespace(chat=lambda **kwargs: calls.append(kwargs) or completion)
+    client = SimpleNamespace(
+        close=Mock(), chat=lambda **kwargs: calls.append(kwargs) or completion
+    )
     monkeypatch.setattr(ollama, "initialize_ollama_client", lambda **kwargs: client)
 
     collection, _, cost, usage = ollama.variations_gen(

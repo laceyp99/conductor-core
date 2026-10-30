@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import Mapping
+from contextlib import closing
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, NoReturn
 
@@ -166,7 +167,7 @@ def _raise_ollama_error(exc: Exception, operation: str) -> NoReturn:
 def initialize_ollama_client(
     host_address: str | None = None, timeout: float | None = None
 ) -> OllamaClient:
-    """Initialize and return an Ollama client."""
+    """Initialize and return an Ollama client; the caller owns closing it."""
     if ollama is None:
         raise ImportError("Install conductor-core[ollama] to use Ollama models.")
     assert httpx is not None
@@ -206,15 +207,17 @@ def get_ollama_status(
     fails; failed records contain a typed error instead of guessed capabilities.
     """
     host = _resolve_host(host_address)
-    client = initialize_ollama_client(
-        host_address=host,
-        **({"timeout": request_timeout} if request_timeout is not None else {}),
-    )
-    names = _list_models(client)
-    return OllamaStatus(
-        host=host,
-        models=tuple(_inspect_model(client, name, host) for name in names),
-    )
+    with closing(
+        initialize_ollama_client(
+            host_address=host,
+            **({"timeout": request_timeout} if request_timeout is not None else {}),
+        )
+    ) as client:
+        names = _list_models(client)
+        return OllamaStatus(
+            host=host,
+            models=tuple(_inspect_model(client, name, host) for name in names),
+        )
 
 
 def get_model_status(
@@ -228,13 +231,15 @@ def get_model_status(
     returns a record with unknown capabilities and the typed error.
     """
     host = _resolve_host(host_address)
-    client = initialize_ollama_client(
-        host_address=host,
-        **({"timeout": request_timeout} if request_timeout is not None else {}),
-    )
-    if model_name not in _list_models(client):
-        return None
-    return _inspect_model(client, model_name, host)
+    with closing(
+        initialize_ollama_client(
+            host_address=host,
+            **({"timeout": request_timeout} if request_timeout is not None else {}),
+        )
+    ) as client:
+        if model_name not in _list_models(client):
+            return None
+        return _inspect_model(client, model_name, host)
 
 
 def _list_models(client) -> list[str]:
@@ -255,11 +260,13 @@ def get_model_list(
     raise Core provider errors; a missing SDK raises ImportError. The timeout
     applies to network operations, not a total deadline; None leaves it unbounded.
     """
-    client = initialize_ollama_client(
-        host_address=_resolve_host(host_address),
-        **({"timeout": request_timeout} if request_timeout is not None else {}),
-    )
-    return _list_models(client)
+    with closing(
+        initialize_ollama_client(
+            host_address=_resolve_host(host_address),
+            **({"timeout": request_timeout} if request_timeout is not None else {}),
+        )
+    ) as client:
+        return _list_models(client)
 
 
 def _thinking_option(
@@ -326,39 +333,41 @@ def loop_gen(
     num_ctx: int | None = None,
 ) -> tuple[objects.Loop, list[ProviderMessage], float]:
     """Generate a MIDI loop using the specified Ollama model and prompt."""
-    client = initialize_ollama_client(
-        host_address=host_address,
-        **({"timeout": request_timeout} if request_timeout is not None else {}),
-    )
-    assert httpx is not None
-    assert ollama is not None
-    loop_prompt = system_prompt or utils.get_loop_prompt()
-    messages: list[ProviderMessage] = [
-        {"role": "system", "content": loop_prompt},
-        {"role": "user", "content": prompt},
-    ]
-    if model_capabilities is None:
-        model_capabilities = _get_model_capabilities(
-            client, model, _resolve_host(host_address)
+    with closing(
+        initialize_ollama_client(
+            host_address=host_address,
+            **({"timeout": request_timeout} if request_timeout is not None else {}),
         )
-    think = _thinking_option(model_capabilities, use_thinking, effort)
-    try:
-        completion = client.chat(
-            model=model,
-            messages=messages,
-            format=objects.Loop.model_json_schema(),
-            options=_chat_options(temp, num_ctx),
-            **({"think": think} if think is not None else {}),
-        )
-    except (
-        httpx.TimeoutException,
-        httpx.NetworkError,
-        ConnectionError,
-        ollama.RequestError,
-        ollama.ResponseError,
-    ) as exc:
-        logger.error("Ollama request failed: %s", exc)
-        _raise_ollama_error(exc, "request")
+    ) as client:
+        assert httpx is not None
+        assert ollama is not None
+        loop_prompt = system_prompt or utils.get_loop_prompt()
+        messages: list[ProviderMessage] = [
+            {"role": "system", "content": loop_prompt},
+            {"role": "user", "content": prompt},
+        ]
+        if model_capabilities is None:
+            model_capabilities = _get_model_capabilities(
+                client, model, _resolve_host(host_address)
+            )
+        think = _thinking_option(model_capabilities, use_thinking, effort)
+        try:
+            completion = client.chat(
+                model=model,
+                messages=messages,
+                format=objects.Loop.model_json_schema(),
+                options=_chat_options(temp, num_ctx),
+                **({"think": think} if think is not None else {}),
+            )
+        except (
+            httpx.TimeoutException,
+            httpx.NetworkError,
+            ConnectionError,
+            ollama.RequestError,
+            ollama.ResponseError,
+        ) as exc:
+            logger.error("Ollama request failed: %s", exc)
+            _raise_ollama_error(exc, "request")
     _raise_if_out_of_context(completion, model, num_ctx)
     message = getattr(completion, "message", None)
     content = getattr(message, "content", None)
@@ -386,38 +395,40 @@ def variations_gen(
     num_ctx: int | None = None,
 ) -> tuple[VariationCollection, list[ProviderMessage], float, VariationUsage | None]:
     """Generate an ordered collection of loops in one Ollama response."""
-    client = initialize_ollama_client(
-        host_address=host_address,
-        **({"timeout": request_timeout} if request_timeout is not None else {}),
-    )
-    assert httpx is not None
-    assert ollama is not None
-    loop_prompt = system_prompt or utils.get_variation_prompt()
-    messages: list[ProviderMessage] = [
-        {"role": "system", "content": loop_prompt},
-        {"role": "user", "content": prompt},
-    ]
-    if model_capabilities is None:
-        model_capabilities = _get_model_capabilities(
-            client, model, _resolve_host(host_address)
+    with closing(
+        initialize_ollama_client(
+            host_address=host_address,
+            **({"timeout": request_timeout} if request_timeout is not None else {}),
         )
-    think = _thinking_option(model_capabilities, use_thinking, effort)
-    try:
-        completion = client.chat(
-            model=model,
-            messages=messages,
-            format=VariationCollection.model_json_schema(),
-            options=_chat_options(temp, num_ctx),
-            **({"think": think} if think is not None else {}),
-        )
-    except (
-        httpx.TimeoutException,
-        httpx.NetworkError,
-        ConnectionError,
-        ollama.RequestError,
-        ollama.ResponseError,
-    ) as exc:
-        _raise_ollama_error(exc, "request")
+    ) as client:
+        assert httpx is not None
+        assert ollama is not None
+        loop_prompt = system_prompt or utils.get_variation_prompt()
+        messages: list[ProviderMessage] = [
+            {"role": "system", "content": loop_prompt},
+            {"role": "user", "content": prompt},
+        ]
+        if model_capabilities is None:
+            model_capabilities = _get_model_capabilities(
+                client, model, _resolve_host(host_address)
+            )
+        think = _thinking_option(model_capabilities, use_thinking, effort)
+        try:
+            completion = client.chat(
+                model=model,
+                messages=messages,
+                format=VariationCollection.model_json_schema(),
+                options=_chat_options(temp, num_ctx),
+                **({"think": think} if think is not None else {}),
+            )
+        except (
+            httpx.TimeoutException,
+            httpx.NetworkError,
+            ConnectionError,
+            ollama.RequestError,
+            ollama.ResponseError,
+        ) as exc:
+            _raise_ollama_error(exc, "request")
     _raise_if_out_of_context(completion, model, num_ctx)
     message = getattr(completion, "message", None)
     content = getattr(message, "content", None)

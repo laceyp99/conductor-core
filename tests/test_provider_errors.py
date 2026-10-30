@@ -268,7 +268,9 @@ def test_ollama_request_normalizes_authentication_error(monkeypatch):
             super().__init__("unauthorized")
 
     original = OllamaResponseError(401)
-    client = SimpleNamespace(chat=lambda **kwargs: (_ for _ in ()).throw(original))
+    client = SimpleNamespace(
+        close=Mock(), chat=lambda **kwargs: (_ for _ in ()).throw(original)
+    )
     monkeypatch.setattr(
         ollama_api,
         "ollama",
@@ -290,7 +292,9 @@ def test_ollama_request_normalizes_authentication_error(monkeypatch):
 
 def test_ollama_request_normalizes_sdk_connection_error(monkeypatch):
     original = ConnectionError("connection refused")
-    client = SimpleNamespace(chat=lambda **kwargs: (_ for _ in ()).throw(original))
+    client = SimpleNamespace(
+        close=Mock(), chat=lambda **kwargs: (_ for _ in ()).throw(original)
+    )
     monkeypatch.setattr(ollama_api, "initialize_ollama_client", lambda **kwargs: client)
 
     with pytest.raises(ProviderConnectionError) as raised:
@@ -353,7 +357,7 @@ def test_ollama_initializer_passes_timeout(monkeypatch):
 
 def test_ollama_status_forwards_request_timeout(monkeypatch):
     captured = {}
-    client = SimpleNamespace(list=lambda: SimpleNamespace(models=[]))
+    client = SimpleNamespace(close=Mock(), list=lambda: SimpleNamespace(models=[]))
     monkeypatch.setattr(
         ollama_api,
         "initialize_ollama_client",
@@ -377,7 +381,8 @@ def test_ollama_status_queries_each_host_on_every_call(monkeypatch):
         calls.append(host)
         model = f"{host.rsplit('/', 1)[-1]}-{calls.count(host)}"
         return SimpleNamespace(
-            list=lambda: SimpleNamespace(models=[SimpleNamespace(model=model)])
+            close=Mock(),
+            list=lambda: SimpleNamespace(models=[SimpleNamespace(model=model)]),
         )
 
     monkeypatch.setattr(ollama_api, "initialize_ollama_client", initialize_client)
