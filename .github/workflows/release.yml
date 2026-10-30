@@ -35,7 +35,8 @@ jobs:
             echo "${tag} already exists; nothing to release."
             exit 0
           fi
-          python - "$version" > release-notes.md <<'PY'
+          # Prints "patch" or "release"; only releases get a notes file.
+          kind=$(python - "$version" <<'PY'
           import sys
           sys.path.insert(0, ".github/scripts")
           from release_check import is_patch, release_notes, section_body
@@ -44,11 +45,14 @@ jobs:
           if is_patch(version):
               if not (section_body(text, version) or "").strip():
                   sys.exit(f"CHANGELOG.md has no [{version}] section")
+              print("patch")
           else:
-              print(release_notes(text, version))
+              with open("release-notes.md", "w", encoding="utf-8") as notes:
+                  notes.write(release_notes(text, version))
+              print("release")
           PY
-          # Empty notes mean a patch: tag it without a release page.
-          if [ ! -s release-notes.md ]; then
+          )
+          if [ "${kind}" = "patch" ]; then
             git tag "${tag}" "${GITHUB_SHA}"
             git push origin "refs/tags/${tag}"
             echo "Tagged patch ${tag}; release pages are published for minor and major versions."

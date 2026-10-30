@@ -162,6 +162,19 @@ def is_patch(version: str) -> bool:
     return key is not None and key[2] > 0
 
 
+def nest_headings(body: str) -> str:
+    """Demote Markdown headings one level, leaving fenced code untouched."""
+    lines = []
+    in_fence = False
+    for line in body.splitlines():
+        if line.lstrip().startswith(("```", "~~~")):
+            in_fence = not in_fence
+        elif not in_fence and re.match(r"#{1,5} ", line):
+            line = f"#{line}"
+        lines.append(line)
+    return "\n".join(lines)
+
+
 def release_notes(text: str, version: str) -> str:
     """Return release-page notes for a minor or major version.
 
@@ -179,9 +192,7 @@ def release_notes(text: str, version: str) -> str:
         if not is_patch(label):
             break
         patch_body = (section_body(text, label) or "").strip()
-        # Nest the patch's own subheadings, e.g. "### Fixed", under its heading.
-        nested = re.sub(r"^#", "##", patch_body, flags=re.MULTILINE)
-        patches.append(f"### [{label}]\n\n{nested}")
+        patches.append(f"### [{label}]\n\n{nest_headings(patch_body)}")
     if not patches:
         return body
     return "\n\n".join([body, "## Included patch releases", *patches])

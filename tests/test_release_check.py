@@ -152,3 +152,16 @@ def test_release_notes_without_patches_use_only_the_version_section(release_chec
     )
 
     assert release_check.release_notes(changelog, "0.13.0") == "- New feature."
+
+
+def test_release_notes_leave_fenced_code_comments_unchanged(release_check):
+    changelog = (
+        "## [0.13.0] - 2026-11-01\n\n- New feature.\n\n"
+        "## [0.12.1] - 2026-10-30\n\n### Changed\n\n"
+        "```python\n# use UTC here\n```\n\n"
+        "## [0.12.0] - 2026-10-29\n\n- Old feature.\n"
+    )
+
+    assert release_check.release_notes(changelog, "0.13.0").endswith(
+        "### [0.12.1]\n\n#### Changed\n\n```python\n# use UTC here\n```"
+    )
