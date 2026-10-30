@@ -8,6 +8,19 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.12.9] - 2026-10-30
+
+### Fixed
+
+- Ollama model listing, status checks, and generation now close the HTTP
+  client they create, including when a request or response parse fails, so
+  repeated calls no longer hold open connections until garbage collection.
+
+### Changed
+
+- The `ollama` and `providers` extras now require `ollama>=0.6.2`, the first
+  SDK release with public client cleanup.
+
 ## [0.12.8] - 2026-10-30
 
 ### Fixed

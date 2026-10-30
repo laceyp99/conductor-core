@@ -1126,7 +1126,7 @@ def test_direct_disabled_thinking_ignores_invalid_effort(
 def test_ollama_loop_gen_accepts_missing_thinking(monkeypatch):
     payload = json.dumps(_loop_payload())
     completion = SimpleNamespace(message=SimpleNamespace(content=payload))
-    fake_client = SimpleNamespace(chat=lambda **kwargs: completion)
+    fake_client = SimpleNamespace(close=Mock(), chat=lambda **kwargs: completion)
 
     monkeypatch.setattr(
         ollama_api, "initialize_ollama_client", lambda host_address=None: fake_client
@@ -1237,7 +1237,7 @@ def test_provider_loop_gen_propagates_client_initialization_type_errors(
 
 def test_ollama_loop_gen_rejects_missing_content(monkeypatch):
     completion = SimpleNamespace(message=SimpleNamespace())
-    fake_client = SimpleNamespace(chat=lambda **kwargs: completion)
+    fake_client = SimpleNamespace(close=Mock(), chat=lambda **kwargs: completion)
 
     monkeypatch.setattr(
         ollama_api, "initialize_ollama_client", lambda host_address=None: fake_client

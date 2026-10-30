@@ -1,6 +1,7 @@
 """Offline discovery failures must survive status inspection and routing."""
 
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import httpx
 import pytest
@@ -27,6 +28,7 @@ def test_inspection_rejects_ambiguous_capability_and_error_state(capabilities):
 def test_selected_model_status_forwards_host_and_timeout(monkeypatch):
     captured = {}
     client = SimpleNamespace(
+        close=Mock(),
         list=lambda: SimpleNamespace(models=[SimpleNamespace(model="local")]),
         show=lambda name: SimpleNamespace(capabilities=[]),
     )
@@ -68,6 +70,7 @@ def test_status_and_both_routes_preserve_failures(
         raise failure
 
     client = SimpleNamespace(
+        close=Mock(),
         list=fail
         if operation == "list"
         else lambda: SimpleNamespace(models=[SimpleNamespace(model="local")]),
@@ -122,7 +125,9 @@ def test_broad_listing_failure_is_typed(monkeypatch):
         raise failure
 
     monkeypatch.setattr(
-        ollama, "initialize_ollama_client", lambda **kwargs: SimpleNamespace(list=fail)
+        ollama,
+        "initialize_ollama_client",
+        lambda **kwargs: SimpleNamespace(close=Mock(), list=fail),
     )
     with pytest.raises(ProviderTimeoutError) as raised:
         ollama.get_ollama_status()
@@ -137,6 +142,7 @@ def test_direct_adapters_stop_after_inspection_timeout(monkeypatch, generator):
         raise failure
 
     client = SimpleNamespace(
+        close=Mock(),
         show=show,
         chat=lambda **kwargs: pytest.fail("generation must not run"),
     )
@@ -151,9 +157,10 @@ def test_missing_model_is_invalid_selection_after_successful_listing(
     monkeypatch, generator
 ):
     client = SimpleNamespace(
+        close=Mock(),
         list=lambda: SimpleNamespace(
             models=[SimpleNamespace(model=None), SimpleNamespace(model="installed")]
-        )
+        ),
     )
     monkeypatch.setattr(ollama, "initialize_ollama_client", lambda **kwargs: client)
     status = ollama.get_model_status("missing")
@@ -183,6 +190,7 @@ def test_missing_sdk_is_actionable_and_import_safe(monkeypatch, generator):
 @pytest.mark.parametrize("raw_available", [False, True])
 def test_absent_optional_metadata_retains_boolean_thinking(monkeypatch, raw_available):
     client = SimpleNamespace(
+        close=Mock(),
         list=lambda: SimpleNamespace(models=[SimpleNamespace(model="local")]),
         show=lambda name: SimpleNamespace(capabilities=["thinking"]),
     )

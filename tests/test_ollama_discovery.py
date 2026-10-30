@@ -1,7 +1,10 @@
-"""Offline request-level checks for Ollama model discovery."""
+"""Offline request-level checks for Ollama discovery and client cleanup."""
+
+import json
 
 import httpx
 import ollama as sdk
+import pydantic
 import pytest
 
 from conductor_core.errors import (
@@ -13,22 +16,32 @@ from conductor_core.errors import (
 from conductor_core.providers import ollama
 
 
+class _SpyTransport(httpx.MockTransport):
+    """Record whether the owning SDK client closed its HTTP transport."""
+
+    closed = False
+
+    def close(self):
+        self.closed = True
+
+
 @pytest.fixture
 def mock_transport(monkeypatch):
+    """Route real SDK clients through a handler; return their transports."""
     client_class = sdk.Client
-    clients = []
 
     def install(handler):
+        transports = []
+
         def create_client(**kwargs):
-            client = client_class(**kwargs, transport=httpx.MockTransport(handler))
-            clients.append(client)
-            return client
+            transport = _SpyTransport(handler)
+            transports.append(transport)
+            return client_class(**kwargs, transport=transport)
 
         monkeypatch.setattr(sdk, "Client", create_client)
+        return transports
 
-    yield install
-    for client in clients:
-        client._client.close()
+    return install
 
 
 @pytest.mark.parametrize("timeout", [None, 2.0])
@@ -110,3 +123,84 @@ def test_model_list_reports_missing_sdk(monkeypatch):
     monkeypatch.setattr(ollama, "ollama", None)
     with pytest.raises(ImportError, match=r"conductor-core\[ollama\]"):
         ollama.get_model_list()
+
+
+LOOP_CONTENT = json.dumps(
+    {
+        f"Bar_{number}": {
+            "num": number,
+            "notes": [
+                {
+                    "pitch": "C",
+                    "octave": 4,
+                    "velocity": 100,
+                    "time": {"start_beat": 1, "duration": 1},
+                }
+            ],
+        }
+        for number in range(1, 5)
+    }
+)
+
+
+def _server(failing_path=None, chat_content=LOOP_CONTENT):
+    """Answer like a local Ollama, returning 503 for ``failing_path``."""
+
+    def respond(request):
+        path = request.url.path
+        if path == failing_path:
+            return httpx.Response(503, json={"error": "failed"})
+        if path == "/api/tags":
+            return httpx.Response(200, json={"models": [{"model": "local"}]})
+        if path == "/api/show":
+            show = {"capabilities": ["completion"], "model_info": {}}
+            return httpx.Response(200, json=show)
+        message = {"role": "assistant", "content": chat_content}
+        return httpx.Response(200, json={"message": message, "done": True})
+
+    return respond
+
+
+@pytest.mark.parametrize(
+    ("server", "operation", "expected"),
+    [
+        pytest.param(_server(), ollama.get_model_list, None, id="list"),
+        pytest.param(_server(), ollama.get_ollama_status, None, id="status"),
+        pytest.param(
+            _server(),
+            lambda: ollama.get_model_status("missing"),
+            None,
+            id="missing-model",
+        ),
+        pytest.param(
+            _server("/api/tags"),
+            ollama.get_model_list,
+            ProviderRequestError,
+            id="list-error",
+        ),
+        pytest.param(
+            _server(), lambda: ollama.loop_gen("prompt", "local"), None, id="loop"
+        ),
+        pytest.param(
+            _server("/api/chat"),
+            lambda: ollama.loop_gen("prompt", "local"),
+            ProviderRequestError,
+            id="request-error",
+        ),
+        pytest.param(
+            _server(chat_content="{}"),
+            lambda: ollama.variations_gen("prompt", "local"),
+            pydantic.ValidationError,
+            id="parse-error",
+        ),
+    ],
+)
+def test_operations_close_their_clients(mock_transport, server, operation, expected):
+    transports = mock_transport(server)
+    if expected is None:
+        operation()
+    else:
+        with pytest.raises(expected):
+            operation()
+    assert len(transports) == 1
+    assert transports[0].closed

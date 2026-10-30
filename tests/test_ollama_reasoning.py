@@ -3,6 +3,7 @@
 import inspect
 import json
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -52,7 +53,9 @@ def test_direct_ollama_thinking_off_ignores_requested_effort(
     if generation == "variations":
         payload = {"variations": [payload]}
     completion = SimpleNamespace(message=SimpleNamespace(content=json.dumps(payload)))
-    client = SimpleNamespace(chat=lambda **kwargs: calls.append(kwargs) or completion)
+    client = SimpleNamespace(
+        close=Mock(), chat=lambda **kwargs: calls.append(kwargs) or completion
+    )
     monkeypatch.setattr(ollama, "initialize_ollama_client", lambda **kwargs: client)
 
     function = ollama.loop_gen if generation == "loop" else ollama.variations_gen
@@ -85,7 +88,9 @@ def test_direct_ollama_thinking_enabled_validates_effort(
     if generation == "variations":
         payload = {"variations": [payload]}
     completion = SimpleNamespace(message=SimpleNamespace(content=json.dumps(payload)))
-    client = SimpleNamespace(chat=lambda **kwargs: calls.append(kwargs) or completion)
+    client = SimpleNamespace(
+        close=Mock(), chat=lambda **kwargs: calls.append(kwargs) or completion
+    )
     monkeypatch.setattr(ollama, "initialize_ollama_client", lambda **kwargs: client)
 
     function = ollama.loop_gen if generation == "loop" else ollama.variations_gen
@@ -116,6 +121,7 @@ def test_direct_ollama_thinking_enabled_validates_effort(
 )
 def test_ollama_status_reports_thinking_capability(monkeypatch, capabilities, expected):
     client = SimpleNamespace(
+        close=Mock(),
         list=lambda: SimpleNamespace(models=[SimpleNamespace(model="local-model")]),
         show=lambda name: SimpleNamespace(capabilities=capabilities),
     )
@@ -140,6 +146,7 @@ def test_ollama_status_preserves_partial_inspection_results(monkeypatch):
         return SimpleNamespace(capabilities=["thinking"])
 
     client = SimpleNamespace(
+        close=Mock(),
         list=lambda: SimpleNamespace(
             models=[
                 SimpleNamespace(model="thinking-model"),
@@ -174,6 +181,7 @@ def test_ollama_status_discovers_effort_levels_from_raw_show(monkeypatch):
 
     raw_calls = []
     client = SimpleNamespace(
+        close=Mock(),
         list=lambda: SimpleNamespace(models=[SimpleNamespace(model="gpt-oss")]),
         show=lambda name: SimpleNamespace(capabilities=["completion", "thinking"]),
         _request_raw=lambda *args, **kwargs: (
@@ -234,7 +242,9 @@ def test_ollama_generation_passes_supported_think_values(
             thinking="private reasoning",
         )
     )
-    client = SimpleNamespace(chat=lambda **kwargs: calls.append(kwargs) or completion)
+    client = SimpleNamespace(
+        close=Mock(), chat=lambda **kwargs: calls.append(kwargs) or completion
+    )
     monkeypatch.setattr(ollama, "initialize_ollama_client", lambda **kwargs: client)
 
     function = ollama.loop_gen if generation == "loop" else ollama.variations_gen
@@ -299,6 +309,7 @@ def test_ollama_status_contract():
 
 def test_ollama_status_return_keys(monkeypatch):
     client = SimpleNamespace(
+        close=Mock(),
         list=lambda: SimpleNamespace(models=[]),
         show=lambda name: SimpleNamespace(capabilities=[]),
     )
@@ -316,16 +327,18 @@ def test_ollama_effort_levels_are_forwarded_by_both_adapters(monkeypatch):
     loop_content = json.dumps(_loop_payload())
     variations_content = json.dumps({"variations": [_loop_payload()]})
     loop_client = SimpleNamespace(
+        close=Mock(),
         chat=lambda **kwargs: (
             loop_calls.append(kwargs)
             or SimpleNamespace(message=SimpleNamespace(content=loop_content))
-        )
+        ),
     )
     variation_client = SimpleNamespace(
+        close=Mock(),
         chat=lambda **kwargs: (
             variations_calls.append(kwargs)
             or SimpleNamespace(message=SimpleNamespace(content=variations_content))
-        )
+        ),
     )
     clients = iter([loop_client, variation_client])
     monkeypatch.setattr(
@@ -388,6 +401,7 @@ def test_ollama_status_reports_thinking_off(
 ):
     thinking_off, effort_options = expected
     client = SimpleNamespace(
+        close=Mock(),
         list=lambda: SimpleNamespace(models=[SimpleNamespace(model="local-model")]),
         show=lambda name: SimpleNamespace(capabilities=capabilities),
         _request_raw=lambda *args, **kwargs: (
@@ -446,6 +460,7 @@ def test_ollama_thinking_off_selects_think_value(
 
 def _counting_client(model_names, shown):
     return SimpleNamespace(
+        close=Mock(),
         list=lambda: SimpleNamespace(
             models=[SimpleNamespace(model=name) for name in model_names]
         ),
