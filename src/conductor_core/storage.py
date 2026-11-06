@@ -789,21 +789,6 @@ def _clear_variation_history(artifact_root: str | Path) -> int:
     )
 
 
-def _copy_artifact_file(source: str, destination: str) -> None:
-    """Copy through a new file and atomically replace the destination entry."""
-    directory = os.path.dirname(destination)
-    file_descriptor, temporary_path = tempfile.mkstemp(
-        prefix=".artifact-", suffix=".tmp", dir=directory
-    )
-    os.close(file_descriptor)
-    try:
-        shutil.copy2(source, temporary_path)
-        os.replace(temporary_path, destination)
-    finally:
-        if os.path.exists(temporary_path):
-            os.unlink(temporary_path)
-
-
 def _load_generation_metadata(
     artifact_root: str | Path, gen_id: str
 ) -> GenerationMetadata:
@@ -1053,6 +1038,10 @@ _AUDIO_COMMIT_GUARD = Lock()
 _ACTIVE_AUDIO_COMMITS: set[tuple[str, str]] = set()
 
 
+class AudioUpdateInProgressError(RuntimeError):
+    """Another participating audio writer owns this generation in this process."""
+
+
 class AudioCommitRecoveryError(OSError):
     """Audio rollback failed; retain artifacts until the generation is reconciled."""
 
@@ -1100,7 +1089,7 @@ class GenerationAudioStage:
         self._entered = True
         with _AUDIO_COMMIT_GUARD:
             if self._key in _ACTIVE_AUDIO_COMMITS:
-                raise RuntimeError(
+                raise AudioUpdateInProgressError(
                     "an audio update is already active for this generation"
                 )
             _ACTIVE_AUDIO_COMMITS.add(self._key)
@@ -1220,7 +1209,6 @@ def _update_generation_audio(
         metadata = _load_generation_metadata(artifact_root, gen_id)
         if audio_path and os.path.exists(audio_path):
             if os.path.abspath(audio_path) != os.path.abspath(workspace.audio_path):
-                _validate_artifact_file(audio_path, required=True)
                 shutil.copy2(audio_path, stage.path)
                 return stage.commit(soundfont=soundfont)
             # Legacy callers may already have overwritten the saved file. Its

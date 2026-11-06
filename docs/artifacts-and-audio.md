@@ -183,7 +183,9 @@ errors propagate. Missing or empty staged audio fails before promotion.
 Participating audio writers share a process-wide reservation keyed by canonical
 root and generation ID, including across separate store instances and the
 module-level helpers. The reservation lasts for the entire context, including
-rendering. Overlapping updates raise `RuntimeError` immediately. This does not
+rendering. Overlapping updates raise `AudioUpdateInProgressError` immediately.
+Import it from `conductor_core.storage`; it subclasses `RuntimeError`, so callers
+can distinguish a busy generation from stage misuse. This does not
 coordinate other processes, direct file writes, generation deletion, or retention;
 consumers must prevent those operations from racing an audio update. The guarantee
 covers caught filesystem errors, not process crashes or atomic visibility across
@@ -195,6 +197,9 @@ from a separate existing source file use the staged commit path without consumin
 the caller's source. Same-path calls remain compatible but cannot restore bytes
 overwritten before the call. Use staging for the rollback guarantee. Legacy
 missing-source and `None`-source calls continue to preserve the SoundFont.
+Separate source files may be symbolic or hard links; Core copies their contents
+into its stage before validating the staged artifact. Empty separate-source audio
+now raises `ValueError` before promotion rather than saving an empty preview.
 
 ## Direct MIDI utilities
 

@@ -21,8 +21,9 @@ while its public API is still in initial development.
 
 - Audio updates from a separate source file now roll back saved audio when
   metadata promotion fails. Audio updates to the same generation cannot overlap
-  within one process. Temporary-file cleanup errors no longer mask a successful
-  metadata write.
+  within one process and raise `AudioUpdateInProgressError` when busy. Empty
+  separate-source audio is rejected before promotion. Temporary-file cleanup
+  errors no longer mask a successful metadata write.
 
 ## [0.13.3] - 2026-11-14
 

@@ -237,7 +237,7 @@ def test_stages_exclude_other_stores_and_release_lock(saved_generation):
     other = storage.FilesystemArtifactStore(Path(store.artifact_root) / ".")
     with (
         store.stage_generation_audio("saved"),
-        pytest.raises(RuntimeError),
+        pytest.raises(storage.AudioUpdateInProgressError),
         other.stage_generation_audio("saved"),
     ):
         pytest.fail("overlapping stage entered")
@@ -285,7 +285,7 @@ def test_module_helper_shares_store_lock(saved_generation, monkeypatch):
     monkeypatch.setenv("CONDUCTOR_CORE_DATA_DIR", str(Path(store.artifact_root).parent))
     with (
         store.stage_generation_audio("saved"),
-        pytest.raises(RuntimeError),
+        pytest.raises(storage.AudioUpdateInProgressError),
         storage.stage_generation_audio("saved"),
     ):
         pytest.fail("module helper entered overlapping stage")
@@ -322,3 +322,39 @@ def test_legacy_audio_update_rolls_back_metadata_failure(
     assert source.read_bytes() == b"new audio"
     assert (directory / "loop.mp3").read_bytes() == b"old audio"
     assert store.get_generation("saved") == original
+
+
+def test_legacy_update_accepts_hard_linked_source(saved_generation, tmp_path):
+    store, directory, _ = saved_generation
+    source = tmp_path / "rendered.mp3"
+    source.write_bytes(b"linked audio")
+    linked = tmp_path / "linked.mp3"
+    os.link(source, linked)
+    updated = store.update_generation_audio(
+        "saved", str(linked), soundfont="linked.sf2"
+    )
+    assert (directory / "loop.mp3").read_bytes() == b"linked audio"
+    assert source.read_bytes() == linked.read_bytes() == b"linked audio"
+    assert updated == store.get_generation("saved")
+    assert updated.soundfont == "linked.sf2"
+
+
+def test_legacy_update_rejects_empty_source_before_promotion(
+    saved_generation, tmp_path
+):
+    store, directory, original = saved_generation
+    source = tmp_path / "empty.mp3"
+    source.touch()
+    with pytest.raises(ValueError, match="must not be empty"):
+        store.update_generation_audio("saved", str(source), soundfont="empty.sf2")
+    assert (directory / "loop.mp3").read_bytes() == b"old audio"
+    assert store.get_generation("saved") == original
+
+
+def test_legacy_update_reports_busy_generation(saved_generation):
+    store, _, _ = saved_generation
+    with (
+        store.stage_generation_audio("saved"),
+        pytest.raises(storage.AudioUpdateInProgressError),
+    ):
+        store.update_generation_audio("saved", None)
