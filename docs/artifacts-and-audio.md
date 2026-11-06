@@ -120,6 +120,82 @@ in `conductor_core.playback`. Rendered audio is trimmed to the MIDI endpoint;
 SoundFont release tails are intentionally excluded so the preview duration
 matches the loop boundary.
 
+### Replacing saved audio safely
+
+Use the store already attached to your engine, or import the default-root helper
+from `conductor_core.storage`. Available signatures are:
+
+```python
+FilesystemArtifactStore.stage_generation_audio(gen_id: str) -> GenerationAudioStage
+stage_generation_audio(gen_id: str) -> GenerationAudioStage
+GenerationAudioStage.commit(*, soundfont: str | None) -> GenerationMetadata
+```
+
+`GenerationAudioStage.path` is a string render destination available inside its
+context. Render there instead of over the saved `loop.mp3`:
+
+```python
+from conductor_core.playback import midi_to_mp3
+from conductor_core.storage import AudioCommitRecoveryError
+
+try:
+    with engine.store.stage_generation_audio(generation_id) as stage:
+        midi_to_mp3(
+            midi_path,
+            output_path=stage.path,
+            soundfont_name=selected_soundfont,
+        )
+        updated = stage.commit(soundfont=selected_soundfont)
+except AudioCommitRecoveryError as exc:
+    # Disable playback and same-font shortcuts until this generation is reconciled.
+    # exc.commit_error and exc.rollback_error describe both failures.
+    # exc.recovery_directory contains the retained recovery files.
+    raise
+else:
+    # Publish UI state only after both saved files have been promoted.
+    current_audio_path = updated.audio_path
+    current_soundfont = updated.soundfont
+```
+
+Core owns the stage directory inside the generation directory, its staged MP3,
+prepared metadata, and backup of previous audio. It validates the generation on
+entry and again at commit. Before promotion, it prepares metadata and copies the
+existing MP3, if any. It replaces the saved MP3, then metadata. On a caught
+metadata promotion `OSError`, it restores the exact previous audio bytes or
+removes the newly promoted MP3 when none existed before. After confirmed rollback,
+the original error propagates and the caller can retain its previous UI state.
+Preparation and audio promotion failures leave the saved pair unchanged.
+
+If rollback also raises `OSError`, `AudioCommitRecoveryError` (an `OSError`
+subclass) exposes `commit_error`, `rollback_error`, and `recovery_directory`.
+Its message includes both failures and its cause is the original commit error.
+The directory retains prepared metadata and any previous-audio backup; the
+promoted audio may remain at the saved path. Reconcile these files before
+re-enabling playback. Core does not automatically reconcile recovery artifacts.
+
+Context exit cleans up after success, abandonment, or confirmed rollback. Cleanup
+errors are logged and never change a successful result or mask the original
+failure. Recovery-required contexts preserve their directory. A stage is
+single-use, cannot be re-entered, and allows only one commit attempt. Missing
+generations raise `FileNotFoundError`; invalid metadata and artifact validation
+errors propagate. Missing or empty staged audio fails before promotion.
+
+Participating audio writers share a process-wide reservation keyed by canonical
+root and generation ID, including across separate store instances and the
+module-level helpers. The reservation lasts for the entire context, including
+rendering. Overlapping updates raise `RuntimeError` immediately. This does not
+coordinate other processes, direct file writes, generation deletion, or retention;
+consumers must prevent those operations from racing an audio update. The guarantee
+covers caught filesystem errors, not process crashes or atomic visibility across
+two files. Readers can briefly observe new audio with old metadata.
+
+Existing `update_generation_audio(gen_id, audio_path, soundfont=None)` signatures
+remain available and still return `None` for an unavailable generation. Updates
+from a separate existing source file use the staged commit path without consuming
+the caller's source. Same-path calls remain compatible but cannot restore bytes
+overwritten before the call. Use staging for the rollback guarantee. Legacy
+missing-source and `None`-source calls continue to preserve the SoundFont.
+
 ## Direct MIDI utilities
 
 Consumers can convert existing MIDI to Core's four-bar loop model and write it

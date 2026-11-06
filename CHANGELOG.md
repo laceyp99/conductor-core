@@ -8,6 +8,22 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-14
+
+### Added
+
+- Store-bound and module-level `stage_generation_audio()` contexts let consumers
+  render separately and commit MP3 bytes with their SoundFont metadata. Caught
+  metadata promotion errors restore previous audio; `AudioCommitRecoveryError`
+  retains recovery artifacts when rollback also fails.
+
+### Fixed
+
+- Audio updates from a separate source file now roll back saved audio when
+  metadata promotion fails. Audio updates to the same generation cannot overlap
+  within one process. Temporary-file cleanup errors no longer mask a successful
+  metadata write.
+
 ## [0.13.3] - 2026-11-14
 
 ### Changed
