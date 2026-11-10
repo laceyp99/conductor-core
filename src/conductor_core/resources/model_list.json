@@ -452,6 +452,26 @@
             }
         },
         "Anthropic": {
+            "claude-fable-5-2":{
+                "extended_thinking": true,
+                "thinking_off": "lowest_effort",
+                "temperature_supported": false,
+                "always_on_adaptive_thinking": true,
+                "effort_options": ["low", "medium", "high", "xhigh", "max"],
+                "max_tokens": 128000,
+                "cost": {
+                    "input": 8.00,
+                    "5m cache input": 10.00,
+                    "1h cache input": 16.00,
+                    "cache hits/refreshes": 0.20,
+                    "output": 40.00
+                },
+                "rate_limits": {
+                    "RPM": 4000,
+                    "TPM": 100000,
+                    "RPD": null
+                }
+            },
             "claude-haiku-5-5":{
                 "extended_thinking": true,
                 "thinking_off": "disabled",
@@ -466,7 +486,7 @@
                     "output": 0.50
                 },
                 "rate_limits": {
-                    "RPM": 1000,
+                    "RPM": 4000,
                     "TPM": 400000,
                     "RPD": null
                 }
@@ -487,7 +507,7 @@
                     "output": 10.00
                 },
                 "rate_limits": {
-                    "RPM": 1000,
+                    "RPM": 4000,
                     "TPM": 400000,
                     "RPD": null
                 }
@@ -507,7 +527,7 @@
                     "output": 20.00
                 },
                 "rate_limits": {
-                    "RPM": 1000,
+                    "RPM": 4000,
                     "TPM": 400000,
                     "RPD": null
                 }
@@ -527,7 +547,7 @@
                     "output": 50.00
                 },
                 "rate_limits": {
-                    "RPM": 1000,
+                    "RPM": 4000,
                     "TPM": 100000,
                     "RPD": null
                 }
@@ -547,7 +567,7 @@
                     "output": 50.00
                 },
                 "rate_limits": {
-                    "RPM": 1000,
+                    "RPM": 4000,
                     "TPM": 100000,
                     "RPD": null
                 }

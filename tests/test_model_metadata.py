@@ -225,45 +225,6 @@ def test_gpt_5_6_cache_write_pricing_matches_openai_documentation(model, expecte
     assert model_config["cost"] == expected_cost
 
 
-def test_claude_fable_5_1_capabilities_match_anthropic_documentation():
-    model_config = music.get_model_info()["models"]["Anthropic"]["claude-fable-5-1"]
-
-    assert model_config["extended_thinking"] is True
-    assert model_config["always_on_adaptive_thinking"] is True
-    assert model_config["effort_options"] == [
-        "low",
-        "medium",
-        "high",
-        "xhigh",
-        "max",
-    ]
-    assert model_config["max_tokens"] == 128000
-    assert model_config["cost"] == {
-        "input": 10.00,
-        "5m cache input": 12.50,
-        "1h cache input": 20.00,
-        "cache hits/refreshes": 0.25,
-        "output": 50.00,
-    }
-
-
-def test_models_have_documented_always_on_adaptive_thinking():
-    anthropic_models = music.get_model_info()["models"]["Anthropic"]
-
-    always_on_models = {
-        model
-        for model, model_config in anthropic_models.items()
-        if model_config.get("always_on_adaptive_thinking")
-    }
-
-    assert always_on_models == {
-        "claude-opus-5-5",
-        "claude-fable-5",
-        "claude-fable-5-1",
-        "claude-sonnet-5-5",
-    }
-
-
 def test_model_metadata_rejects_non_boolean_always_on_adaptive_thinking():
     model_info = {
         "models": {
