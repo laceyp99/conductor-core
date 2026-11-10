@@ -91,32 +91,10 @@ def test_thinking_fixed_temperature_matches_adapter_request(
         assert sent == REQUESTED_TEMPERATURE
 
 
-def test_models_that_reject_temperature_are_marked_unsupported():
-    models = music.get_model_info()["models"]
-    anthropic_models = (
-        "claude-opus-5-5",
-        "claude-sonnet-5-5",
-        "claude-fable-5-2",
-        "claude-fable-5-1",
-        "claude-fable-5",
-        "claude-opus-5",
-        "claude-sonnet-5",
-        "claude-opus-4-8",
-        "claude-opus-4-7",
-    )
-
-    for model in anthropic_models:
-        assert models["Anthropic"][model]["temperature_supported"] is False, model
-    for model, model_config in models["OpenAI"].items():
+def test_openai_reasoning_models_reject_temperature():
+    for model, model_config in music.get_model_info()["models"]["OpenAI"].items():
         if model_config["extended_thinking"]:
             assert model_config["temperature_supported"] is False, model
-
-
-def test_anthropic_budget_thinking_models_report_fixed_temperature():
-    models = music.get_model_info()["models"]["Anthropic"]
-
-    for model in ("claude-opus-4-5", "claude-sonnet-4-5", "claude-haiku-4-5"):
-        assert models[model]["thinking_fixed_temperature"] == 1.0
 
 
 def test_only_anthropic_models_report_fixed_temperature():

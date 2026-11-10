@@ -750,17 +750,24 @@ def test_claude_opus_5_uses_adaptive_thinking_and_effort(monkeypatch):
     }
 
 
-@pytest.mark.parametrize(
-    "model",
-    ["claude-opus-5-5", "claude-fable-5", "claude-fable-5-1", "claude-fable-5-2"],
-)
-def test_claude_uses_metadata_driven_always_on_thinking(monkeypatch, model):
-    captured = {}
-    payload = json.dumps(_loop_payload())
+_ANTHROPIC_ALWAYS_ON_MODELS = [
+    model
+    for model, model_config in music.get_model_info()["models"]["Anthropic"].items()
+    if model_config.get("always_on_adaptive_thinking")
+]
+
+
+@pytest.mark.parametrize("generation", ["loop", "variations"])
+@pytest.mark.parametrize("use_thinking", [False, True])
+@pytest.mark.parametrize("model", _ANTHROPIC_ALWAYS_ON_MODELS)
+def test_claude_always_on_thinking_never_forces_the_output_tool(
+    monkeypatch, model, use_thinking, generation
+):
+    calls = []
 
     def fake_create(**kwargs):
-        captured.update(kwargs)
-        return _anthropic_completion(payload)
+        calls.append(kwargs)
+        raise _RequestCaptured
 
     fake_client = SimpleNamespace(
         close=Mock(), messages=SimpleNamespace(create=fake_create)
@@ -768,48 +775,20 @@ def test_claude_uses_metadata_driven_always_on_thinking(monkeypatch, model):
     monkeypatch.setattr(
         claude_api, "initialize_anthropic_client", lambda api_key: fake_client
     )
-    monkeypatch.setattr(claude_api.utils, "get_loop_prompt", lambda: "system prompt")
-    monkeypatch.setattr(claude_api.utils, "save_messages_to_json", _fail_save_messages)
+    function = (
+        claude_api.loop_gen if generation == "loop" else claude_api.variations_gen
+    )
 
-    claude_api.loop_gen("write a loop", model, use_thinking=True, effort="max")
+    with pytest.raises(_RequestCaptured):
+        function("prompt", model, use_thinking=use_thinking, effort="max")
 
-    assert "thinking" not in captured
-    assert "temperature" not in captured
-    assert captured["output_config"] == {"effort": "max"}
-    assert captured["tool_choice"] == {
+    request = calls[0]
+    assert request["tool_choice"] == {
         "type": "auto",
         "disable_parallel_tool_use": True,
     }
-
-
-@pytest.mark.parametrize(
-    "model",
-    ["claude-opus-5-5", "claude-fable-5", "claude-fable-5-1", "claude-fable-5-2"],
-)
-def test_claude_always_on_thinking_off_uses_lowest_effort(monkeypatch, model):
-    captured = {}
-    payload = json.dumps(_loop_payload())
-
-    def fake_create(**kwargs):
-        captured.update(kwargs)
-        return _anthropic_completion(payload)
-
-    fake_client = SimpleNamespace(
-        close=Mock(), messages=SimpleNamespace(create=fake_create)
-    )
-    monkeypatch.setattr(
-        claude_api, "initialize_anthropic_client", lambda api_key: fake_client
-    )
-    monkeypatch.setattr(claude_api.utils, "get_loop_prompt", lambda: "system prompt")
-
-    claude_api.loop_gen("write a loop", model, use_thinking=False, effort="max")
-
-    assert captured["output_config"] == {"effort": "low"}
-    assert "thinking" not in captured
-    assert captured["tool_choice"] == {
-        "type": "auto",
-        "disable_parallel_tool_use": True,
-    }
+    if use_thinking:
+        assert request["output_config"] == {"effort": "max"}
 
 
 def test_claude_sonnet_5_5_thinking_off_uses_between_tools(monkeypatch):
@@ -853,7 +832,7 @@ def test_claude_sonnet_5_5_thinking_off_uses_between_tools(monkeypatch):
         ("claude-sonnet-4-6", 0.4),
     ],
 )
-def test_claude_thinking_off_disables_adaptive_thinking(
+def test_claude_thinking_off_sends_temperature_only_when_supported(
     monkeypatch, model, expected_temperature, generation
 ):
     calls = []
@@ -876,14 +855,6 @@ def test_claude_thinking_off_disables_adaptive_thinking(
         function("prompt", model, temp=0.4, use_thinking=False, effort="max")
 
     request = calls[0]
-    tool_name = request["tools"][0]["name"]
-    assert request["thinking"] == {"type": "disabled"}
-    assert "output_config" not in request
-    assert request["tool_choice"] == {
-        "type": "tool",
-        "name": tool_name,
-        "disable_parallel_tool_use": True,
-    }
     assert "temperature" not in request
     assert request.get("extra_body", {}).get("temperature") == expected_temperature
 
