@@ -8,6 +8,19 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.12.10] - 2026-11-09
+
+### Added
+
+- Claude Fable 5.2 model support with always-on adaptive thinking, `low`
+  through `max` effort, 128K output tokens, standard token and cache pricing,
+  and Start-tier rate limits. Turning thinking off selects `low` effort.
+
+### Changed
+
+- Claude Opus 5.5, Sonnet 5.5, Haiku 5.5, Fable 5.1, and Fable 5 now allow
+  4,000 requests per minute, matching Anthropic's current Start-tier limits.
+
 ## [0.12.9] - 2026-10-30
 
 ### Fixed

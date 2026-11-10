@@ -751,7 +751,8 @@ def test_claude_opus_5_uses_adaptive_thinking_and_effort(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "model", ["claude-opus-5-5", "claude-fable-5", "claude-fable-5-1"]
+    "model",
+    ["claude-opus-5-5", "claude-fable-5", "claude-fable-5-1", "claude-fable-5-2"],
 )
 def test_claude_uses_metadata_driven_always_on_thinking(monkeypatch, model):
     captured = {}
@@ -782,7 +783,8 @@ def test_claude_uses_metadata_driven_always_on_thinking(monkeypatch, model):
 
 
 @pytest.mark.parametrize(
-    "model", ["claude-opus-5-5", "claude-fable-5", "claude-fable-5-1"]
+    "model",
+    ["claude-opus-5-5", "claude-fable-5", "claude-fable-5-1", "claude-fable-5-2"],
 )
 def test_claude_always_on_thinking_off_uses_lowest_effort(monkeypatch, model):
     captured = {}
