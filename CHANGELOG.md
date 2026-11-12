@@ -8,6 +8,16 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.12.11] - 2026-11-12
+
+### Added
+
+- Google Gemini 4 Hydrogen model support with `low` through `xhigh` reasoning,
+  65,536 output tokens per synchronous request, and standard token and implicit
+  cache pricing. Custom temperature is omitted; turning thinking off selects `low`.
+  Quotas use maintainer-selected Tier 1 defaults of 1,000 RPM, 2,000,000 TPM,
+  and 1,000 RPD; confirm actual limits in the Google project's AI Studio.
+
 ## [0.12.10] - 2026-11-09
 
 ### Added
