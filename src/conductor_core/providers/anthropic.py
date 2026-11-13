@@ -389,7 +389,7 @@ def loop_gen(
             APIConnectionError,
             APIError,
         ) as exc:
-            logger.error("Anthropic request failed: %s", exc)
+            logger.exception("Anthropic request failed: %s", exc)
             _raise_anthropic_error(exc, "request")
 
         try:
@@ -401,7 +401,7 @@ def loop_gen(
             APIConnectionError,
             APIError,
         ) as exc:
-            logger.error("Anthropic stream failed: %s", exc)
+            logger.exception("Anthropic stream failed: %s", exc)
             _raise_anthropic_error(exc, "stream")
         finally:
             completion.close()

@@ -8,6 +8,12 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+### Changed
+
+- Error logs written while handling a failure now include the traceback. This
+  covers storage lookups and deletes, audio rendering, and provider requests.
+  Log levels and message text are unchanged.
+
 ## [0.13.2] - 2026-11-13
 
 ### Changed

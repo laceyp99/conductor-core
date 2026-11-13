@@ -112,6 +112,7 @@ select = [
 	"A",
 	"ASYNC",
 	"B",
+	"BLE",
 	"C4",
 	"DTZ",
 	"E4",
@@ -120,6 +121,7 @@ select = [
 	"F",
 	"FLY",
 	"FURB",
+	"G",
 	"I",
 	"NPY",
 	"PERF",
@@ -134,6 +136,7 @@ select = [
 	"SIM",
 	"T20",
 	"TID251",
+	"TRY400",
 	"UP",
 	"W605",
 ]

@@ -77,7 +77,8 @@ def _get_thinking_metadata(client, model_name, model_info):
             try:
                 response = request_raw("POST", "/api/show", json={"model": model_name})
                 thinking = response.json().get("thinking")
-            except Exception as exc:
+            # Not swallowed: _raise_ollama_error always re-raises.
+            except Exception as exc:  # noqa: BLE001
                 _raise_ollama_error(
                     exc, f"thinking metadata inspection for {model_name!r}"
                 )
@@ -104,7 +105,8 @@ def _get_model_capabilities(client, model_name, host) -> dict[str, object]:
             client, model_name, model_info
         )
         supports_thinking = "thinking" in capabilities or bool(effort_options)
-    except Exception as exc:
+    # Not swallowed: _raise_ollama_error always re-raises.
+    except Exception as exc:  # noqa: BLE001
         _raise_ollama_error(exc, f"capability inspection for {model_name!r} at {host}")
     if not supports_thinking:
         thinking_off = None
@@ -268,7 +270,8 @@ def _list_models(client) -> list[str]:
     """List named models, preserving the SDK failure and operation."""
     try:
         return [model.model for model in client.list().models if model.model]
-    except Exception as exc:
+    # Not swallowed: _raise_ollama_error always re-raises.
+    except Exception as exc:  # noqa: BLE001
         _raise_ollama_error(exc, "model listing")
 
 
@@ -388,7 +391,7 @@ def loop_gen(
             ollama.RequestError,
             ollama.ResponseError,
         ) as exc:
-            logger.error("Ollama request failed: %s", exc)
+            logger.exception("Ollama request failed: %s", exc)
             _raise_ollama_error(exc, "request")
     _raise_if_out_of_context(completion, model, num_ctx)
     message = getattr(completion, "message", None)

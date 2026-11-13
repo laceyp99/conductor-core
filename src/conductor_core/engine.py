@@ -369,7 +369,8 @@ class LoopGenerationEngine:
             )
         except AudioRenderingError as exc:
             audio_error = str(exc)
-        except Exception as exc:
+        # Audio is optional, so any rendering failure becomes a warning.
+        except Exception as exc:  # noqa: BLE001
             audio_error = (
                 f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
             )

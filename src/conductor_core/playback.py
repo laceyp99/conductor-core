@@ -265,7 +265,7 @@ def get_default_soundfont() -> str | None:
             return _find_soundfont_file(matched_name)
 
     fallback_soundfont = available_soundfonts[0]
-    logger.info(f"Falling back to SoundFont: {fallback_soundfont}")
+    logger.info("Falling back to SoundFont: %s", fallback_soundfont)
     return _find_soundfont_file(fallback_soundfont)
 
 
@@ -389,7 +389,7 @@ def midi_to_mp3(
         # Check if playback is available
         available, error = is_playback_available(soundfont_name)
         if not available:
-            logger.warning(f"Audio playback not available: {error}")
+            logger.warning("Audio playback not available: %s", error)
             raise AudioRenderingError(error or "Audio playback is not available")
 
         # Validate the MIDI timeline before creating files or starting synthesis.
@@ -422,24 +422,24 @@ def midi_to_mp3(
             temp_mp3_path = temp_mp3.name
 
         # Use FluidSynth to render MIDI to WAV
-        logger.info(f"Rendering MIDI to WAV using SoundFont: {soundfont_path}")
+        logger.info("Rendering MIDI to WAV using SoundFont: %s", soundfont_path)
         _render_midi_to_wav(midi_path, temp_wav_path, soundfont_path)
         _validate_wav_has_audio(temp_wav_path)
 
-        logger.info(f"Converting WAV to MP3: {output_path}")
+        logger.info("Converting WAV to MP3: %s", output_path)
         _encode_wav_to_mp3(temp_wav_path, temp_mp3_path, target_duration_ms)
         os.replace(temp_mp3_path, output_path)
 
-        logger.info(f"Successfully created MP3: {output_path}")
+        logger.info("Successfully created MP3: %s", output_path)
         return output_path
 
     except AudioRenderingError as exc:
-        logger.error(f"Failed to convert MIDI to MP3: {exc}")
+        logger.exception("Failed to convert MIDI to MP3: %s", exc)
         raise
     except Exception as exc:
         detail = f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
         error = AudioRenderingError(detail)
-        logger.error(f"Failed to convert MIDI to MP3: {error}")
+        logger.exception("Failed to convert MIDI to MP3: %s", error)
         raise error from exc
 
     finally:

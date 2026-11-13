@@ -196,7 +196,7 @@ def loop_gen(
             config=config,
         )
     except (genai_errors.APIError, httpx2.TimeoutException, httpx2.NetworkError) as exc:
-        logger.error("Google request failed: %s", exc)
+        logger.exception("Google request failed: %s", exc)
         _raise_google_error(exc, "request")
     content, thinking_content = process_output(response)
     midi_loop = objects.Loop.model_validate_json(content)

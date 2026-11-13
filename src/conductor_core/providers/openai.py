@@ -216,7 +216,7 @@ def loop_gen(
         APIConnectionError,
         APIError,
     ) as exc:
-        logger.error("OpenAI request failed: %s", exc)
+        logger.exception("OpenAI request failed: %s", exc)
         _raise_openai_error(exc, "request")
 
     if response.output_parsed is None:
