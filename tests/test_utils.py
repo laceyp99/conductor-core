@@ -27,6 +27,10 @@ def test_pitch_class_to_note_wraps_chromatic_values(pitch_class, expected_note):
         ("G♭", 6),
         ("Cb", 11),
         ("B#", 0),
+        ("Cx", 2),
+        ("C𝄪", 2),
+        ("D𝄫", 0),
+        (" F# ", 6),
     ],
 )
 def test_note_name_to_pitch_class_supports_enharmonics(name, expected_pitch_class):
@@ -87,6 +91,11 @@ def test_scale_returns_expected_note_family_for_c_major():
 
     for note_name in ["C", "D", "E", "F", "G", "A", "B"]:
         assert note_name in scale_notes
+
+
+@pytest.mark.parametrize("mode", ["Major", "MAJOR", "Harmonic Minor"])
+def test_scale_accepts_modes_case_insensitively_like_generation_request(mode):
+    assert utils.scale("C", mode) == utils.scale("C", mode.lower())
 
 
 def test_scale_rejects_invalid_root_and_mode():

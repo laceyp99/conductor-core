@@ -8,6 +8,16 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.12.11] - 2026-11-12
+
+### Fixed
+
+- `note_name_to_pitch_class()` now accepts the same spellings as
+  `calculate_midi_number()`, including `x`, `𝄪`, `𝄫`, and surrounding
+  whitespace.
+- `scale()` now matches modes case-insensitively, so a validated
+  `GenerationRequest(scale="Major")` can be passed to it directly.
+
 ## [0.12.10] - 2026-11-09
 
 ### Added
