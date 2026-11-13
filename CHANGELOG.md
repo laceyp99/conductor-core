@@ -8,6 +8,23 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.13.2] - 2026-11-13
+
+### Changed
+
+- Single generations and variation batches now resolve their provider, reasoning
+  effort, and Ollama capabilities through one shared routing step, so model
+  lookup, effort validation, and `ollama_num_ctx` warnings stay identical across
+  both. Provider requests are unchanged.
+- Routing now passes `request_timeout` to every provider adapter, and `num_ctx`
+  to Ollama adapters, even when they are `None`. Code that replaces adapter
+  functions in tests must accept these keyword arguments.
+
+### Fixed
+
+- The README and Getting Started install commands now pin `v0.13.2` instead of
+  the outdated `v0.8.3` tag.
+
 ## [0.13.1] - 2026-11-13
 
 ### Changed

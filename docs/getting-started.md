@@ -10,13 +10,13 @@ FluidSynth and FFmpeg installed separately.
 === "uv"
 
     ```powershell
-    uv add "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.8.3"
+    uv add "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.13.2"
     ```
 
 === "pip"
 
     ```powershell
-    python -m pip install "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.8.3"
+    python -m pip install "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.13.2"
     ```
 
 Provider extras are `openai`, `anthropic`, `google`, and `ollama`. 

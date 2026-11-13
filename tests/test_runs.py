@@ -159,7 +159,7 @@ def test_generate_midi_routes_to_ollama_and_forwards_temperature(monkeypatch):
     monkeypatch.setattr(
         runs.ollama_api,
         "get_model_status",
-        lambda model_name, host_address=None: (
+        lambda model_name, **kwargs: (
             runs.ollama_api.OllamaModelInspection(model_name, {}, None)
             if model_name == "llama3"
             else None
@@ -175,6 +175,8 @@ def test_generate_midi_routes_to_ollama_and_forwards_temperature(monkeypatch):
         use_thinking=False,
         effort="low",
         model_capabilities=None,
+        request_timeout=None,
+        num_ctx=None,
     ):
         captured.update(
             {
@@ -240,6 +242,7 @@ def test_generate_midi_routes_to_openai_and_forwards_effort(monkeypatch):
         effort=None,
         api_key=None,
         system_prompt=None,
+        request_timeout=None,
     ):
         captured.update(
             {
@@ -306,6 +309,7 @@ def test_generate_midi_routes_to_gemini_and_forwards_reasoning_options(monkeypat
         effort=None,
         api_key=None,
         system_prompt=None,
+        request_timeout=None,
     ):
         captured.update(
             {
@@ -372,6 +376,7 @@ def test_generate_midi_routes_to_claude_and_forwards_reasoning_options(monkeypat
         effort="low",
         api_key=None,
         system_prompt=None,
+        request_timeout=None,
     ):
         captured.update(
             {
@@ -422,7 +427,7 @@ def test_generate_midi_rejects_unknown_models_when_ollama_is_unavailable(monkeyp
     monkeypatch.setattr(
         runs.ollama_api,
         "get_model_status",
-        lambda model_name, host_address=None: (_ for _ in ()).throw(
+        lambda model_name, **kwargs: (_ for _ in ()).throw(
             runs.ollama_api.ProviderConnectionError(
                 "Ollama", "unavailable", operation="model listing"
             )
@@ -445,7 +450,7 @@ def test_generate_midi_rejects_unknown_models_when_ollama_is_available(monkeypat
     monkeypatch.setattr(
         runs.ollama_api,
         "get_model_status",
-        lambda model_name, host_address=None: None,
+        lambda model_name, **kwargs: None,
     )
 
     with pytest.raises(ValueError, match="Invalid Model Selected"):
