@@ -318,3 +318,34 @@ def test_late_persistence_failure_preserves_finalized_predecessor(
     assert len(generation_dirs) == 1
     assert (generation_dirs[0] / "metadata.json").exists()
     assert not (tmp_path / "generations" / "variations").exists()
+
+
+def test_variation_audio_failure_keeps_midi_and_warns(
+    monkeypatch, tmp_path, sample_loop
+):
+    def failed_render(*args, **kwargs):
+        raise engine_module.AudioRenderingError("FluidSynth is unavailable")
+
+    monkeypatch.setattr(
+        engine_module.routing,
+        "generate_variations",
+        lambda **kwargs: provider_result((sample_loop, sample_loop)),
+    )
+    monkeypatch.setattr(
+        engine_module.playback, "resolve_soundfont", lambda name: "custom.sf2"
+    )
+    monkeypatch.setattr(engine_module.playback, "midi_to_mp3", failed_render)
+    engine = LoopGenerationEngine(
+        EngineConfig.from_defaults(artifact_root=tmp_path / "generations")
+    )
+
+    result = engine.generate_variations(request(render_audio=True))
+
+    assert result.status == "complete"
+    for item in result.items:
+        assert item.warnings == (
+            "Audio rendering was skipped or failed. FluidSynth is unavailable",
+        )
+        assert Path(item.generation.midi_path).exists()
+        assert item.generation.audio_path is None
+        assert item.generation.soundfont is None

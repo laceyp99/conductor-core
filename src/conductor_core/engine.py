@@ -17,7 +17,7 @@ from conductor_core.config import (
 )
 from conductor_core.errors import AudioRenderingError
 from conductor_core.midi import loop_to_midi
-from conductor_core.storage import FilesystemArtifactStore
+from conductor_core.storage import FilesystemArtifactStore, GenerationWorkspace
 from conductor_core.variations import (
     VariationBatchMetadata,
     VariationBatchResult,
@@ -108,46 +108,14 @@ class LoopGenerationEngine:
             )
             midi.save(workspace.midi_path)
 
-            audio_path = None
-            resolved_soundfont = None
+            audio_path = soundfont = None
             if request.render_audio:
                 self._emit(progress_callback, "audio", "Rendering Audio...")
-                audio_error = None
-                try:
-                    selected_soundfont = (
-                        request.soundfont_path
-                        if request.soundfont_path is not None
-                        else self.config.default_soundfont_path
-                    )
-                    requested_soundfont = (
-                        os.fspath(selected_soundfont)
-                        if selected_soundfont is not None
-                        else None
-                    )
-                    if isinstance(requested_soundfont, bytes):
-                        raise TypeError(
-                            "soundfont_path must resolve to a text path, not bytes"
-                        )
-                    resolved_soundfont = playback.resolve_soundfont(requested_soundfont)
-                    audio_path = playback.midi_to_mp3(
-                        workspace.midi_path,
-                        output_path=workspace.audio_path,
-                        soundfont_name=resolved_soundfont or requested_soundfont,
-                    )
-                except AudioRenderingError as exc:
-                    audio_error = str(exc)
-                except Exception as exc:
-                    audio_error = (
-                        f"{type(exc).__name__}: {exc}"
-                        if str(exc)
-                        else type(exc).__name__
-                    )
-
-                if audio_path is None:
-                    warning = "Audio rendering was skipped or failed."
-                    if audio_error:
-                        warning = f"{warning} {audio_error}"
-                    warnings.append(warning)
+                audio_path, soundfont, audio_warning = self._render_optional_audio(
+                    workspace, request.soundfont_path
+                )
+                if audio_warning:
+                    warnings.append(audio_warning)
 
             with open(workspace.messages_path, "w", encoding="utf-8") as messages_file:
                 json.dump(provider_result.messages, messages_file, indent=2)
@@ -163,9 +131,7 @@ class LoopGenerationEngine:
                 use_thinking=request.use_thinking,
                 effort=request.effort,
                 cost=provider_result.cost,
-                soundfont=os.path.basename(resolved_soundfont)
-                if audio_path and resolved_soundfont
-                else None,
+                soundfont=soundfont,
                 audio_render_succeeded=audio_path is not None,
             )
             finalized = True
@@ -339,44 +305,13 @@ class LoopGenerationEngine:
             warnings.extend(loop_to_midi(midi, loop))
             midi.save(workspace.midi_path)
 
-            audio_path = None
-            resolved_soundfont = None
+            audio_path = soundfont = None
             if request.render_audio:
-                audio_error = None
-                try:
-                    selected_soundfont = (
-                        request.soundfont_path
-                        if request.soundfont_path is not None
-                        else self.config.default_soundfont_path
-                    )
-                    requested_soundfont = (
-                        os.fspath(selected_soundfont)
-                        if selected_soundfont is not None
-                        else None
-                    )
-                    if isinstance(requested_soundfont, bytes):
-                        raise TypeError(
-                            "soundfont_path must resolve to a text path, not bytes"
-                        )
-                    resolved_soundfont = playback.resolve_soundfont(requested_soundfont)
-                    audio_path = playback.midi_to_mp3(
-                        workspace.midi_path,
-                        output_path=workspace.audio_path,
-                        soundfont_name=resolved_soundfont or requested_soundfont,
-                    )
-                except AudioRenderingError as exc:
-                    audio_error = str(exc)
-                except Exception as exc:
-                    audio_error = (
-                        f"{type(exc).__name__}: {exc}"
-                        if str(exc)
-                        else type(exc).__name__
-                    )
-                if audio_path is None:
-                    warning = "Audio rendering was skipped or failed."
-                    if audio_error:
-                        warning = f"{warning} {audio_error}"
-                    warnings.append(warning)
+                audio_path, soundfont, audio_warning = self._render_optional_audio(
+                    workspace, request.soundfont_path
+                )
+                if audio_warning:
+                    warnings.append(audio_warning)
 
             generation = self.store.finalize_generation(
                 workspace=workspace,
@@ -389,9 +324,7 @@ class LoopGenerationEngine:
                 use_thinking=request.use_thinking,
                 effort=request.effort,
                 cost=None,
-                soundfont=os.path.basename(resolved_soundfont)
-                if audio_path and resolved_soundfont
-                else None,
+                soundfont=soundfont,
                 audio_render_succeeded=audio_path is not None,
                 protected_generation_ids=(*protected_generation_ids, workspace.id),
             )
@@ -400,3 +333,51 @@ class LoopGenerationEngine:
         finally:
             if workspace is not None and not finalized:
                 self.store.cleanup_generation_workspace(workspace)
+
+    def _render_optional_audio(
+        self,
+        workspace: GenerationWorkspace,
+        soundfont_path: str | os.PathLike | None,
+    ) -> tuple[str | None, str | None, str | None]:
+        """Render the workspace MIDI to MP3 without letting failures escape.
+
+        Returns ``(audio_path, soundfont, warning)``. ``soundfont`` is the
+        resolved SoundFont's file name, set only when audio was rendered.
+        ``warning`` is set only when no audio was produced.
+        """
+        audio_path = None
+        resolved_soundfont = None
+        audio_error = None
+        try:
+            selected_soundfont = (
+                soundfont_path
+                if soundfont_path is not None
+                else self.config.default_soundfont_path
+            )
+            requested_soundfont = (
+                os.fspath(selected_soundfont)
+                if selected_soundfont is not None
+                else None
+            )
+            if isinstance(requested_soundfont, bytes):
+                raise TypeError("soundfont_path must resolve to a text path, not bytes")
+            resolved_soundfont = playback.resolve_soundfont(requested_soundfont)
+            audio_path = playback.midi_to_mp3(
+                workspace.midi_path,
+                output_path=workspace.audio_path,
+                soundfont_name=resolved_soundfont or requested_soundfont,
+            )
+        except AudioRenderingError as exc:
+            audio_error = str(exc)
+        except Exception as exc:
+            audio_error = (
+                f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
+            )
+
+        if audio_path is None:
+            warning = "Audio rendering was skipped or failed."
+            if audio_error:
+                warning = f"{warning} {audio_error}"
+            return None, None, warning
+        soundfont = os.path.basename(resolved_soundfont) if resolved_soundfont else None
+        return audio_path, soundfont, None
