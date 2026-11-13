@@ -656,7 +656,7 @@ def _read_variation_manifest_for_listing(
         if manifest.created_at.utcoffset() is None:
             path = _get_variation_manifest_path(artifact_root, batch_id)
             order = (
-                datetime(1970, 1, 1).toordinal() * 86400 * 1_000_000
+                datetime(1970, 1, 1, tzinfo=UTC).toordinal() * 86400 * 1_000_000
                 + os.lstat(path).st_mtime_ns // 1_000
             )
         else:

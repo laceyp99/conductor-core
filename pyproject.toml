@@ -113,6 +113,7 @@ select = [
 	"ASYNC",
 	"B",
 	"C4",
+	"DTZ",
 	"E4",
 	"E7",
 	"E9",
@@ -124,11 +125,15 @@ select = [
 	"PERF",
 	"PGH",
 	"PIE",
+	"PLE",
+	"PLW",
 	"PT",
 	"RET",
 	"RSE",
 	"RUF",
 	"SIM",
+	"T20",
+	"TID251",
 	"UP",
 	"W605",
 ]
@@ -136,3 +141,10 @@ ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/test_audio.py" = ["A002"]
+"tests/**" = ["T20"]
+"scripts/**" = ["T20"]
+".github/scripts/**" = ["T20"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"gradio".msg = "Core must not depend on UI frameworks."
+"dash".msg = "Core must not depend on UI frameworks."

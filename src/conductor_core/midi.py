@@ -153,9 +153,10 @@ def loop_to_midi(midi: MidiFile, loop: objects.Loop) -> list[str]:
     notes = sorted(scheduled_notes.items())
     events = []
     shortened = 0
-    for index, ((note_num, note_start_tick), (note_end_tick, velocity)) in enumerate(
+    for index, ((note_num, note_start_tick), (written_end_tick, velocity)) in enumerate(
         notes
     ):
+        note_end_tick = written_end_tick
         if index + 1 < len(notes):
             (next_pitch, next_start), _ = notes[index + 1]
             if next_pitch == note_num and next_start < note_end_tick:
@@ -268,13 +269,13 @@ def midi_to_loop(midi_filename: str | PathLike[str]) -> objects.Loop:
     bars = {0: [], 1: [], 2: [], 3: []}
 
     # Process each note event and assign it to the appropriate bar.
-    for note_number, start_tick, end_tick, velocity in note_events:
+    for note_number, start_tick, recorded_end_tick, velocity in note_events:
         # The public Loop model is exactly four bars. Preserve sustained notes
         # within that window and clip a MIDI note-off beyond it, matching the
         # export boundary policy. Notes that begin after the window are skipped.
         if start_tick >= loop_end_tick:
             continue
-        end_tick = min(end_tick, loop_end_tick)
+        end_tick = min(recorded_end_tick, loop_end_tick)
         # Determine the sixteenth-note position (1-based indexing).
         start_sixteenth = (start_tick * 4 // ticks_per_beat) + 1
         duration_ticks = (end_tick - start_tick) * 4

@@ -319,7 +319,8 @@ def _validate_model_info(model_info):
 
 def get_model_info() -> ModelInfo:
     """Load, validate, and cache packaged model metadata."""
-    global _model_info_cache
+    # A module-level cache keeps packaged metadata loading to one read per process.
+    global _model_info_cache  # noqa: PLW0603
 
     if _model_info_cache is None:
         model_info_resource = resources.files("conductor_core.resources").joinpath(
