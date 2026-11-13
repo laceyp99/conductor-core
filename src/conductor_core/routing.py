@@ -3,7 +3,7 @@
 import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from conductor_core.config import ProviderCredentials
 from conductor_core.models import Loop
@@ -69,13 +69,14 @@ def _resolve_reasoning_effort(
     return effort
 
 
-_CLOUD_PROVIDERS: tuple[ProviderId, ...] = ("OpenAI", "Google", "Anthropic")
 # Cloud adapters keep their own loop_gen/variations_gen so wire schemas stay explicit.
+# This table is the single list of cloud providers, checked in this order.
 _CLOUD_ADAPTERS = {
     "OpenAI": openai_api,
     "Google": gemini_api,
     "Anthropic": claude_api,
 }
+_CLOUD_PROVIDERS = cast("tuple[ProviderId, ...]", tuple(_CLOUD_ADAPTERS))
 
 
 @dataclass(frozen=True)
