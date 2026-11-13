@@ -6,6 +6,15 @@ on:
       - main
   pull_request:
 
+permissions:
+  contents: read
+
+# A newer push to a pull request replaces its in-progress run. Runs on main
+# always finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   locked-tests:
     name: Locked tests (Python ${{ matrix.python-version }})
@@ -14,7 +23,7 @@ jobs:
       matrix:
         python-version: ["3.11", "3.14"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Set up uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
@@ -29,7 +38,7 @@ jobs:
     name: Quality and package build (Python 3.12)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Set up uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
@@ -56,12 +65,14 @@ jobs:
           .venv-consumer/bin/python -m pip install dist/conductor_core-*.whl
           .venv-consumer/bin/python -m pip check
           .venv-consumer/bin/python -I tests/installed_package_smoke.py
+      - name: Build documentation
+        run: uv run --locked --group docs --python 3.12 mkdocs build --strict
 
   minimal-install:
     name: Minimal install (Python 3.11)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Set up uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
@@ -91,7 +102,7 @@ jobs:
     name: Storage security (Windows, Python 3.12)
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Set up uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
