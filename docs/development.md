@@ -67,40 +67,6 @@ typing check on pull requests and pushes to `main`.
 When intentionally updating dependencies, run `uv lock --upgrade`, review the
 lockfile diff, and rerun the checks. Never edit `uv.lock` by hand.
 
-## Provider dependency updates
-
-`pyproject.toml` declares the SDK versions supported by installed-package
-consumers. `uv.lock` records exact versions for development and CI; downstream
-applications maintain their own lockfiles. The Google extra supports
-`google-genai>=3.3.0,<4`, using its default `httpx2` transport.
-
-When adding a model, check its SDK requirements as well as the API documentation.
-Upgrade only the relevant package, review its release notes and lockfile diff,
-then run the documented checks:
-
-```powershell
-uv lock --upgrade-package google-genai
-uv sync --locked --all-extras
-```
-
-Raise the declared minimum when Core relies on newly added SDK behavior. Review
-major SDK upgrades explicitly rather than allowing them through an unbounded
-dependency. The existing weekly compatibility workflow checks the newest
-versions within the declared ranges.
-
-After building the wheel, also verify a clean Google-only installation. This
-checks optional dependencies without other providers supplying missing packages:
-
-```powershell
-uv venv --python 3.11 .venv-google
-uv pip install --python .venv-google/Scripts/python.exe "conductor-core[google] @ ./dist/conductor_core-0.13.0-py3-none-any.whl"
-.venv-google/Scripts/python.exe -I tests/installed_google_smoke.py
-```
-
-Adjust the wheel filename to the current project version. On Unix, use
-`.venv-google/bin/python` for both commands. This check uses an offline transport;
-it does not require credentials or make provider requests.
-
 ## Release metadata
 
 Every pull request must carry its own release metadata. The required

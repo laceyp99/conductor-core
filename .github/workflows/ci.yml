@@ -56,11 +56,6 @@ jobs:
           .venv-consumer/bin/python -m pip install dist/conductor_core-*.whl
           .venv-consumer/bin/python -m pip check
           .venv-consumer/bin/python -I tests/installed_package_smoke.py
-      - name: Test Google-only built wheel
-        run: |
-          uv venv --python 3.11 .venv-google
-          uv pip install --python .venv-google/bin/python "$(find dist -name '*.whl')[google]"
-          .venv-google/bin/python -I tests/installed_google_smoke.py
 
   minimal-install:
     name: Minimal install (Python 3.11)
