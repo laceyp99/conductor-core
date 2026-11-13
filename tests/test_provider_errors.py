@@ -44,6 +44,41 @@ HOSTED_PROVIDERS = [
 ]
 
 
+@pytest.mark.parametrize(
+    ("error_name", "expected"),
+    [("ReadTimeout", ProviderTimeoutError), ("ConnectError", ProviderConnectionError)],
+)
+@pytest.mark.parametrize("operation", ["initialize", "loop_gen", "variations_gen"])
+def test_google_normalizes_transport_errors(
+    monkeypatch, error_name, expected, operation
+):
+    module = pytest.importorskip("httpx2")
+    original = getattr(module, error_name)("offline transport failure")
+
+    def fail(**kwargs):
+        raise original
+
+    if operation == "initialize":
+        monkeypatch.setattr(google_api.genai, "Client", fail)
+
+        def call():
+            return google_api.initialize_gemini_client(api_key="test-key")
+    else:
+        client = SimpleNamespace(models=SimpleNamespace(generate_content=fail))
+        monkeypatch.setattr(
+            google_api, "initialize_gemini_client", lambda **kwargs: client
+        )
+
+        def call():
+            return getattr(google_api, operation)(
+                "write a loop", "gemini-4-hydrogen", use_thinking=True, effort="high"
+            )
+
+    with pytest.raises(expected) as raised:
+        call()
+    assert raised.value.__cause__ is original
+
+
 def _patch_client_constructor(monkeypatch, module, client_path, replacement):
     target = module
     for attribute in client_path[:-1]:

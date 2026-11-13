@@ -2,7 +2,7 @@ import json
 import os
 import shutil
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from threading import Barrier, current_thread
 
@@ -225,18 +225,16 @@ def test_finalize_generation_persists_metadata_for_direct_written_artifacts(
     persisted_timestamp = json.loads(
         Path(workspace.metadata_path).read_text(encoding="utf-8")
     )["timestamp"]
-    assert datetime.fromisoformat(
-        persisted_timestamp.replace("Z", "+00:00")
-    ).utcoffset() == timedelta(0)
+    assert datetime.fromisoformat(persisted_timestamp).utcoffset() == timedelta(0)
 
 
 def test_generation_ids_use_utc(monkeypatch):
-    utc_time = datetime(2026, 10, 8, 3, 4, 5, 123456, tzinfo=timezone.utc)
+    utc_time = datetime(2026, 10, 8, 3, 4, 5, 123456, tzinfo=UTC)
 
     class FixedDatetime(datetime):
         @classmethod
         def now(cls, tz=None):
-            assert tz is timezone.utc
+            assert tz is UTC
             return utc_time
 
     monkeypatch.setattr(history, "datetime", FixedDatetime)
@@ -247,7 +245,7 @@ def test_generation_ids_use_utc(monkeypatch):
 def test_mixed_history_returns_utc_and_retains_by_instant_without_rewriting(
     isolated_history_dir, module_helpers
 ):
-    legacy_instant = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    legacy_instant = datetime(2026, 1, 1, tzinfo=UTC)
     timestamps = {
         "legacy": legacy_instant.astimezone().replace(tzinfo=None),
         "utc": legacy_instant + timedelta(hours=1),
@@ -272,7 +270,7 @@ def test_mixed_history_returns_utc_and_retains_by_instant_without_rewriting(
     loaded = load_history()
     assert [item.id for item in loaded] == ["utc", "legacy", "offset"]
     for item in loaded:
-        expected = timestamps[item.id].astimezone(timezone.utc)
+        expected = timestamps[item.id].astimezone(UTC)
         assert item.timestamp == expected
         assert item.timestamp.utcoffset() == timedelta(0)
         assert get_generation(item.id) == item

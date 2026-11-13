@@ -14,17 +14,12 @@ import logging
 import os
 import shutil
 import subprocess
-import sys
 import tempfile
 import wave
 from contextlib import ExitStack, suppress
 from importlib import resources
+from importlib.resources.abc import Traversable
 from threading import Lock
-
-if sys.version_info >= (3, 11):
-    from importlib.resources.abc import Traversable
-else:
-    from importlib.abc import Traversable
 
 from mido import MidiFile, merge_tracks, tick2second
 

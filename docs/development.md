@@ -2,6 +2,8 @@
 
 ## Set up the environment
 
+Core requires Python 3.11 or newer.
+
 Core uses [uv](https://docs.astral.sh/uv/) 0.11.16 or newer. 
 
 From the repository
@@ -48,7 +50,7 @@ require FluidSynth or FFmpeg.
 
 Ty is a development-only dependency, with its exact version resolved in `uv.lock`.
 The [Ty configuration](https://docs.astral.sh/ty/reference/configuration/) targets
-Python 3.10 and checks `src/`; tests and examples are not part of the required
+Python 3.11 and checks `src/`; tests and examples are not part of the required
 source baseline. Errors fail the command. Warnings remain visible but do not
 fail it. Do not use blanket or file-wide suppressions: an unavoidable suppression
 must name its specific rule and include a comment explaining why it is safe.

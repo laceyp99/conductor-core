@@ -8,6 +8,29 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-12
+
+### Changed
+
+- Require Python 3.11 or newer. Python 3.10 consumers must upgrade Python before
+  updating Core.
+- Require Google GenAI SDK `>=3.3.0,<4` for the Google integration and lock 3.3.0.
+  Hydrogen's `xhigh` reasoning level is recognized without an unknown-level warning.
+- Default the MIDI generation example to Gemini 4 Hydrogen with `low` reasoning.
+
+### Fixed
+
+- Use the Google SDK's `httpx2` transport for timeout and connection errors.
+  Google-only installations no longer depend on another provider installing `httpx`.
+
+### Added
+
+- Google Gemini 4 Hydrogen model support with `low` through `xhigh` reasoning,
+  65,536 output tokens per synchronous request, and standard token and implicit
+  cache pricing. Custom temperature is omitted; turning thinking off selects `low`.
+  Quotas use maintainer-selected Tier 1 defaults of 1,000 RPM, 2,000,000 TPM,
+  and 1,000 RPD; confirm actual limits in the Google project's AI Studio.
+
 ## [0.12.11] - 2026-11-12
 
 ### Fixed

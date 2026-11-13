@@ -20,11 +20,10 @@ import os
 import re
 import subprocess
 import sys
+import tomllib
 from datetime import date
 from pathlib import Path
 from typing import NoReturn
-
-import tomllib
 
 CHANGELOG_PATH = "CHANGELOG.md"
 PYPROJECT_PATH = "pyproject.toml"

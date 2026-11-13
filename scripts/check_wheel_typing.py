@@ -50,7 +50,7 @@ def main() -> None:
         shutil.copyfile(repo / "tests/typing/consumer.py", sample)
         config = root / "ty.toml"
         config.write_text(
-            '[environment]\npython-version = "3.10"\nroot = ["."]\n'
+            '[environment]\npython-version = "3.11"\nroot = ["."]\n'
             "[terminal]\nerror-on-warning = false\n",
             encoding="utf-8",
         )

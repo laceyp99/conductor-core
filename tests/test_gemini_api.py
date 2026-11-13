@@ -37,7 +37,11 @@ def test_calc_cost_uses_standard_rate_above_legacy_threshold():
 
 @pytest.mark.parametrize(
     ("model", "input_rate", "output_rate", "cache_rate"),
-    [("gemini-2.5-flash", 0.30, 2.50, 0.03), ("gemini-4-argon", 2.00, 10.00, 0.10)],
+    [
+        ("gemini-2.5-flash", 0.30, 2.50, 0.03),
+        ("gemini-4-argon", 2.00, 10.00, 0.10),
+        ("gemini-4-hydrogen", 1.50, 7.50, 0.075),
+    ],
 )
 def test_calc_cost_includes_thought_tokens_at_output_rate(
     model, input_rate, output_rate, cache_rate

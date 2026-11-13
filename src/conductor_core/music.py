@@ -3,10 +3,10 @@ from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from importlib import resources
 from os import PathLike
-from typing import cast
+from typing import NotRequired, cast
 
 from pydantic import JsonValue
-from typing_extensions import NotRequired, TypedDict
+from typing_extensions import TypedDict
 
 from conductor_core.models import Note
 
