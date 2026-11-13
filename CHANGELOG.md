@@ -8,6 +8,14 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-11-13
+
+### Changed
+
+- Single generations and variation batches now share one optional audio-rendering
+  path, so SoundFont selection and non-fatal render warnings stay identical
+  across both. No behavior change is expected.
+
 ## [0.13.0] - 2026-11-12
 
 ### Changed
