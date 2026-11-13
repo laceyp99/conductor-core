@@ -349,3 +349,41 @@ def test_variation_audio_failure_keeps_midi_and_warns(
         assert Path(item.generation.midi_path).exists()
         assert item.generation.audio_path is None
         assert item.generation.soundfont is None
+
+
+def test_variation_audio_renders_with_config_default_soundfont(
+    monkeypatch, tmp_path, sample_loop
+):
+    rendered = []
+
+    def fake_midi_to_mp3(midi_path, output_path=None, soundfont_name=None):
+        Path(output_path).write_bytes(b"audio")
+        rendered.append(soundfont_name)
+        return output_path
+
+    monkeypatch.setattr(
+        engine_module.routing,
+        "generate_variations",
+        lambda **kwargs: provider_result((sample_loop, sample_loop)),
+    )
+    monkeypatch.setattr(
+        engine_module.playback,
+        "resolve_soundfont",
+        lambda name: str(tmp_path / "soundfonts" / name),
+    )
+    monkeypatch.setattr(engine_module.playback, "midi_to_mp3", fake_midi_to_mp3)
+    engine = LoopGenerationEngine(
+        EngineConfig.from_defaults(
+            artifact_root=tmp_path / "generations",
+            default_soundfont_path="house.sf2",
+        )
+    )
+
+    result = engine.generate_variations(request(render_audio=True))
+
+    assert result.status == "complete"
+    assert rendered == [str(tmp_path / "soundfonts" / "house.sf2")] * 2
+    for item in result.items:
+        assert item.warnings == ()
+        assert Path(item.generation.audio_path).read_bytes() == b"audio"
+        assert item.generation.soundfont == "house.sf2"
