@@ -8,6 +8,15 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-11-13
+
+### Changed
+
+- Update the README and Getting Started install commands to pin `v0.13.1`
+  instead of the outdated `v0.8.3` tag.
+- Simplify internal provider routing so loop and variation requests share one
+  model lookup and reasoning-effort check. Provider requests are unchanged.
+
 ## [0.13.0] - 2026-11-12
 
 ### Changed
