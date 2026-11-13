@@ -10,6 +10,18 @@ while its public API is still in initial development.
 
 ## [0.12.11] - 2026-11-12
 
+### Changed
+
+- Refresh the locked Google GenAI SDK to 3.3.0 on Python 3.11 and newer, which
+  recognizes Hydrogen's `xhigh` reasoning level without an unknown-level warning.
+  Python 3.10 uses the compatible 2.33.0 SDK and still emits that warning.
+- Default the MIDI generation example to Gemini 4 Hydrogen with `low` reasoning.
+
+### Fixed
+
+- Preserve Core's Google timeout and connection errors with the SDK's new
+  `httpx2` transport as well as the older `httpx` transport.
+
 ### Added
 
 - Google Gemini 4 Hydrogen model support with `low` through `xhigh` reasoning,

@@ -61,12 +61,12 @@ def test_generate_midi_builds_expected_paid_request(capsys):
     assert script.main(engine=FakeEngine()) is result
 
     request = captured["request"]
-    assert request.model == "gpt-5.6-terra"
+    assert request.model == "gemini-4-hydrogen"
     assert request.description == (
         "warm neo-soul electric piano chords with syncopated upper extensions "
         "and a simple bass movement"
     )
-    assert request.effort == "medium"
+    assert request.effort == "low"
     assert request.prompt_override is None
     assert request.render_audio is True
     assert request.soundfont_path is None

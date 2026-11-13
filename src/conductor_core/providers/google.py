@@ -36,12 +36,25 @@ except ImportError:  # pragma: no cover - exercised only in minimal installs
 
 logger = logging.getLogger(__name__)
 
+# GenAI 3 uses httpx2; older supported SDKs still use httpx.
+try:
+    import httpx2
+except ImportError:  # pragma: no cover - older SDK and minimal installs
+    httpx2 = None
+
+_TIMEOUT_ERRORS = tuple(
+    module.TimeoutException for module in (httpx, httpx2) if module is not None
+)
+_NETWORK_ERRORS = tuple(
+    module.NetworkError for module in (httpx, httpx2) if module is not None
+)
+
 
 def _raise_google_error(exc: Exception, operation: str) -> NoReturn:
     assert httpx is not None
-    if isinstance(exc, httpx.TimeoutException):
+    if isinstance(exc, _TIMEOUT_ERRORS):
         error = ProviderTimeoutError("Google", str(exc), operation=operation)
-    elif isinstance(exc, httpx.NetworkError):
+    elif isinstance(exc, _NETWORK_ERRORS):
         error = ProviderConnectionError("Google", str(exc), operation=operation)
     else:
         error = error_for_status(
@@ -78,7 +91,7 @@ def initialize_gemini_client(
             api_key=resolved_api_key,
             http_options=types.HttpOptions(timeout=max(1, round(timeout * 1000))),
         )
-    except (genai_errors.APIError, httpx.TimeoutException, httpx.NetworkError) as exc:
+    except (genai_errors.APIError, *_TIMEOUT_ERRORS, *_NETWORK_ERRORS) as exc:
         _raise_google_error(exc, "client initialization")
 
 
@@ -195,7 +208,7 @@ def loop_gen(
             contents=prompt,
             config=config,
         )
-    except (genai_errors.APIError, httpx.TimeoutException, httpx.NetworkError) as exc:
+    except (genai_errors.APIError, *_TIMEOUT_ERRORS, *_NETWORK_ERRORS) as exc:
         logger.error("Google request failed: %s", exc)
         _raise_google_error(exc, "request")
     content, thinking_content = process_output(response)
@@ -271,7 +284,7 @@ def variations_gen(
             contents=prompt,
             config=config,
         )
-    except (genai_errors.APIError, httpx.TimeoutException, httpx.NetworkError) as exc:
+    except (genai_errors.APIError, *_TIMEOUT_ERRORS, *_NETWORK_ERRORS) as exc:
         _raise_google_error(exc, "request")
     content, thinking_content = process_output(response)
     collection = VariationCollection.model_validate_json(content)

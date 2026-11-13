@@ -12,7 +12,7 @@ repository root. Importing this module does not make a provider call.
 from conductor_core import EngineConfig, GenerationRequest, LoopGenerationEngine
 
 # --- Edit these values before running the example. ---
-MODEL = "gpt-5.6-terra"
+MODEL = "gemini-4-hydrogen"
 KEY = "A"
 SCALE = "minor"
 DESCRIPTION = (
@@ -21,7 +21,7 @@ DESCRIPTION = (
 )
 TEMPERATURE = 0.0
 USE_THINKING = True
-EFFORT = "medium"
+EFFORT = "low"
 RENDER_AUDIO = True
 
 # None uses Conductor Core's packaged default prompt. To customize the system
