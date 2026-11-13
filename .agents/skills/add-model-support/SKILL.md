@@ -43,6 +43,12 @@ If the user does not provide a provider or URL, search the web first and prefer 
    - Add `extended_thinking`, `always_on_adaptive_thinking`, `effort_options` when applicable, `max_tokens`, `cost`, and `rate_limits` only from supported evidence.
 
 4. Verify the provider module.
+   - Check the installed SDK against the vendor's current release notes. New
+     model parameters may require a newer SDK even when the API accepts them.
+     Use `uv lock --upgrade-package <sdk-package>` for a targeted update, and
+     raise the declared minimum in `pyproject.toml` when the new behavior is
+     required. Review the lockfile diff and follow the validation commands in
+     `docs/development.md`.
    - Inspect the provider module and check whether the new model works with the current request construction, parameter names, parsing path, and cost calculation.
    - Make the smallest provider-side change needed.
    - Keep changes local to the provider unless a real compatibility constraint forces a nearby adjustment.

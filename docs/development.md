@@ -2,7 +2,7 @@
 
 ## Set up the environment
 
-Core requires Python 3.11 or newer. Use Python 3.12 for the standard local checks.
+Core requires Python 3.11 or newer.
 
 Core uses [uv](https://docs.astral.sh/uv/) 0.11.16 or newer. 
 
