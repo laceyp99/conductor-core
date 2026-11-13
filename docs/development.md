@@ -93,7 +93,7 @@ checks optional dependencies without other providers supplying missing packages:
 
 ```powershell
 uv venv --python 3.11 .venv-google
-uv pip install --python .venv-google/Scripts/python.exe "conductor-core[google] @ ./dist/conductor_core-0.12.11-py3-none-any.whl"
+uv pip install --python .venv-google/Scripts/python.exe "conductor-core[google] @ ./dist/conductor_core-0.13.0-py3-none-any.whl"
 .venv-google/Scripts/python.exe -I tests/installed_google_smoke.py
 ```
 

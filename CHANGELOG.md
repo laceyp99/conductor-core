@@ -8,7 +8,7 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
-## [0.12.11] - 2026-11-12
+## [0.13.0] - 2026-11-12
 
 ### Changed
 
@@ -30,6 +30,16 @@ while its public API is still in initial development.
   cache pricing. Custom temperature is omitted; turning thinking off selects `low`.
   Quotas use maintainer-selected Tier 1 defaults of 1,000 RPM, 2,000,000 TPM,
   and 1,000 RPD; confirm actual limits in the Google project's AI Studio.
+
+## [0.12.11] - 2026-11-12
+
+### Fixed
+
+- `note_name_to_pitch_class()` now accepts the same spellings as
+  `calculate_midi_number()`, including `x`, `𝄪`, `𝄫`, and surrounding
+  whitespace.
+- `scale()` now matches modes case-insensitively, so a validated
+  `GenerationRequest(scale="Major")` can be passed to it directly.
 
 ## [0.12.10] - 2026-11-09
 

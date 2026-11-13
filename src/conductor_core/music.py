@@ -381,13 +381,29 @@ def pitch_class_to_note(pc: int) -> str:
     return NOTE_NAMES[pc % 12]
 
 
+def _clean_pitch_name(name: str) -> str:
+    """Normalize a pitch name to the ASCII spelling used by ``base_midi_numbers``.
+
+    Strips whitespace and maps unicode accidentals and ``x`` (double sharp) to
+    ``#``/``b`` so ``"C𝄪"``, ``"Cx"``, and ``"C##"`` all resolve the same way.
+    """
+    return (
+        name.strip()
+        .replace("♯", "#")
+        .replace("♭", "b")
+        .replace("𝄪", "##")
+        .replace("x", "##")
+        .replace("𝄫", "bb")
+    )
+
+
 def note_name_to_pitch_class(name: str) -> int:
     """Convert a note name to its pitch class using base_midi_numbers.
 
     Supports ASCII and unicode sharps/flats, double sharps, etc.
 
     Args:
-        name (str): Note name (e.g. "C", "F#", "Eb", "G##").
+        name (str): Note name (e.g. "C", "F#", "Eb", "G##", "Cx", "D𝄫").
 
     Returns:
         int: Pitch class (0-11).
@@ -395,7 +411,7 @@ def note_name_to_pitch_class(name: str) -> int:
     Raises:
         ValueError: If the note name is not recognized.
     """
-    pc = base_midi_numbers.get(name)
+    pc = base_midi_numbers.get(_clean_pitch_name(name))
     if pc is None:
         raise ValueError(f"Unrecognized note name: {name}")
     return pc % 12
@@ -436,7 +452,8 @@ def scale(scale_letter: str, scale_mode: str) -> list[str]:
 
     Args:
         scale_letter (str): The letter of the scale.
-        scale_mode (str): The mode of the scale (either "major" or "minor").
+        scale_mode (str): A ``SCALE_INTERVALS`` mode such as "major" or
+            "harmonic minor", matched case-insensitively like ``GenerationRequest``.
 
     Returns:
         list[str]: A list of note names in the scale.
@@ -453,12 +470,13 @@ def scale(scale_letter: str, scale_mode: str) -> list[str]:
     if start_index is None:
         raise ValueError(f"Invalid scale letter: {scale_letter}")
 
-    if scale_mode not in SCALE_INTERVALS:
+    intervals = SCALE_INTERVALS.get(scale_mode.lower())
+    if intervals is None:
         raise ValueError(f"Invalid scale mode: {scale_mode}")
 
     return [
         note
-        for interval in SCALE_INTERVALS[scale_mode]
+        for interval in intervals
         for note in ENHARMONIC_NOTE_NAMES[(start_index + interval) % 12]
     ]
 
@@ -472,14 +490,7 @@ def calculate_midi_number(note: Note) -> int:
     Returns:
         int: A MIDI number that corresponds to the note.
     """
-    cleaned_pitch = (
-        note.pitch.strip()
-        .replace("♯", "#")
-        .replace("♭", "b")
-        .replace("𝄪", "##")
-        .replace("x", "##")
-        .replace("𝄫", "bb")
-    )
+    cleaned_pitch = _clean_pitch_name(note.pitch)
     if cleaned_pitch not in base_midi_numbers:
         raise ValueError(f"Unrecognized note name: {note.pitch}")
     base_number = base_midi_numbers[cleaned_pitch]
