@@ -69,20 +69,87 @@ def _resolve_reasoning_effort(
     return effort
 
 
-def _warn_ignored_num_ctx(
+_CLOUD_PROVIDERS: tuple[ProviderId, ...] = ("OpenAI", "Google", "Anthropic")
+# Cloud adapters keep their own loop_gen/variations_gen so wire schemas stay explicit.
+_CLOUD_ADAPTERS = {
+    "OpenAI": openai_api,
+    "Google": gemini_api,
+    "Anthropic": claude_api,
+}
+
+
+@dataclass(frozen=True)
+class _Route:
+    """Provider choice and reasoning settings resolved once per request."""
+
+    provider: ProviderId
+    effort: str | None
+    # Inspected Ollama capabilities; None for cloud models.
+    model_capabilities: Mapping[str, Any] | None
+
+
+def _resolve_route(
     model_choice: str,
-    model_info: Mapping[str, Any],
+    credentials: ProviderCredentials,
+    use_thinking: bool,
+    effort: str | None,
+    request_timeout: float | None,
     ollama_num_ctx: int | None,
-) -> None:
-    """Log when an Ollama-only context size is set for a cloud model."""
-    if ollama_num_ctx is None:
-        return
-    if any(model_choice in models for models in model_info["models"].values()):
-        logger.warning(
-            "ollama_num_ctx=%r only applies to Ollama models; ignoring it for %s.",
-            ollama_num_ctx,
-            model_choice,
+) -> _Route:
+    """Pick the provider for a model and resolve its effective effort.
+
+    Cloud models are looked up in model metadata. Anything else is treated as
+    an installed Ollama model, whose capabilities are inspected live.
+    """
+    model_info = get_model_info()
+    for provider in _CLOUD_PROVIDERS:
+        model_config = model_info["models"][provider].get(model_choice)
+        if model_config is None:
+            continue
+        if ollama_num_ctx is not None:
+            logger.warning(
+                "ollama_num_ctx=%r only applies to Ollama models; ignoring it for %s.",
+                ollama_num_ctx,
+                model_choice,
+            )
+        return _Route(
+            provider=provider,
+            effort=_resolve_reasoning_effort(
+                model_choice, model_config, use_thinking, effort
+            ),
+            model_capabilities=None,
         )
+
+    status = ollama_api.get_model_status(
+        model_choice,
+        host_address=credentials.ollama_host,
+        request_timeout=request_timeout,
+    )
+    if status is None:
+        raise ValueError("Invalid Model Selected")
+    if status.error is not None:
+        raise status.error
+    model_capabilities = status.capabilities
+    # Successful inspection is required before routing reasoning controls.
+    assert model_capabilities is not None
+    return _Route(
+        provider="Ollama",
+        effort=_resolve_reasoning_effort(
+            model_choice, model_capabilities, use_thinking, effort
+        ),
+        model_capabilities=model_capabilities,
+    )
+
+
+def _cloud_api_key(
+    credentials: ProviderCredentials, provider: ProviderId
+) -> str | None:
+    """Return the configured API key for a cloud provider."""
+    return {
+        "OpenAI": credentials.openai_api_key,
+        "Google": credentials.google_api_key,
+        "Anthropic": credentials.anthropic_api_key,
+    }[provider]
 
 
 def generate_midi(
@@ -104,118 +171,40 @@ def generate_midi(
         request.
     """
     credentials = provider_credentials or ProviderCredentials()
-    model_info = get_model_info()
-    _warn_ignored_num_ctx(model_choice, model_info, ollama_num_ctx)
-    provider: ProviderId
-
-    if model_choice in model_info["models"]["OpenAI"]:
-        effective_effort = _resolve_reasoning_effort(
-            model_choice,
-            model_info["models"]["OpenAI"][model_choice],
-            use_thinking,
-            effort,
-        )
-        provider = "OpenAI"
-        loop, messages, loop_cost = openai_api.loop_gen(
+    route = _resolve_route(
+        model_choice,
+        credentials,
+        use_thinking,
+        effort,
+        request_timeout,
+        ollama_num_ctx,
+    )
+    if route.provider == "Ollama":
+        loop, messages, loop_cost = ollama_api.loop_gen(
             prompt=prompt,
             model=model_choice,
             temp=temp,
-            use_thinking=use_thinking,
-            effort=effective_effort,
-            api_key=credentials.openai_api_key,
+            host_address=credentials.ollama_host,
             system_prompt=system_prompt,
-            **(
-                {"request_timeout": request_timeout}
-                if request_timeout is not None
-                else {}
-            ),
-        )
-    elif model_choice in model_info["models"]["Google"]:
-        effective_effort = _resolve_reasoning_effort(
-            model_choice,
-            model_info["models"]["Google"][model_choice],
-            use_thinking,
-            effort,
-        )
-        provider = "Google"
-        loop, messages, loop_cost = gemini_api.loop_gen(
-            prompt=prompt,
-            model=model_choice,
-            temp=temp,
             use_thinking=use_thinking,
-            effort=effective_effort,
-            api_key=credentials.google_api_key,
-            system_prompt=system_prompt,
-            **(
-                {"request_timeout": request_timeout}
-                if request_timeout is not None
-                else {}
-            ),
-        )
-    elif model_choice in model_info["models"]["Anthropic"]:
-        effective_effort = _resolve_reasoning_effort(
-            model_choice,
-            model_info["models"]["Anthropic"][model_choice],
-            use_thinking,
-            effort,
-        )
-        provider = "Anthropic"
-        loop, messages, loop_cost = claude_api.loop_gen(
-            prompt=prompt,
-            model=model_choice,
-            temp=temp,
-            use_thinking=use_thinking,
-            effort=effective_effort,
-            api_key=credentials.anthropic_api_key,
-            system_prompt=system_prompt,
-            **(
-                {"request_timeout": request_timeout}
-                if request_timeout is not None
-                else {}
-            ),
+            effort=route.effort,
+            model_capabilities=route.model_capabilities,
+            request_timeout=request_timeout,
+            num_ctx=ollama_num_ctx,
         )
     else:
-        ollama_status = ollama_api.get_model_status(
-            model_choice,
-            host_address=credentials.ollama_host,
-            **(
-                {"request_timeout": request_timeout}
-                if request_timeout is not None
-                else {}
-            ),
+        loop, messages, loop_cost = _CLOUD_ADAPTERS[route.provider].loop_gen(
+            prompt=prompt,
+            model=model_choice,
+            temp=temp,
+            use_thinking=use_thinking,
+            effort=route.effort,
+            api_key=_cloud_api_key(credentials, route.provider),
+            system_prompt=system_prompt,
+            request_timeout=request_timeout,
         )
-
-        if ollama_status is not None:
-            if ollama_status.error is not None:
-                raise ollama_status.error
-            model_capabilities = ollama_status.capabilities
-            # Successful inspection is required before routing reasoning controls.
-            assert model_capabilities is not None
-            effective_effort = _resolve_reasoning_effort(
-                model_choice, model_capabilities, use_thinking, effort
-            )
-            provider = "Ollama"
-            loop, messages, loop_cost = ollama_api.loop_gen(
-                prompt=prompt,
-                model=model_choice,
-                temp=temp,
-                host_address=credentials.ollama_host,
-                system_prompt=system_prompt,
-                use_thinking=use_thinking,
-                effort=effective_effort,
-                model_capabilities=model_capabilities,
-                **(
-                    {"request_timeout": request_timeout}
-                    if request_timeout is not None
-                    else {}
-                ),
-                **({"num_ctx": ollama_num_ctx} if ollama_num_ctx is not None else {}),
-            )
-        else:
-            raise ValueError("Invalid Model Selected")
-
     return LoopProviderResult(
-        loop=loop, messages=messages, cost=loop_cost, provider=provider
+        loop=loop, messages=messages, cost=loop_cost, provider=route.provider
     )
 
 
@@ -233,93 +222,16 @@ def generate_variations(
 ) -> VariationProviderResult:
     """Route one ordered variation collection request to a provider."""
     credentials = provider_credentials or ProviderCredentials()
-    model_info = get_model_info()
-    _warn_ignored_num_ctx(model_choice, model_info, ollama_num_ctx)
+    route = _resolve_route(
+        model_choice,
+        credentials,
+        use_thinking,
+        effort,
+        request_timeout,
+        ollama_num_ctx,
+    )
     variation_prompt = f"Requested variation count: {count}\n\n{prompt}"
-    provider: ProviderId
-    if model_choice in model_info["models"]["OpenAI"]:
-        provider = "OpenAI"
-        collection, messages, cost, usage = openai_api.variations_gen(
-            prompt=variation_prompt,
-            model=model_choice,
-            temp=temp,
-            use_thinking=use_thinking,
-            effort=_resolve_reasoning_effort(
-                model_choice,
-                model_info["models"][provider][model_choice],
-                use_thinking,
-                effort,
-            ),
-            api_key=credentials.openai_api_key,
-            system_prompt=system_prompt,
-            **(
-                {"request_timeout": request_timeout}
-                if request_timeout is not None
-                else {}
-            ),
-        )
-    elif model_choice in model_info["models"]["Google"]:
-        provider = "Google"
-        collection, messages, cost, usage = gemini_api.variations_gen(
-            prompt=variation_prompt,
-            model=model_choice,
-            temp=temp,
-            use_thinking=use_thinking,
-            effort=_resolve_reasoning_effort(
-                model_choice,
-                model_info["models"][provider][model_choice],
-                use_thinking,
-                effort,
-            ),
-            api_key=credentials.google_api_key,
-            system_prompt=system_prompt,
-            **(
-                {"request_timeout": request_timeout}
-                if request_timeout is not None
-                else {}
-            ),
-        )
-    elif model_choice in model_info["models"]["Anthropic"]:
-        provider = "Anthropic"
-        collection, messages, cost, usage = claude_api.variations_gen(
-            prompt=variation_prompt,
-            model=model_choice,
-            temp=temp,
-            use_thinking=use_thinking,
-            effort=_resolve_reasoning_effort(
-                model_choice,
-                model_info["models"][provider][model_choice],
-                use_thinking,
-                effort,
-            ),
-            api_key=credentials.anthropic_api_key,
-            system_prompt=system_prompt,
-            **(
-                {"request_timeout": request_timeout}
-                if request_timeout is not None
-                else {}
-            ),
-        )
-    else:
-        status = ollama_api.get_model_status(
-            model_choice,
-            host_address=credentials.ollama_host,
-            **(
-                {"request_timeout": request_timeout}
-                if request_timeout is not None
-                else {}
-            ),
-        )
-        if status is None:
-            raise ValueError("Invalid Model Selected")
-        if status.error is not None:
-            raise status.error
-        model_capabilities = status.capabilities
-        assert model_capabilities is not None
-        effective_effort = _resolve_reasoning_effort(
-            model_choice, model_capabilities, use_thinking, effort
-        )
-        provider = "Ollama"
+    if route.provider == "Ollama":
         collection, messages, cost, usage = ollama_api.variations_gen(
             prompt=variation_prompt,
             model=model_choice,
@@ -327,19 +239,27 @@ def generate_variations(
             host_address=credentials.ollama_host,
             system_prompt=system_prompt,
             use_thinking=use_thinking,
-            effort=effective_effort,
-            model_capabilities=model_capabilities,
-            **(
-                {"request_timeout": request_timeout}
-                if request_timeout is not None
-                else {}
-            ),
-            **({"num_ctx": ollama_num_ctx} if ollama_num_ctx is not None else {}),
+            effort=route.effort,
+            model_capabilities=route.model_capabilities,
+            request_timeout=request_timeout,
+            num_ctx=ollama_num_ctx,
         )
-
+    else:
+        collection, messages, cost, usage = _CLOUD_ADAPTERS[
+            route.provider
+        ].variations_gen(
+            prompt=variation_prompt,
+            model=model_choice,
+            temp=temp,
+            use_thinking=use_thinking,
+            effort=route.effort,
+            api_key=_cloud_api_key(credentials, route.provider),
+            system_prompt=system_prompt,
+            request_timeout=request_timeout,
+        )
     return VariationProviderResult(
         variations=tuple(collection.variations),
-        provider=provider,
+        provider=route.provider,
         messages=messages,
         usage=usage,
         cost=cost,
