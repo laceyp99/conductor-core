@@ -82,8 +82,10 @@ Both the PR check and release publication reject missing or invalid dates.
 
 The version bump is your choice: use `patch` for backward-compatible fixes,
 `minor` for new backward-compatible features, and `major` for breaking changes.
-Keep changelog entries user-facing; omit them for test-only, CI, formatting, or
-internal refactor changes.
+Keep changelog entries user-facing; omit them for test-only, CI, or formatting
+changes. A `refactor` pull request always cuts a release, because refactors
+here often change public types; describe what consumers may notice, even when
+that is only consistency between code paths.
 
 Skip `release-check` when a pull request does not affect releases by adding the
 `skip-release` label or by using a Conventional Commit title whose type is
