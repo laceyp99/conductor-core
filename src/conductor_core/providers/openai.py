@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import TYPE_CHECKING, NoReturn, cast
+from typing import TYPE_CHECKING, NoReturn, NotRequired, cast
 
-from typing_extensions import NotRequired, TypedDict
+from typing_extensions import TypedDict
 
 if TYPE_CHECKING:
     from openai import OpenAI as OpenAIClient

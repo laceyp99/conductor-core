@@ -20,7 +20,7 @@ import shutil
 import stat
 import tempfile
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Literal, Optional
 
@@ -289,7 +289,7 @@ def _generate_id() -> str:
     Returns:
         str: A unique identifier string.
     """
-    return datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
+    return datetime.now(UTC).strftime("%Y%m%d_%H%M%S_%f")
 
 
 def _get_generation_dir(gen_id: str, artifact_root: str | Path | None = None) -> str:
@@ -541,9 +541,7 @@ def _save_variation_history(
     manifest_values = {
         key: value for key, value in values.items() if key in allowed_fields
     }
-    manifest_values.update(
-        created_at=datetime.now(timezone.utc), generation_ids=ordered_ids
-    )
+    manifest_values.update(created_at=datetime.now(UTC), generation_ids=ordered_ids)
     manifest = VariationHistoryManifest.model_validate(manifest_values)
     if len(ordered_ids) != manifest.requested_count:
         raise ValueError("generation ID count must match requested variation count")
@@ -793,7 +791,7 @@ def _load_generation_metadata(
         metadata = GenerationMetadata(**json.load(metadata_file))
 
     # Legacy timezone-free timestamps represent local time; normalize in memory.
-    metadata.timestamp = metadata.timestamp.astimezone(timezone.utc)
+    metadata.timestamp = metadata.timestamp.astimezone(UTC)
 
     if metadata.id != gen_id:
         raise ValueError(
@@ -966,7 +964,7 @@ def _finalize_generation(
 
     metadata = GenerationMetadata(
         id=workspace.id,
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         prompt=prompt,
         key=key,
         scale=scale,

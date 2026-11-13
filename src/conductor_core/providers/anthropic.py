@@ -5,9 +5,9 @@ from __future__ import annotations
 import logging
 import os
 from contextlib import closing
-from typing import TYPE_CHECKING, Literal, NoReturn
+from typing import TYPE_CHECKING, Literal, NoReturn, NotRequired
 
-from typing_extensions import NotRequired, TypedDict
+from typing_extensions import TypedDict
 
 if TYPE_CHECKING:
     from anthropic import Anthropic as AnthropicClient

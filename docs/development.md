@@ -2,6 +2,8 @@
 
 ## Set up the environment
 
+Core requires Python 3.11 or newer. Use Python 3.12 for the standard local checks.
+
 Core uses [uv](https://docs.astral.sh/uv/) 0.11.16 or newer. 
 
 From the repository
@@ -48,7 +50,7 @@ require FluidSynth or FFmpeg.
 
 Ty is a development-only dependency, with its exact version resolved in `uv.lock`.
 The [Ty configuration](https://docs.astral.sh/ty/reference/configuration/) targets
-Python 3.10 and checks `src/`; tests and examples are not part of the required
+Python 3.11 and checks `src/`; tests and examples are not part of the required
 source baseline. Errors fail the command. Warnings remain visible but do not
 fail it. Do not use blanket or file-wide suppressions: an unavoidable suppression
 must name its specific rule and include a comment explaining why it is safe.
@@ -64,6 +66,40 @@ typing check on pull requests and pushes to `main`.
 
 When intentionally updating dependencies, run `uv lock --upgrade`, review the
 lockfile diff, and rerun the checks. Never edit `uv.lock` by hand.
+
+## Provider dependency updates
+
+`pyproject.toml` declares the SDK versions supported by installed-package
+consumers. `uv.lock` records exact versions for development and CI; downstream
+applications maintain their own lockfiles. The Google extra supports
+`google-genai>=3.3.0,<4`, using its default `httpx2` transport.
+
+When adding a model, check its SDK requirements as well as the API documentation.
+Upgrade only the relevant package, review its release notes and lockfile diff,
+then run the documented checks:
+
+```powershell
+uv lock --upgrade-package google-genai
+uv sync --locked --all-extras
+```
+
+Raise the declared minimum when Core relies on newly added SDK behavior. Review
+major SDK upgrades explicitly rather than allowing them through an unbounded
+dependency. The existing weekly compatibility workflow checks the newest
+versions within the declared ranges.
+
+After building the wheel, also verify a clean Google-only installation. This
+checks optional dependencies without other providers supplying missing packages:
+
+```powershell
+uv venv --python 3.11 .venv-google
+uv pip install --python .venv-google/Scripts/python.exe "conductor-core[google] @ ./dist/conductor_core-0.12.11-py3-none-any.whl"
+.venv-google/Scripts/python.exe -I tests/installed_google_smoke.py
+```
+
+Adjust the wheel filename to the current project version. On Unix, use
+`.venv-google/bin/python` for both commands. This check uses an offline transport;
+it does not require credentials or make provider requests.
 
 ## Release metadata
 

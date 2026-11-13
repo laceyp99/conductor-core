@@ -1,7 +1,7 @@
 import json
 import os
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Barrier
 
@@ -52,9 +52,7 @@ def test_save_manifest_is_versioned_atomic_and_contains_only_batch_index(
     manifest_path = generation_root / "variations" / "batch_batch-one.json"
     payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert payload["schema_version"] == 1
-    assert datetime.fromisoformat(
-        payload["created_at"].replace("Z", "+00:00")
-    ).utcoffset() == timedelta(0)
+    assert datetime.fromisoformat(payload["created_at"]).utcoffset() == timedelta(0)
     assert payload["generation_ids"] == ["one", "two"]
     assert payload["messages"] == _metadata()["messages"]
     assert payload["usage"] == {
@@ -230,7 +228,7 @@ def test_variation_history_returns_legacy_generation_in_utc_without_rewriting(
     listed = store.list_variation_history().records[0]
 
     assert looked_up == listed == saved
-    assert saved.generations[0].timestamp == legacy_time.astimezone(timezone.utc)
+    assert saved.generations[0].timestamp == legacy_time.astimezone(UTC)
     assert all(item.timestamp.utcoffset() == timedelta(0) for item in saved.generations)
     assert metadata_path.read_bytes() == original_bytes
 
@@ -289,10 +287,8 @@ def test_manifest_lifecycle_never_deletes_generation_artifacts(tmp_path, monkeyp
     newer_path = tmp_path / "generations" / "variations" / "batch_newer.json"
     older_payload = json.loads(older_path.read_text(encoding="utf-8"))
     newer_payload = json.loads(newer_path.read_text(encoding="utf-8"))
-    older_payload["created_at"] = (
-        datetime.now(timezone.utc) - timedelta(days=1)
-    ).isoformat()
-    newer_payload["created_at"] = datetime.now(timezone.utc).isoformat()
+    older_payload["created_at"] = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+    newer_payload["created_at"] = datetime.now(UTC).isoformat()
     older_path.write_text(json.dumps(older_payload), encoding="utf-8")
     newer_path.write_text(json.dumps(newer_payload), encoding="utf-8")
 
@@ -646,7 +642,7 @@ def test_listing_uses_file_time_for_legacy_naive_manifest(tmp_path):
         ),
         encoding="utf-8",
     )
-    legacy_written_at = datetime(2026, 9, 27, 10, tzinfo=timezone.utc).timestamp()
+    legacy_written_at = datetime(2026, 9, 27, 10, tzinfo=UTC).timestamp()
     os.utime(legacy, (legacy_written_at, legacy_written_at))
     (variations / "batch_aware.json").write_text(
         json.dumps(

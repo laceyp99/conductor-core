@@ -7,7 +7,7 @@ name = "conductor-core"
 version = "0.12.11"
 description = "Reusable prompt-to-MIDI loop generation engine for Conductor"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [
@@ -27,7 +27,6 @@ classifiers = [
 	"Development Status :: 3 - Alpha",
 	"Programming Language :: Python :: 3",
 	"Programming Language :: Python :: 3 :: Only",
-	"Programming Language :: Python :: 3.10",
 	"Programming Language :: Python :: 3.11",
 	"Programming Language :: Python :: 3.12",
 	"Programming Language :: Python :: 3.13",
@@ -49,11 +48,11 @@ Issues = "https://github.com/laceyp99/conductor-core/issues"
 [project.optional-dependencies]
 openai = ["openai>=1.79.0"]
 anthropic = ["anthropic>=0.115.0"]
-google = ["google-genai>=1.65.0"]
+google = ["google-genai>=3.3.0,<4"]
 ollama = ["ollama>=0.6.2"]
 providers = [
 	"anthropic>=0.115.0",
-	"google-genai>=1.65.0",
+	"google-genai>=3.3.0,<4",
 	"ollama>=0.6.2",
 	"openai>=1.79.0",
 ]
@@ -93,7 +92,7 @@ testpaths = ["tests"]
 addopts = "-ra"
 
 [tool.ty.environment]
-python-version = "3.10"
+python-version = "3.11"
 
 [tool.ty.src]
 include = ["src"]
@@ -102,7 +101,7 @@ include = ["src"]
 error-on-warning = false
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py311"
 line-length = 88
 
 [tool.ruff.format]

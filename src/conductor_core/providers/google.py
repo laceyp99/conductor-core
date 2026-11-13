@@ -24,37 +24,24 @@ from conductor_core.providers._variations import VariationCollection
 from conductor_core.variations import VariationUsage
 
 try:
-    import httpx
+    import httpx2
     from google import genai
     from google.genai import errors as genai_errors
     from google.genai import types
 except ImportError:  # pragma: no cover - exercised only in minimal installs
     genai = None
     genai_errors = None
-    httpx = None
+    httpx2 = None
     types = None
 
 logger = logging.getLogger(__name__)
 
-# GenAI 3 uses httpx2; older supported SDKs still use httpx.
-try:
-    import httpx2
-except ImportError:  # pragma: no cover - older SDK and minimal installs
-    httpx2 = None
-
-_TIMEOUT_ERRORS = tuple(
-    module.TimeoutException for module in (httpx, httpx2) if module is not None
-)
-_NETWORK_ERRORS = tuple(
-    module.NetworkError for module in (httpx, httpx2) if module is not None
-)
-
 
 def _raise_google_error(exc: Exception, operation: str) -> NoReturn:
-    assert httpx is not None
-    if isinstance(exc, _TIMEOUT_ERRORS):
+    assert httpx2 is not None
+    if isinstance(exc, httpx2.TimeoutException):
         error = ProviderTimeoutError("Google", str(exc), operation=operation)
-    elif isinstance(exc, _NETWORK_ERRORS):
+    elif isinstance(exc, httpx2.NetworkError):
         error = ProviderConnectionError("Google", str(exc), operation=operation)
     else:
         error = error_for_status(
@@ -74,7 +61,7 @@ def initialize_gemini_client(
         raise ImportError("Install conductor-core[google] to use Google models.")
     assert types is not None
     assert genai_errors is not None
-    assert httpx is not None
+    assert httpx2 is not None
 
     resolved_api_key = api_key or os.getenv("GEMINI_API_KEY")
     if not resolved_api_key or not resolved_api_key.strip():
@@ -91,7 +78,7 @@ def initialize_gemini_client(
             api_key=resolved_api_key,
             http_options=types.HttpOptions(timeout=max(1, round(timeout * 1000))),
         )
-    except (genai_errors.APIError, *_TIMEOUT_ERRORS, *_NETWORK_ERRORS) as exc:
+    except (genai_errors.APIError, httpx2.TimeoutException, httpx2.NetworkError) as exc:
         _raise_google_error(exc, "client initialization")
 
 
@@ -168,7 +155,7 @@ def loop_gen(
     )
     assert types is not None
     assert genai_errors is not None
-    assert httpx is not None
+    assert httpx2 is not None
     loop_prompt = system_prompt or utils.get_loop_prompt()
 
     config: GenerateContentConfigDict = {
@@ -208,7 +195,7 @@ def loop_gen(
             contents=prompt,
             config=config,
         )
-    except (genai_errors.APIError, *_TIMEOUT_ERRORS, *_NETWORK_ERRORS) as exc:
+    except (genai_errors.APIError, httpx2.TimeoutException, httpx2.NetworkError) as exc:
         logger.error("Google request failed: %s", exc)
         _raise_google_error(exc, "request")
     content, thinking_content = process_output(response)
@@ -252,7 +239,7 @@ def variations_gen(
     )
     assert types is not None
     assert genai_errors is not None
-    assert httpx is not None
+    assert httpx2 is not None
     loop_prompt = system_prompt or utils.get_variation_prompt()
     config: GenerateContentConfigDict = {
         "system_instruction": loop_prompt,
@@ -284,7 +271,7 @@ def variations_gen(
             contents=prompt,
             config=config,
         )
-    except (genai_errors.APIError, *_TIMEOUT_ERRORS, *_NETWORK_ERRORS) as exc:
+    except (genai_errors.APIError, httpx2.TimeoutException, httpx2.NetworkError) as exc:
         _raise_google_error(exc, "request")
     content, thinking_content = process_output(response)
     collection = VariationCollection.model_validate_json(content)

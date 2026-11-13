@@ -2,8 +2,7 @@
 
 from importlib import resources
 from pathlib import Path
-
-from typing_extensions import assert_type
+from typing import assert_type
 
 from conductor_core import (
     EngineConfig,

@@ -37,7 +37,7 @@ import sys
 
 class BlockProviderSDKs(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
-        if fullname.split('.')[0] in {'anthropic', 'google', 'httpx', 'ollama', 'openai'}:
+        if fullname.split('.')[0] in {'anthropic', 'google', 'httpx', 'httpx2', 'ollama', 'openai'}:
             raise ImportError('SDK blocked for minimal-install test')
 
 sys.meta_path.insert(0, BlockProviderSDKs())

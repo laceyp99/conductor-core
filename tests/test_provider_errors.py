@@ -44,16 +44,15 @@ HOSTED_PROVIDERS = [
 ]
 
 
-@pytest.mark.parametrize("transport", ["httpx", "httpx2"])
 @pytest.mark.parametrize(
     ("error_name", "expected"),
     [("ReadTimeout", ProviderTimeoutError), ("ConnectError", ProviderConnectionError)],
 )
 @pytest.mark.parametrize("operation", ["initialize", "loop_gen", "variations_gen"])
 def test_google_normalizes_transport_errors(
-    monkeypatch, transport, error_name, expected, operation
+    monkeypatch, error_name, expected, operation
 ):
-    module = pytest.importorskip(transport)
+    module = pytest.importorskip("httpx2")
     original = getattr(module, error_name)("offline transport failure")
 
     def fail(**kwargs):

@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.10", "3.14"]
+        python-version: ["3.11", "3.14"]
     steps:
       - uses: actions/checkout@v4
       - name: Set up uv
@@ -56,9 +56,14 @@ jobs:
           .venv-consumer/bin/python -m pip install dist/conductor_core-*.whl
           .venv-consumer/bin/python -m pip check
           .venv-consumer/bin/python -I tests/installed_package_smoke.py
+      - name: Test Google-only built wheel
+        run: |
+          uv venv --python 3.11 .venv-google
+          uv pip install --python .venv-google/bin/python "$(find dist -name '*.whl')[google]"
+          .venv-google/bin/python -I tests/installed_google_smoke.py
 
   minimal-install:
-    name: Minimal install (Python 3.10)
+    name: Minimal install (Python 3.11)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -67,7 +72,7 @@ jobs:
         with:
           version: "0.11.16"
       - name: Create fresh environment
-        run: uv venv --python 3.10 .venv-minimal
+        run: uv venv --python 3.11 .venv-minimal
       - name: Install bare package and test dependency
         run: uv pip install --python .venv-minimal/bin/python -e . "pytest>=9.0.3,<10"
       - name: Verify optional dependencies are absent

@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
@@ -32,7 +32,7 @@ def metadata(**overrides):
 def generation(index=0):
     return GenerationMetadata(
         id=f"generation-{index}",
-        timestamp=datetime(2026, 1, 2, tzinfo=timezone.utc),
+        timestamp=datetime(2026, 1, 2, tzinfo=UTC),
         prompt="prompt",
         key="C",
         scale="major",
