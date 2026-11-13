@@ -17,7 +17,12 @@ from conductor_core.config import (
 )
 from conductor_core.errors import AudioRenderingError
 from conductor_core.midi import loop_to_midi
-from conductor_core.storage import FilesystemArtifactStore, GenerationWorkspace
+from conductor_core.models import Loop
+from conductor_core.storage import (
+    FilesystemArtifactStore,
+    GenerationMetadata,
+    GenerationWorkspace,
+)
 from conductor_core.variations import (
     VariationBatchMetadata,
     VariationBatchResult,
@@ -289,12 +294,12 @@ class LoopGenerationEngine:
 
     def _persist_variation(
         self,
-        loop,
+        loop: Loop,
         request: VariationGenerationRequest,
         metadata: VariationBatchMetadata,
         *,
         protected_generation_ids: tuple[str, ...] = (),
-    ):
+    ) -> tuple[GenerationMetadata, tuple[str, ...]]:
         """Persist one already-validated variation in an ordinary workspace."""
         workspace = None
         finalized = False

@@ -3,7 +3,7 @@ from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from importlib import resources
 from os import PathLike
-from typing import NotRequired, cast
+from typing import Any, NotRequired, cast
 
 from pydantic import JsonValue
 from typing_extensions import TypedDict
@@ -194,7 +194,7 @@ THINKING_OFF_MODES = ("disabled", "lowest_effort")
 VARIATION_PROMPT_VERSION = "variation_gen_v1"
 
 
-def _validate_model_info(model_info):
+def _validate_model_info(model_info: dict[str, Any]) -> None:
     """Validate invariants for packaged, selectable cloud-model metadata."""
     models_by_provider = model_info.get("models")
     if not isinstance(models_by_provider, dict):

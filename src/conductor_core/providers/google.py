@@ -8,7 +8,12 @@ from typing import TYPE_CHECKING, NoReturn, cast
 
 if TYPE_CHECKING:
     from google.genai import Client as GeminiClient
-    from google.genai.types import GenerateContentConfigDict, ThinkingConfigDict
+    from google.genai.types import (
+        GenerateContentConfigDict,
+        GenerateContentResponse,
+        GenerateContentResponseUsageMetadata,
+        ThinkingConfigDict,
+    )
 
 from conductor_core import models as objects
 from conductor_core import music as utils
@@ -82,7 +87,7 @@ def initialize_gemini_client(
         _raise_google_error(exc, "client initialization")
 
 
-def calc_cost(model, usage) -> float:
+def calc_cost(model: str, usage: GenerateContentResponseUsageMetadata) -> float:
     """Calculate the cost for a Gemini completion based on token usage."""
     model_info = utils.get_model_info()
     model_cost = model_info["models"]["Google"][model]["cost"]
@@ -107,7 +112,7 @@ def calc_cost(model, usage) -> float:
     )
 
 
-def process_output(response) -> tuple[str, str]:
+def process_output(response: GenerateContentResponse) -> tuple[str, str]:
     final_result = ""
     thinking_content = ""
     candidates = getattr(response, "candidates", None) or []

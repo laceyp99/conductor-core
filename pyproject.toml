@@ -110,6 +110,7 @@ line-ending = "auto"
 [tool.ruff.lint]
 select = [
 	"A",
+	"ANN",
 	"ASYNC",
 	"B",
 	"BLE",
@@ -144,9 +145,9 @@ ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/test_audio.py" = ["A002"]
-"tests/**" = ["T20"]
-"scripts/**" = ["T20"]
-".github/scripts/**" = ["T20"]
+"tests/**" = ["ANN", "T20"]
+"scripts/**" = ["ANN", "T20"]
+".github/scripts/**" = ["ANN", "T20"]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "gradio".msg = "Core must not depend on UI frameworks."
