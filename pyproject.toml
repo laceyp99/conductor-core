@@ -91,7 +91,11 @@ conductor_core = [
 testpaths = ["tests"]
 addopts = "-ra --strict-markers --strict-config"
 xfail_strict = true
-filterwarnings = ["error"]
+filterwarnings = [
+	"error",
+	# google-genai ships invalid escape sequences in generated docstrings.
+	'ignore:.*invalid escape sequence::.*google.genai.types',
+]
 
 [tool.ty.environment]
 python-version = "3.11"
