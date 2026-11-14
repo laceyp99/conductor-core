@@ -46,13 +46,17 @@ uv run --locked --all-extras python scripts/check_wheel_typing.py
 ```
 
 The test suite is deterministic. It does not make live provider calls or
-require FluidSynth or FFmpeg.
+require FluidSynth or FFmpeg. Pytest treats warnings as errors and rejects
+unknown markers and configuration keys.
+
+Test modules that need a provider SDK start with `pytest.importorskip(...)`.
+The CI minimal-install job runs the whole suite without any SDK, so a new
+SDK-dependent module needs the same guard.
 
 Ty is a development-only dependency, with its exact version resolved in `uv.lock`.
 The [Ty configuration](https://docs.astral.sh/ty/reference/configuration/) targets
 Python 3.11 and checks `src/`; tests and examples are not part of the required
-source baseline. Errors fail the command. Warnings remain visible but do not
-fail it. Do not use blanket or file-wide suppressions: an unavoidable suppression
+source baseline. Errors and warnings both fail the command. Do not use blanket or file-wide suppressions: an unavoidable suppression
 must name its specific rule and include a comment explaining why it is safe.
 
 The consumer command checks the wheel in `dist/` that matches the current project

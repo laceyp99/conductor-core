@@ -89,7 +89,9 @@ conductor_core = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra"
+addopts = "-ra --strict-markers --strict-config"
+xfail_strict = true
+filterwarnings = ["error"]
 
 [tool.ty.environment]
 python-version = "3.11"
@@ -98,7 +100,7 @@ python-version = "3.11"
 include = ["src"]
 
 [tool.ty.terminal]
-error-on-warning = false
+error-on-warning = true
 
 [tool.ruff]
 target-version = "py311"
