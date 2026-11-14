@@ -123,14 +123,10 @@ def _apply_thinking_params(
         api_params["output_config"] = {"effort": _validated_effort(effort)}
         thinking_enabled = True
     elif use_thinking and model_config.get("extended_thinking"):
-        # Metadata types the budget as optional; the SDK requires an integer.
-        api_params["thinking"] = cast(
-            "ThinkingConfigParam",
-            {
-                "type": "enabled",
-                "budget_tokens": model_config["max_thinking_budget"],
-            },
-        )
+        api_params["thinking"] = {
+            "type": "enabled",
+            "budget_tokens": model_config["max_thinking_budget"],
+        }
         thinking_enabled = True
     elif effort_options:
         # Some adaptive-thinking models think by default unless disabled.

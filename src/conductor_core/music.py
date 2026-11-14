@@ -47,11 +47,11 @@ class ModelConfig(TypedDict):
     thinking_off: NotRequired[str | None]
     temperature_supported: NotRequired[bool]
     effort_options: NotRequired[list[str]]
-    max_thinking_budget: NotRequired[int | None]
-    min_thinking_budget: NotRequired[int | None]
+    max_thinking_budget: NotRequired[int]
+    min_thinking_budget: NotRequired[int]
     thinking_fixed_temperature: NotRequired[float | None]
     always_on_adaptive_thinking: NotRequired[bool]
-    thinking_off_type: NotRequired[str | None]
+    thinking_off_type: NotRequired[str]
 
 
 class ModelInfo(TypedDict):
@@ -191,6 +191,10 @@ _model_info_cache: ModelInfo | None = None
 # setting, or the model's lowest effort when reasoning cannot be turned off.
 THINKING_OFF_MODES = ("disabled", "lowest_effort")
 
+# Model-specific ``thinking`` types that turn reasoning off in place of the
+# standard "disabled" type. Add a value here before using it in metadata.
+THINKING_OFF_TYPES = ("between_tools",)
+
 VARIATION_PROMPT_VERSION = "variation_gen_v1"
 
 
@@ -289,14 +293,19 @@ def _validate_model_info(model_info: dict[str, Any]) -> None:
                     f"{model_label} effort_options must be a list of strings"
                 )
             for field in ("max_thinking_budget", "min_thinking_budget"):
-                value = model_config.get(field)
-                if value is not None and (
-                    isinstance(value, bool) or not isinstance(value, int)
-                ):
+                if field not in model_config:
+                    continue
+                value = model_config[field]
+                if isinstance(value, bool) or not isinstance(value, int):
                     raise ValueError(f"{model_label} {field} must be an integer")
-            thinking_off_type = model_config.get("thinking_off_type")
-            if thinking_off_type is not None and not isinstance(thinking_off_type, str):
-                raise ValueError(f"{model_label} thinking_off_type must be a string")
+            if (
+                "thinking_off_type" in model_config
+                and model_config["thinking_off_type"] not in THINKING_OFF_TYPES
+            ):
+                raise ValueError(
+                    f"{model_label} thinking_off_type must be one of: "
+                    f"{', '.join(THINKING_OFF_TYPES)}"
+                )
             cost = model_config.get("cost")
             if not isinstance(cost, dict) or not all(
                 isinstance(cost.get(field), (int, float))
