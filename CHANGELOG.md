@@ -8,6 +8,8 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.13.3] - 2026-11-14
+
 ### Changed
 
 - Storage error logs for failed history lookups and deletes now include the
