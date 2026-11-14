@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import Iterable, Mapping
 from contextlib import closing
-from typing import TYPE_CHECKING, Literal, NoReturn, NotRequired
+from typing import TYPE_CHECKING, Any, Literal, NoReturn, NotRequired, cast
 
 from typing_extensions import TypedDict
 
@@ -93,7 +94,7 @@ ANTHROPIC_THINKING_TEMPERATURE = 1.0
 
 def _apply_thinking_params(
     api_params: _AnthropicRequest,
-    model_config,
+    model_config: utils.ModelConfig,
     temp: float,
     use_thinking: bool,
     effort: str | None,
@@ -109,7 +110,10 @@ def _apply_thinking_params(
     if model_config.get("always_on_adaptive_thinking", False):
         # Some always-on models turn thinking off with a model-specific type.
         if not use_thinking and model_config.get("thinking_off_type"):
-            api_params["thinking"] = {"type": model_config["thinking_off_type"]}
+            # The off type is model-specific metadata, not one of the SDK literals.
+            api_params["thinking"] = cast(
+                "ThinkingConfigParam", {"type": model_config["thinking_off_type"]}
+            )
         api_params["output_config"] = {
             "effort": _validated_effort(effort if use_thinking else effort_options[0])
         }
@@ -180,7 +184,7 @@ def initialize_anthropic_client(
         _raise_anthropic_error(exc, "client initialization")
 
 
-def _token_counts(output) -> dict[str, int]:
+def _token_counts(output: Mapping[str, Any]) -> dict[str, int]:
     """Return non-negative usage counts shared by pricing and reported usage."""
     keys = (
         "input_tokens",
@@ -192,7 +196,7 @@ def _token_counts(output) -> dict[str, int]:
     return {key: max(0, output.get(key, 0) or 0) for key in keys}
 
 
-def calc_price(model, output) -> float | None:
+def calc_price(model: str, output: Mapping[str, Any]) -> float | None:
     """Calculate the cost for a completion based on token usage."""
     model_info = utils.get_model_info()
     anthropic_models = model_info["models"]["Anthropic"]
@@ -229,15 +233,18 @@ def calc_price(model, output) -> float | None:
     )
 
 
-def build_system_prompt_block(loop_prompt):
+def build_system_prompt_block(loop_prompt: str) -> TextBlockParam:
     """Build Anthropic's system text block, marking only likely-cacheable prompts."""
-    block = {"type": "text", "text": loop_prompt}
+    block: TextBlockParam = {"type": "text", "text": loop_prompt}
     if len(loop_prompt) >= ANTHROPIC_CACHE_CONTROL_MIN_CHARS:
         block["cache_control"] = {"type": "ephemeral"}
     return block
 
 
-def process_streaming_response(completion, expected_tool_name: str | None = None):
+def process_streaming_response(
+    completion: Iterable[Any],
+    expected_tool_name: str | None = None,
+) -> dict[str, Any]:
     """Extract text, tool JSON, and usage; reject streams without message_stop."""
     output = {
         "loop": "",
@@ -262,7 +269,7 @@ def process_streaming_response(completion, expected_tool_name: str | None = None
         "cache_creation_1h": "ephemeral_1h_input_tokens",
     }
 
-    def apply_usage(usage):
+    def apply_usage(usage: object) -> None:
         # Anthropic usage snapshots are cumulative message totals: message_start
         # reports the baseline and message_delta reports the running total, so
         # each reported (non-None) field replaces the prior value instead of
@@ -389,7 +396,6 @@ def loop_gen(
             APIConnectionError,
             APIError,
         ) as exc:
-            logger.error("Anthropic request failed: %s", exc)
             _raise_anthropic_error(exc, "request")
 
         try:
@@ -401,7 +407,6 @@ def loop_gen(
             APIConnectionError,
             APIError,
         ) as exc:
-            logger.error("Anthropic stream failed: %s", exc)
             _raise_anthropic_error(exc, "stream")
         finally:
             completion.close()

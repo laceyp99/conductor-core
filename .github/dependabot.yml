@@ -1,0 +1,10 @@
+# Keeps the SHA-pinned actions in .github/workflows current. Python
+# dependencies are covered by the weekly dependency-compatibility workflow.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: ci

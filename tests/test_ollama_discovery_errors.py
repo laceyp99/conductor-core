@@ -3,8 +3,11 @@
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-import httpx
 import pytest
+
+pytest.importorskip("ollama")
+
+import httpx
 
 from conductor_core import routing
 from conductor_core.errors import (

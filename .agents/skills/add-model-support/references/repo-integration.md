@@ -57,7 +57,9 @@ Anthropic models that always apply adaptive thinking should set
 `always_on_adaptive_thinking` to `true`; omit the field otherwise. If such a
 model turns thinking off with its own `thinking` type rather than
 `{"type": "disabled"}`, set `thinking_off` to `"disabled"` and
-`thinking_off_type` to that type (for example, `"between_tools"`).
+`thinking_off_type` to that type (for example, `"between_tools"`). The type
+must be listed in `THINKING_OFF_TYPES` in `src/conductor_core/music.py`;
+metadata validation rejects any other value.
 Record reasoning and temperature behavior from the provider's documentation.
 Offline tests check these fields against the request each adapter builds
 (`tests/test_thinking_off_metadata.py` and

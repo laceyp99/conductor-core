@@ -152,7 +152,7 @@ def test_create_generation_workspace_propagates_root_permission_error(
 def test_generation_metadata_distinguishes_unrecorded_and_explicit_reasoning_settings():
     common_fields = {
         "id": "fixed_id",
-        "timestamp": datetime.now(),
+        "timestamp": datetime.now(UTC),
         "prompt": "warm rhodes loop",
         "key": "D",
         "scale": "minor",
@@ -360,7 +360,7 @@ def test_finalize_generation_merges_and_deduplicates_protection(tmp_path):
     store = history.FilesystemArtifactStore(root, max_generations=3)
     prior_directories = {
         gen_id: _write_generation_metadata(
-            root, gen_id=gen_id, timestamp=datetime(year, 1, 1)
+            root, gen_id=gen_id, timestamp=datetime(year, 1, 1, tzinfo=UTC)
         )
         for gen_id, year in [("protected", 2000), ("older", 2098), ("newer", 2099)]
     }
@@ -584,7 +584,7 @@ def test_update_generation_audio_preserves_soundfont_when_audio_update_is_skippe
 
 
 def test_load_history_allows_older_entries_without_soundfont(isolated_history_dir):
-    now = datetime.now()
+    now = datetime.now(UTC)
     _write_generation_metadata(
         isolated_history_dir,
         gen_id="older",
@@ -611,7 +611,7 @@ def test_load_history_allows_legacy_entries_without_reasoning_settings(
     gen_dir = _write_generation_metadata(
         isolated_history_dir,
         gen_id="legacy",
-        timestamp=datetime.now(),
+        timestamp=datetime.now(UTC),
     )
     metadata_path = gen_dir / "metadata.json"
     metadata_json = json.loads(metadata_path.read_text(encoding="utf-8"))
@@ -627,7 +627,7 @@ def test_load_history_allows_legacy_entries_without_reasoning_settings(
 
 
 def test_load_history_sorts_newest_first(isolated_history_dir):
-    now = datetime.now()
+    now = datetime.now(UTC)
     _write_generation_metadata(
         isolated_history_dir, gen_id="older", timestamp=now - timedelta(days=1)
     )
@@ -642,7 +642,7 @@ def test_load_history_skips_missing_and_malformed_metadata(isolated_history_dir)
     valid_dir = _write_generation_metadata(
         isolated_history_dir,
         gen_id="valid",
-        timestamp=datetime.now(),
+        timestamp=datetime.now(UTC),
     )
     missing_dir = isolated_history_dir / "gen_missing"
     missing_dir.mkdir(parents=True)
@@ -661,7 +661,7 @@ def test_load_history_skips_missing_and_malformed_metadata(isolated_history_dir)
 def test_load_history_skips_missing_midi_and_preserves_valid_neighbors(
     isolated_history_dir, caplog
 ):
-    now = datetime.now()
+    now = datetime.now(UTC)
     _write_generation_metadata(
         isolated_history_dir,
         gen_id="older",
@@ -733,12 +733,12 @@ def test_retention_skips_mismatched_metadata_id_without_deleting_other_generatio
     attacker_dir = _write_generation_metadata(
         root,
         gen_id="attacker",
-        timestamp=datetime.now() - timedelta(days=1),
+        timestamp=datetime.now(UTC) - timedelta(days=1),
     )
     victim_dir = _write_generation_metadata(
         root,
         gen_id="victim",
-        timestamp=datetime.now(),
+        timestamp=datetime.now(UTC),
     )
     attacker_metadata_path = attacker_dir / "metadata.json"
     attacker_metadata = json.loads(attacker_metadata_path.read_text(encoding="utf-8"))
@@ -815,7 +815,7 @@ def test_get_generation_warns_for_missing_midi_without_mutating_record(
     corrupt_dir = _write_generation_metadata(
         root,
         gen_id="corrupt",
-        timestamp=datetime.now(),
+        timestamp=datetime.now(UTC),
     )
     (corrupt_dir / "loop.mid").unlink()
     remaining_files = {
@@ -851,7 +851,7 @@ def test_delete_generation_removes_directory_and_handles_missing_id(
     isolated_history_dir,
 ):
     _write_generation_metadata(
-        isolated_history_dir, gen_id="delete_me", timestamp=datetime.now()
+        isolated_history_dir, gen_id="delete_me", timestamp=datetime.now(UTC)
     )
 
     assert history.delete_generation("delete_me") is True
@@ -904,7 +904,7 @@ def test_store_rejects_generation_symlink_that_escapes_root(tmp_path):
 
 def test_enforce_limit_removes_oldest_generations(isolated_history_dir, monkeypatch):
     monkeypatch.setattr(history, "MAX_GENERATIONS", 2)
-    now = datetime.now()
+    now = datetime.now(UTC)
     _write_generation_metadata(
         isolated_history_dir, gen_id="oldest", timestamp=now - timedelta(days=2)
     )
@@ -921,7 +921,7 @@ def test_enforce_limit_removes_oldest_generations(isolated_history_dir, monkeypa
 
 
 def test_enforce_limit_counts_generation_missing_midi(isolated_history_dir):
-    now = datetime.now()
+    now = datetime.now(UTC)
     corrupt_dir = _write_generation_metadata(
         isolated_history_dir, gen_id="corrupt", timestamp=now - timedelta(days=1)
     )
@@ -936,7 +936,7 @@ def test_enforce_limit_counts_generation_missing_midi(isolated_history_dir):
 def test_enforce_limit_newer_corrupt_generation_displaces_older_valid_generation(
     isolated_history_dir,
 ):
-    now = datetime.now()
+    now = datetime.now(UTC)
     _write_generation_metadata(
         isolated_history_dir, gen_id="older", timestamp=now - timedelta(days=1)
     )
@@ -1086,10 +1086,10 @@ def test_history_count_and_clear_history_reflect_saved_generations(
     _write_generation_metadata(
         isolated_history_dir,
         gen_id="one",
-        timestamp=datetime.now() - timedelta(minutes=1),
+        timestamp=datetime.now(UTC) - timedelta(minutes=1),
     )
     _write_generation_metadata(
-        isolated_history_dir, gen_id="two", timestamp=datetime.now()
+        isolated_history_dir, gen_id="two", timestamp=datetime.now(UTC)
     )
 
     assert history.get_history_count() == 2

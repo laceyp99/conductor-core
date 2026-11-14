@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import os
 from typing import TYPE_CHECKING, NoReturn, NotRequired, cast
 
@@ -10,6 +9,7 @@ from typing_extensions import TypedDict
 
 if TYPE_CHECKING:
     from openai import OpenAI as OpenAIClient
+    from openai.types.responses import Response
     from openai.types.shared.reasoning_effort import ReasoningEffort
     from openai.types.shared_params.reasoning import Reasoning
 
@@ -54,8 +54,6 @@ except ImportError:  # pragma: no cover - exercised only in minimal installs
         pass
 
     OpenAI = None
-
-logger = logging.getLogger(__name__)
 
 
 class _LoopParseKwargs(TypedDict):
@@ -126,10 +124,12 @@ def initialize_openai_client(
         _raise_openai_error(exc, "client initialization")
 
 
-def calc_price(model, response) -> float:
+def calc_price(model: str, response: Response) -> float:
     """Calculate the cost for a given response based on token usage."""
     model_info = utils.get_model_info()
     usage = response.usage
+    if usage is None:
+        raise ValueError("OpenAI response did not report token usage.")
     model_cost = model_info["models"]["OpenAI"][model]["cost"]
     input_tokens = max(0, usage.input_tokens or 0)
     output_tokens = max(0, usage.output_tokens or 0)
@@ -156,7 +156,7 @@ def calc_price(model, response) -> float:
     )
 
 
-def extract_reasoning(response) -> str:
+def extract_reasoning(response: Response) -> str:
     reasoning = ""
     for item in getattr(response, "output", []):
         if getattr(item, "type", None) == "reasoning":
@@ -216,7 +216,6 @@ def loop_gen(
         APIConnectionError,
         APIError,
     ) as exc:
-        logger.error("OpenAI request failed: %s", exc)
         _raise_openai_error(exc, "request")
 
     if response.output_parsed is None:

@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -87,7 +87,7 @@ def test_allowed_batch_survives_retention_of_older_generations(
 ):
     # With fixed IDs, each batch uses two finalization times and one manifest time.
     # Keep older IDs higher for ties so timestamp and ID sorting favor old history.
-    first = datetime(2026, 1, 2)
+    first = datetime(2026, 1, 2, tzinfo=UTC)
     delta = timedelta(days=1 if clock_order == "forward" else -1)
     second = first if clock_order == "same" else first + delta
     timestamps = iter(
@@ -140,7 +140,7 @@ def test_allowed_batch_survives_retention_of_older_generations(
     # Protection ends with this batch. An ordinary later finalization can prune
     # the batch according to timestamps without changing its saved manifest.
     monkeypatch.setattr(storage, "_generate_id", lambda: "later")
-    timestamps = iter([datetime(2026, 1, 4)])
+    timestamps = iter([datetime(2026, 1, 4, tzinfo=UTC)])
     workspace = store.create_generation_workspace()
     Path(workspace.midi_path).write_bytes(b"midi")
     store.finalize_generation(

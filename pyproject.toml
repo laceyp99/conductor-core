@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "conductor-core"
-version = "0.13.2"
+version = "0.13.3"
 description = "Reusable prompt-to-MIDI loop generation engine for Conductor"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -89,7 +89,13 @@ conductor_core = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra"
+addopts = "-ra --strict-markers --strict-config"
+xfail_strict = true
+filterwarnings = [
+	"error",
+	# google-genai ships invalid escape sequences in generated docstrings.
+	'ignore:.*invalid escape sequence::.*google.genai.types',
+]
 
 [tool.ty.environment]
 python-version = "3.11"
@@ -98,7 +104,7 @@ python-version = "3.11"
 include = ["src"]
 
 [tool.ty.terminal]
-error-on-warning = false
+error-on-warning = true
 
 [tool.ruff]
 target-version = "py311"
@@ -110,25 +116,34 @@ line-ending = "auto"
 [tool.ruff.lint]
 select = [
 	"A",
+	"ANN",
 	"ASYNC",
 	"B",
+	"BLE",
 	"C4",
+	"DTZ",
 	"E4",
 	"E7",
 	"E9",
 	"F",
 	"FLY",
 	"FURB",
+	"G",
 	"I",
 	"NPY",
 	"PERF",
 	"PGH",
 	"PIE",
+	"PLE",
+	"PLW",
 	"PT",
 	"RET",
 	"RSE",
 	"RUF",
 	"SIM",
+	"T20",
+	"TID251",
+	"TRY400",
 	"UP",
 	"W605",
 ]
@@ -136,3 +151,10 @@ ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/test_audio.py" = ["A002"]
+"tests/**" = ["ANN", "T20"]
+"scripts/**" = ["ANN", "T20"]
+".github/scripts/**" = ["ANN", "T20"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"gradio".msg = "Core must not depend on UI frameworks."
+"dash".msg = "Core must not depend on UI frameworks."

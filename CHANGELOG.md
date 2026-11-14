@@ -8,6 +8,22 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.13.3] - 2026-11-14
+
+### Changed
+
+- Storage error logs for failed history lookups and deletes now include the
+  traceback. Log levels and message text are unchanged.
+- Core no longer logs provider request failures or audio rendering failures
+  before raising them. The raised `ProviderError` or `AudioRenderingError`
+  carries the same detail; log it in your application if you relied on the
+  `Anthropic request failed`, `Google request failed`, `Ollama request failed`,
+  `OpenAI request failed`, `Failed to convert MIDI to MP3`,
+  `Audio playback not available`, or `No SoundFont file available` log lines.
+- `ModelConfig` now types `max_thinking_budget` and `min_thinking_budget` as
+  `int` and `thinking_off_type` as `str`; none of them accept `None`. The
+  packaged metadata never used `None` for these fields.
+
 ## [0.13.2] - 2026-11-13
 
 ### Changed

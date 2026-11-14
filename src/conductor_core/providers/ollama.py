@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import os
 from collections.abc import Mapping
 from contextlib import closing
@@ -10,6 +9,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, NoReturn
 
 if TYPE_CHECKING:
+    from ollama import ChatResponse, ShowResponse
     from ollama import Client as OllamaClient
 
 from conductor_core import models as objects
@@ -32,8 +32,6 @@ try:
 except ImportError:  # pragma: no cover - exercised only in minimal installs
     httpx = None
     ollama = None
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -59,7 +57,9 @@ class OllamaStatus:
     models: tuple[OllamaModelInspection, ...]
 
 
-def _get_thinking_metadata(client, model_name, model_info):
+def _get_thinking_metadata(
+    client: OllamaClient, model_name: str, model_info: ShowResponse
+) -> tuple[list[str], bool | None]:
     """Read Ollama's per-model think values when the SDK preserves them.
 
     Returns the supported effort levels and whether ``think=False`` is
@@ -77,7 +77,8 @@ def _get_thinking_metadata(client, model_name, model_info):
             try:
                 response = request_raw("POST", "/api/show", json={"model": model_name})
                 thinking = response.json().get("thinking")
-            except Exception as exc:
+            # Not swallowed: _raise_ollama_error always re-raises.
+            except Exception as exc:  # noqa: BLE001
                 _raise_ollama_error(
                     exc, f"thinking metadata inspection for {model_name!r}"
                 )
@@ -94,7 +95,9 @@ def _get_thinking_metadata(client, model_name, model_info):
     return effort_options, any(value is False for value in values)
 
 
-def _get_model_capabilities(client, model_name, host) -> dict[str, object]:
+def _get_model_capabilities(
+    client: OllamaClient, model_name: str, host: str
+) -> dict[str, object]:
     effort_options = []
     accepts_think_false = None
     try:
@@ -104,7 +107,8 @@ def _get_model_capabilities(client, model_name, host) -> dict[str, object]:
             client, model_name, model_info
         )
         supports_thinking = "thinking" in capabilities or bool(effort_options)
-    except Exception as exc:
+    # Not swallowed: _raise_ollama_error always re-raises.
+    except Exception as exc:  # noqa: BLE001
         _raise_ollama_error(exc, f"capability inspection for {model_name!r} at {host}")
     if not supports_thinking:
         thinking_off = None
@@ -187,7 +191,9 @@ def initialize_ollama_client(
         _raise_ollama_error(exc, "client initialization")
 
 
-def _inspect_model(client, model_name: str, host: str) -> OllamaModelInspection:
+def _inspect_model(
+    client: OllamaClient, model_name: str, host: str
+) -> OllamaModelInspection:
     """Keep a model's capabilities and any inspection failure in one record."""
     try:
         capabilities = _get_model_capabilities(client, model_name, host)
@@ -264,11 +270,12 @@ def _with_default_tag(model_name: str) -> str:
     return f"{model_name}:latest"
 
 
-def _list_models(client) -> list[str]:
+def _list_models(client: OllamaClient) -> list[str]:
     """List named models, preserving the SDK failure and operation."""
     try:
         return [model.model for model in client.list().models if model.model]
-    except Exception as exc:
+    # Not swallowed: _raise_ollama_error always re-raises.
+    except Exception as exc:  # noqa: BLE001
         _raise_ollama_error(exc, "model listing")
 
 
@@ -320,7 +327,7 @@ def _thinking_option(
     return True if use_thinking else None
 
 
-def _chat_options(temp, num_ctx):
+def _chat_options(temp: float, num_ctx: int | None) -> dict[str, float | int]:
     """Build Ollama model options, leaving context size to Ollama by default."""
     options = {"temperature": temp}
     if num_ctx is not None:
@@ -328,7 +335,9 @@ def _chat_options(temp, num_ctx):
     return options
 
 
-def _raise_if_out_of_context(completion, model, num_ctx):
+def _raise_if_out_of_context(
+    completion: ChatResponse, model: str, num_ctx: int | None
+) -> None:
     """Raise a clear error when Ollama stopped because the context was full."""
     if getattr(completion, "done_reason", None) != "length":
         return
@@ -388,7 +397,6 @@ def loop_gen(
             ollama.RequestError,
             ollama.ResponseError,
         ) as exc:
-            logger.error("Ollama request failed: %s", exc)
             _raise_ollama_error(exc, "request")
     _raise_if_out_of_context(completion, model, num_ctx)
     message = getattr(completion, "message", None)

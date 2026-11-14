@@ -7,6 +7,8 @@ from unittest.mock import Mock
 
 import pytest
 
+pytest.importorskip("ollama")
+
 from conductor_core import routing
 from conductor_core.providers import ollama
 from conductor_core.providers._variations import VariationCollection

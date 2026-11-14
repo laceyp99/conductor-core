@@ -276,6 +276,9 @@ def test_model_metadata_validation_rejects_invalid_rate_limits(rate_limits, mess
         ("max_tokens", True, "max_tokens"),
         ("effort_options", ["low", 3], "effort_options"),
         ("cost", {"input": 1.0, "output": "free"}, "cost"),
+        ("max_thinking_budget", None, "max_thinking_budget"),
+        ("min_thinking_budget", None, "min_thinking_budget"),
+        ("thinking_off_type", "between_tool", "thinking_off_type"),
     ],
 )
 def test_model_metadata_rejects_invalid_public_fields(field, value, message):

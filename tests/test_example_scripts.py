@@ -1,6 +1,6 @@
 import importlib.util
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -174,7 +174,7 @@ def test_check_copied_history_reports_reconstructed_paths(tmp_path, capsys):
     (generation_dir / "messages.json").write_text("[]", encoding="utf-8")
     metadata = {
         "id": "fixed_id",
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "prompt": "prompt",
         "key": "C",
         "scale": "major",

@@ -485,7 +485,8 @@ def _load_referenced_generation(
         if os.path.lexists(generation_dir):
             return None, "invalid"
         return None, "missing"
-    except Exception as exc:
+    # One unreadable entry must not hide the rest of history; log it and move on.
+    except Exception as exc:  # noqa: BLE001
         logger.warning(
             "Invalid generation %s in variation history: %s", generation_id, exc
         )
@@ -608,7 +609,7 @@ def _get_variation_history(
             )
         )
     except Exception as exc:
-        logger.error(f"Failed to load variation batch {batch_id}: {exc}")
+        logger.exception("Failed to load variation batch %s: %s", batch_id, exc)
         return VariationHistoryLookupResult(
             diagnostics=(
                 VariationHistoryDiagnostic(
@@ -656,14 +657,14 @@ def _read_variation_manifest_for_listing(
         if manifest.created_at.utcoffset() is None:
             path = _get_variation_manifest_path(artifact_root, batch_id)
             order = (
-                datetime(1970, 1, 1).toordinal() * 86400 * 1_000_000
+                datetime(1970, 1, 1, tzinfo=UTC).toordinal() * 86400 * 1_000_000
                 + os.lstat(path).st_mtime_ns // 1_000
             )
         else:
             order = _variation_created_at_order(manifest)
         return manifest, order, None
     except Exception as exc:
-        logger.error("Failed to load variation batch %s: %s", batch_id, exc)
+        logger.exception("Failed to load variation batch %s: %s", batch_id, exc)
         return (
             None,
             None,
@@ -743,7 +744,7 @@ def _delete_variation_history(artifact_root: str | Path, batch_id: str) -> bool:
     except FileNotFoundError:
         return False
     except OSError as exc:
-        logger.error(f"Failed to delete variation batch {batch_id}: {exc}")
+        logger.exception("Failed to delete variation batch %s: %s", batch_id, exc)
         return False
     return True
 
@@ -847,7 +848,7 @@ def _create_generation_workspace(artifact_root: str | Path) -> GenerationWorkspa
         workspace = _build_workspace(gen_id, artifact_root)
         try:
             os.makedirs(workspace.directory)
-            logger.info(f"Created generation workspace: {workspace.directory}")
+            logger.info("Created generation workspace: %s", workspace.directory)
             return workspace
         except FileExistsError:
             continue
@@ -948,7 +949,7 @@ def _finalize_generation(
         except FileNotFoundError:
             pass
         except OSError as exc:
-            logger.warning(f"Failed to remove partial audio artifact: {exc}")
+            logger.warning("Failed to remove partial audio artifact: %s", exc)
 
         audio_path = None
     else:
@@ -982,7 +983,7 @@ def _finalize_generation(
 
     _write_metadata_file(workspace.metadata_path, metadata)
 
-    logger.info(f"Finalized generation {workspace.id} in history")
+    logger.info("Finalized generation %s in history", workspace.id)
     _enforce_limit(
         artifact_root,
         max_generations=max_generations,
@@ -1020,7 +1021,7 @@ def _cleanup_generation_workspace(
         return False
 
     shutil.rmtree(workspace.directory)
-    logger.info(f"Removed unfinalized generation workspace: {workspace.directory}")
+    logger.info("Removed unfinalized generation workspace: %s", workspace.directory)
     return True
 
 
@@ -1101,7 +1102,7 @@ def _load_history(artifact_root: str | Path) -> list[GenerationMetadata]:
         try:
             gen_dir = _get_generation_dir(item.removeprefix("gen_"), root)
         except ValueError as exc:
-            logger.warning(f"Skipping unsafe generation path {item}: {exc}")
+            logger.warning("Skipping unsafe generation path %s: %s", item, exc)
             continue
         if not os.path.isdir(gen_dir):
             continue
@@ -1111,11 +1112,12 @@ def _load_history(artifact_root: str | Path) -> list[GenerationMetadata]:
             generations.append(metadata)
         except FileNotFoundError as exc:
             logger.warning(
-                f"Missing required artifact for generation {item}: {exc.filename}"
+                "Missing required artifact for generation %s: %s", item, exc.filename
             )
             continue
-        except Exception as e:
-            logger.warning(f"Failed to load generation {item}: {e}")
+        # One unreadable entry must not hide the rest of history; log it and move on.
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Failed to load generation %s: %s", item, e)
             continue
 
     # Sort by timestamp, newest first
@@ -1147,11 +1149,11 @@ def _get_generation(
         workspace = _build_workspace(gen_id, artifact_root)
         if exc.filename != workspace.metadata_path:
             logger.warning(
-                f"Missing required artifact for generation {gen_id}: {exc.filename}"
+                "Missing required artifact for generation %s: %s", gen_id, exc.filename
             )
         return None
     except Exception as e:
-        logger.error(f"Failed to load generation {gen_id}: {e}")
+        logger.exception("Failed to load generation %s: %s", gen_id, e)
         return None
 
 
@@ -1172,15 +1174,15 @@ def _delete_generation(artifact_root: str | Path, gen_id: str) -> bool:
     gen_dir = _get_generation_dir(gen_id, artifact_root)
 
     if not os.path.exists(gen_dir):
-        logger.warning(f"Generation not found: {gen_id}")
+        logger.warning("Generation not found: %s", gen_id)
         return False
 
     try:
         shutil.rmtree(gen_dir)
-        logger.info(f"Deleted generation: {gen_id}")
+        logger.info("Deleted generation: %s", gen_id)
         return True
     except Exception as e:
-        logger.error(f"Failed to delete generation {gen_id}: {e}")
+        logger.exception("Failed to delete generation %s: %s", gen_id, e)
         return False
 
 
@@ -1211,7 +1213,7 @@ def _enforce_limit(
     generations_to_delete = generations[max_generations:]
 
     for gen in generations_to_delete:
-        logger.info(f"Removing old generation {gen.gen_id} to enforce limit")
+        logger.info("Removing old generation %s to enforce limit", gen.gen_id)
         _delete_generation(root, gen.gen_id)
 
 
@@ -1231,7 +1233,7 @@ def _load_retention_candidates(artifact_root: str | Path) -> list[_RetentionCand
             workspace = _build_workspace(gen_id, root)
             directory_stat = os.lstat(workspace.directory)
         except (FileNotFoundError, ValueError) as exc:
-            logger.warning(f"Skipping unsafe retention candidate {item}: {exc}")
+            logger.warning("Skipping unsafe retention candidate %s: %s", item, exc)
             continue
 
         reparse_point = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
@@ -1241,7 +1243,7 @@ def _load_retention_candidates(artifact_root: str | Path) -> list[_RetentionCand
             or stat.S_ISLNK(directory_stat.st_mode)
             or file_attributes & reparse_point
         ):
-            logger.warning(f"Skipping unsafe retention candidate {item}")
+            logger.warning("Skipping unsafe retention candidate %s", item)
             continue
 
         try:
@@ -1260,10 +1262,10 @@ def _load_retention_candidates(artifact_root: str | Path) -> list[_RetentionCand
         except FileNotFoundError:
             # Workspaces do not receive metadata until finalization. Excluding them
             # prevents another request's retention pass from deleting active work.
-            logger.debug(f"Skipping non-finalized retention candidate {item}")
+            logger.debug("Skipping non-finalized retention candidate %s", item)
             continue
         except (OSError, TypeError, ValueError) as exc:
-            logger.warning(f"Skipping invalid retention candidate {item}: {exc}")
+            logger.warning("Skipping invalid retention candidate %s: %s", item, exc)
             continue
 
         candidates.append(_RetentionCandidate(gen_id=gen_id, timestamp=timestamp))

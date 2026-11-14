@@ -216,7 +216,8 @@ def test_variation_history_returns_legacy_generation_in_utc_without_rewriting(
     store = storage.FilesystemArtifactStore(root, max_generations=None)
     first = _finalize(store, "one", monkeypatch)
     second = _finalize(store, "two", monkeypatch)
-    legacy_time = datetime(2026, 1, 1, 12)
+    # Deliberately naive: older Core versions wrote local time without an offset.
+    legacy_time = datetime(2026, 1, 1, 12)  # noqa: DTZ001
     metadata_path = root / "gen_one" / "metadata.json"
     payload = json.loads(metadata_path.read_text(encoding="utf-8"))
     payload["timestamp"] = legacy_time.isoformat()
@@ -336,7 +337,7 @@ def test_strict_manifest_loader_skips_unknown_versions_and_extra_fields(
     base = {
         **_metadata(),
         "schema_version": 2,
-        "created_at": datetime.now().isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "generation_ids": ["one", "two"],
         "unexpected": True,
     }
