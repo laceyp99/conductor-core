@@ -389,7 +389,6 @@ def midi_to_mp3(
         # Check if playback is available
         available, error = is_playback_available(soundfont_name)
         if not available:
-            logger.warning("Audio playback not available: %s", error)
             raise AudioRenderingError(error or "Audio playback is not available")
 
         # Validate the MIDI timeline before creating files or starting synthesis.
@@ -405,9 +404,7 @@ def midi_to_mp3(
         # Find the soundfont
         soundfont_path = find_soundfont(soundfont_name)
         if soundfont_path is None:
-            error = "No SoundFont file available"
-            logger.error(error)
-            raise AudioRenderingError(error)
+            raise AudioRenderingError("No SoundFont file available")
 
         # Create a temporary WAV file
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_wav:
