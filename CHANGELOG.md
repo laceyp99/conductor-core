@@ -18,13 +18,11 @@ while its public API is still in initial development.
   before raising them. The raised `ProviderError` or `AudioRenderingError`
   carries the same detail; log it in your application if you relied on the
   `Anthropic request failed`, `Google request failed`, `Ollama request failed`,
-  `OpenAI request failed`, or `Failed to convert MIDI to MP3` log lines.
-- Model metadata validation now rejects `null` for `max_thinking_budget` and
-  `min_thinking_budget`; omit the field instead. `ModelConfig` types both as
-  `int`.
-- `thinking_off_type` must be one of the values in the new
-  `music.THINKING_OFF_TYPES`, so a misspelled value fails at load time instead
-  of on a live request.
+  `OpenAI request failed`, `Failed to convert MIDI to MP3`,
+  `Audio playback not available`, or `No SoundFont file available` log lines.
+- `ModelConfig` now types `max_thinking_budget` and `min_thinking_budget` as
+  `int` and `thinking_off_type` as `str`; none of them accept `None`. The
+  packaged metadata never used `None` for these fields.
 
 ## [0.13.2] - 2026-11-13
 
