@@ -433,14 +433,12 @@ def midi_to_mp3(
         logger.info("Successfully created MP3: %s", output_path)
         return output_path
 
-    except AudioRenderingError as exc:
-        logger.exception("Failed to convert MIDI to MP3: %s", exc)
+    except AudioRenderingError:
+        # Already typed; do not wrap it again below.
         raise
     except Exception as exc:
         detail = f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
-        error = AudioRenderingError(detail)
-        logger.exception("Failed to convert MIDI to MP3: %s", error)
-        raise error from exc
+        raise AudioRenderingError(detail) from exc
 
     finally:
         # Clean up temporary WAV file

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import os
 from typing import TYPE_CHECKING, NoReturn, NotRequired, cast
 
@@ -55,8 +54,6 @@ except ImportError:  # pragma: no cover - exercised only in minimal installs
         pass
 
     OpenAI = None
-
-logger = logging.getLogger(__name__)
 
 
 class _LoopParseKwargs(TypedDict):
@@ -219,7 +216,6 @@ def loop_gen(
         APIConnectionError,
         APIError,
     ) as exc:
-        logger.exception("OpenAI request failed: %s", exc)
         _raise_openai_error(exc, "request")
 
     if response.output_parsed is None:

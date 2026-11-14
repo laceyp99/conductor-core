@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import os
 from collections.abc import Mapping
 from contextlib import closing
@@ -33,8 +32,6 @@ try:
 except ImportError:  # pragma: no cover - exercised only in minimal installs
     httpx = None
     ollama = None
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -400,7 +397,6 @@ def loop_gen(
             ollama.RequestError,
             ollama.ResponseError,
         ) as exc:
-            logger.exception("Ollama request failed: %s", exc)
             _raise_ollama_error(exc, "request")
     _raise_if_out_of_context(completion, model, num_ctx)
     message = getattr(completion, "message", None)

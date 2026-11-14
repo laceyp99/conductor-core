@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import os
 from typing import TYPE_CHECKING, NoReturn, cast
 
@@ -38,8 +37,6 @@ except ImportError:  # pragma: no cover - exercised only in minimal installs
     genai_errors = None
     httpx2 = None
     types = None
-
-logger = logging.getLogger(__name__)
 
 
 def _raise_google_error(exc: Exception, operation: str) -> NoReturn:
@@ -201,7 +198,6 @@ def loop_gen(
             config=config,
         )
     except (genai_errors.APIError, httpx2.TimeoutException, httpx2.NetworkError) as exc:
-        logger.exception("Google request failed: %s", exc)
         _raise_google_error(exc, "request")
     content, thinking_content = process_output(response)
     midi_loop = objects.Loop.model_validate_json(content)
