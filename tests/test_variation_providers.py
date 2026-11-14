@@ -5,6 +5,11 @@ from unittest.mock import Mock
 import pytest
 from pydantic import ValidationError
 
+pytest.importorskip("anthropic")
+pytest.importorskip("google.genai")
+pytest.importorskip("ollama")
+pytest.importorskip("openai")
+
 from conductor_core import routing
 from conductor_core.models import Loop
 from conductor_core.providers import anthropic, google, ollama, openai

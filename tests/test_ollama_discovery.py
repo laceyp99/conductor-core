@@ -2,10 +2,13 @@
 
 import json
 
-import httpx
-import ollama as sdk
 import pydantic
 import pytest
+
+pytest.importorskip("ollama")
+
+import httpx
+import ollama as sdk
 
 from conductor_core.errors import (
     ProviderAuthenticationError,

@@ -3,6 +3,11 @@ from unittest.mock import Mock
 
 import pytest
 
+pytest.importorskip("anthropic")
+pytest.importorskip("google.genai")
+pytest.importorskip("ollama")
+pytest.importorskip("openai")
+
 from conductor_core import (
     EngineConfig,
     ProviderAuthenticationError,

@@ -5,6 +5,10 @@ from unittest.mock import Mock
 
 import pytest
 
+pytest.importorskip("anthropic")
+pytest.importorskip("google.genai")
+pytest.importorskip("openai")
+
 from conductor_core import music
 from conductor_core.providers import anthropic, google, openai
 
