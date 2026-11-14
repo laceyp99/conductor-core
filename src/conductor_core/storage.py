@@ -22,6 +22,8 @@ import tempfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from threading import Lock
+from types import TracebackType
 from typing import Annotated, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, PrivateAttr
@@ -111,6 +113,10 @@ class FilesystemArtifactStore:
         return _update_generation_audio(
             self.artifact_root, gen_id, audio_path, soundfont=soundfont
         )
+
+    def stage_generation_audio(self, gen_id: str) -> "GenerationAudioStage":
+        """Own a separate render path and commit audio with rollback on failure."""
+        return GenerationAudioStage(self.artifact_root, gen_id)
 
     def load_history(self) -> list["GenerationMetadata"]:
         return _load_history(self.artifact_root)
@@ -432,8 +438,17 @@ def _validate_artifact_file(
     return path
 
 
-def _write_metadata_file(path: str, metadata: GenerationMetadata) -> None:
-    """Atomically replace metadata without following an existing destination link."""
+def _cleanup_temporary_file(path: str) -> None:
+    try:
+        os.unlink(path)
+    except FileNotFoundError:
+        pass
+    except OSError:
+        logger.warning("Could not clean up temporary file %s", path, exc_info=True)
+
+
+def _prepare_metadata_file(path: str, metadata: GenerationMetadata) -> str:
+    """Serialize metadata beside its destination before promoting any artifacts."""
     directory = os.path.dirname(path)
     file_descriptor, temporary_path = tempfile.mkstemp(
         prefix=".metadata-", suffix=".tmp", dir=directory
@@ -441,10 +456,19 @@ def _write_metadata_file(path: str, metadata: GenerationMetadata) -> None:
     try:
         with os.fdopen(file_descriptor, "w", encoding="utf-8") as metadata_file:
             metadata_file.write(metadata.model_dump_json(indent=2))
+    except BaseException:
+        _cleanup_temporary_file(temporary_path)
+        raise
+    return temporary_path
+
+
+def _write_metadata_file(path: str, metadata: GenerationMetadata) -> None:
+    """Atomically replace metadata without following an existing destination link."""
+    temporary_path = _prepare_metadata_file(path, metadata)
+    try:
         os.replace(temporary_path, path)
     finally:
-        if os.path.exists(temporary_path):
-            os.unlink(temporary_path)
+        _cleanup_temporary_file(temporary_path)
 
 
 def _metadata_values(metadata: object) -> dict[str, object]:
@@ -765,21 +789,6 @@ def _clear_variation_history(artifact_root: str | Path) -> int:
     )
 
 
-def _copy_artifact_file(source: str, destination: str) -> None:
-    """Copy through a new file and atomically replace the destination entry."""
-    directory = os.path.dirname(destination)
-    file_descriptor, temporary_path = tempfile.mkstemp(
-        prefix=".artifact-", suffix=".tmp", dir=directory
-    )
-    os.close(file_descriptor)
-    try:
-        shutil.copy2(source, temporary_path)
-        os.replace(temporary_path, destination)
-    finally:
-        if os.path.exists(temporary_path):
-            os.unlink(temporary_path)
-
-
 def _load_generation_metadata(
     artifact_root: str | Path, gen_id: str
 ) -> GenerationMetadata:
@@ -1025,6 +1034,145 @@ def _cleanup_generation_workspace(
     return True
 
 
+_AUDIO_COMMIT_GUARD = Lock()
+_ACTIVE_AUDIO_COMMITS: set[tuple[str, str]] = set()
+
+
+class AudioUpdateInProgressError(RuntimeError):
+    """Another participating audio writer owns this generation in this process."""
+
+
+class AudioCommitRecoveryError(OSError):
+    """Audio rollback failed; retain artifacts until the generation is reconciled."""
+
+    def __init__(
+        self,
+        commit_error: OSError,
+        rollback_error: OSError,
+        recovery_directory: str,
+    ) -> None:
+        self.commit_error = commit_error
+        self.rollback_error = rollback_error
+        self.recovery_directory = recovery_directory
+        super().__init__(
+            f"Audio commit failed: {commit_error}; rollback failed: {rollback_error}. "
+            f"Recovery artifacts retained at {recovery_directory}"
+        )
+
+
+class GenerationAudioStage:
+    """Single-use render context returned by stage_generation_audio()."""
+
+    def __init__(self, artifact_root: str | Path, gen_id: str) -> None:
+        self._root = _resolve_artifact_root(artifact_root)
+        self._workspace = _build_workspace(gen_id, self._root)
+        self._key = (
+            os.path.normcase(os.path.realpath(self._root)),
+            os.path.normcase(gen_id),
+        )
+        self._directory: str | None = None
+        self._active = False
+        self._entered = False
+        self._used = False
+        self._recovery_required = False
+
+    @property
+    def path(self) -> str:
+        """Render destination, available only inside the active context."""
+        if not self._active or self._directory is None:
+            raise RuntimeError("audio stage is not active")
+        return os.path.join(self._directory, "loop.mp3")
+
+    def __enter__(self) -> "GenerationAudioStage":
+        if self._entered:
+            raise RuntimeError("audio stage cannot be reused")
+        self._entered = True
+        with _AUDIO_COMMIT_GUARD:
+            if self._key in _ACTIVE_AUDIO_COMMITS:
+                raise AudioUpdateInProgressError(
+                    "an audio update is already active for this generation"
+                )
+            _ACTIVE_AUDIO_COMMITS.add(self._key)
+        try:
+            _load_generation_metadata(self._root, self._workspace.id)
+            self._directory = tempfile.mkdtemp(
+                prefix=".audio-stage-", dir=self._workspace.directory
+            )
+            self._active = True
+            return self
+        except BaseException:
+            self._release()
+            raise
+
+    def _release(self) -> None:
+        with _AUDIO_COMMIT_GUARD:
+            _ACTIVE_AUDIO_COMMITS.discard(self._key)
+        self._active = False
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        try:
+            if self._directory is not None and not self._recovery_required:
+                try:
+                    shutil.rmtree(self._directory)
+                except OSError:
+                    logger.warning(
+                        "Could not clean up audio stage %s",
+                        self._directory,
+                        exc_info=True,
+                    )
+        finally:
+            self._release()
+
+    def commit(self, *, soundfont: str | None) -> GenerationMetadata:
+        """Promote staged audio and metadata, restoring audio on caught OSError."""
+        if not self._active or self._used:
+            raise RuntimeError("audio stage must be active and may commit only once")
+        self._used = True
+        staged_audio = self.path
+        _validate_artifact_file(staged_audio, required=True)
+        if os.path.getsize(staged_audio) == 0:
+            raise ValueError("staged audio must not be empty")
+        metadata = _load_generation_metadata(self._root, self._workspace.id)
+        previous_audio = metadata.audio_path
+        updated = metadata.model_copy(
+            update={"audio_path": self._workspace.audio_path, "soundfont": soundfont}
+        )
+        assert self._directory is not None
+        # Keep preparation inside the stage so context cleanup owns every artifact.
+        prepared_metadata = _prepare_metadata_file(
+            os.path.join(self._directory, "metadata.json"), updated
+        )
+        backup = os.path.join(self._directory, "previous.mp3")
+        if previous_audio is not None:
+            shutil.copy2(previous_audio, backup)
+        os.replace(staged_audio, self._workspace.audio_path)
+        try:
+            os.replace(prepared_metadata, self._workspace.metadata_path)
+        except OSError as commit_error:
+            try:
+                if previous_audio is None:
+                    os.unlink(self._workspace.audio_path)
+                else:
+                    os.replace(backup, self._workspace.audio_path)
+            except OSError as rollback_error:
+                self._recovery_required = True
+                raise AudioCommitRecoveryError(
+                    commit_error, rollback_error, self._directory
+                ) from commit_error
+            raise
+        return updated
+
+
+def stage_generation_audio(gen_id: str) -> GenerationAudioStage:
+    """Stage an audio update in the default artifact root; use as a context manager."""
+    return GenerationAudioStage(_resolve_artifact_root(), gen_id)
+
+
 def update_generation_audio(
     gen_id: str,
     audio_path: str | None,
@@ -1056,26 +1204,19 @@ def _update_generation_audio(
     if metadata is None:
         return None
 
-    gen_dir = _get_generation_dir(gen_id, artifact_root)
-    metadata_path = os.path.join(gen_dir, "metadata.json")
-
-    dest_audio_path = metadata.audio_path
-    audio_updated = False
-    if audio_path and os.path.exists(audio_path):
-        dest_audio_path = os.path.join(gen_dir, "loop.mp3")
-        if os.path.abspath(audio_path) != os.path.abspath(dest_audio_path):
-            _copy_artifact_file(audio_path, dest_audio_path)
-        else:
-            dest_audio_path = audio_path
-        audio_updated = True
-
-    metadata.audio_path = dest_audio_path
-    if audio_updated:
-        metadata.soundfont = soundfont
-
-    _write_metadata_file(metadata_path, metadata)
-
-    return metadata
+    with GenerationAudioStage(artifact_root, gen_id) as stage:
+        workspace = _build_workspace(gen_id, artifact_root)
+        metadata = _load_generation_metadata(artifact_root, gen_id)
+        if audio_path and os.path.exists(audio_path):
+            if os.path.abspath(audio_path) != os.path.abspath(workspace.audio_path):
+                shutil.copy2(audio_path, stage.path)
+                return stage.commit(soundfont=soundfont)
+            # Legacy callers may already have overwritten the saved file. Its
+            # previous bytes cannot be recovered here; use staging for rollback.
+            metadata.audio_path = workspace.audio_path
+            metadata.soundfont = soundfont
+        _write_metadata_file(workspace.metadata_path, metadata)
+        return metadata
 
 
 def load_history() -> list[GenerationMetadata]:
