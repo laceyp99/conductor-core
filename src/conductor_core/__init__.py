@@ -13,7 +13,9 @@ from conductor_core.config import (
 )
 from conductor_core.engine import LoopGenerationEngine, ProgressCallback
 from conductor_core.errors import (
+    AudioCommitRecoveryError,
     AudioRenderingError,
+    AudioUpdateInProgressError,
     ProviderAuthenticationError,
     ProviderConnectionError,
     ProviderContextLengthError,
@@ -57,7 +59,9 @@ from conductor_core.variations import (
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
+    "AudioCommitRecoveryError",
     "AudioRenderingError",
+    "AudioUpdateInProgressError",
     "EngineConfig",
     "GenerationMetadata",
     "GenerationRequest",

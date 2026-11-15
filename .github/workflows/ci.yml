@@ -113,4 +113,4 @@ jobs:
             throw "The Windows directory-symlink security test was skipped."
           }
       - name: Test Windows storage behavior
-        run: uv run --locked --all-extras --python 3.12 pytest -q tests/test_history.py tests/test_paths.py
+        run: uv run --locked --all-extras --python 3.12 pytest -q tests/test_history.py tests/test_paths.py tests/test_audio_commit.py

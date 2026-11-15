@@ -7,6 +7,28 @@ class AudioRenderingError(RuntimeError):
     """Core could not render a MIDI file to audio."""
 
 
+class AudioUpdateInProgressError(RuntimeError):
+    """Another audio stage owns this generation in this process."""
+
+
+class AudioCommitRecoveryError(OSError):
+    """Audio rollback failed; retain artifacts until the generation is reconciled."""
+
+    def __init__(
+        self,
+        commit_error: OSError,
+        rollback_error: OSError,
+        recovery_directory: str,
+    ) -> None:
+        self.commit_error = commit_error
+        self.rollback_error = rollback_error
+        self.recovery_directory = recovery_directory
+        super().__init__(
+            f"Audio commit failed: {commit_error}; rollback failed: {rollback_error}. "
+            f"Recovery artifacts retained at {recovery_directory}"
+        )
+
+
 class ProviderError(RuntimeError):
     """Base error raised when a provider SDK fails.
 

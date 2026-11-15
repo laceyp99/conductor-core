@@ -20,7 +20,12 @@ from conductor_core import (
 from conductor_core.models import Loop
 from conductor_core.music import get_loop_prompt, get_model_info
 from conductor_core.routing import LoopProviderResult, VariationProviderResult
-from conductor_core.storage import FilesystemArtifactStore, GenerationMetadata
+from conductor_core.storage import (
+    FilesystemArtifactStore,
+    GenerationAudioStage,
+    GenerationMetadata,
+    stage_generation_audio,
+)
 
 
 def progress(event: ProgressEvent) -> str:
@@ -57,6 +62,11 @@ def consume(root: Path) -> None:
         workspace, "A melody", "C", "major", "gpt-6-sol", "OpenAI", 0.0
     )
     assert_type(metadata, GenerationMetadata)
+    assert_type(stage_generation_audio(metadata.id), GenerationAudioStage)
+    with store.stage_generation_audio(metadata.id) as stage:
+        assert_type(stage.path, str)
+        # A real consumer renders into stage.path before committing.
+        assert_type(stage.commit(soundfont="piano.sf2"), GenerationMetadata)
 
 
 def consume_routing(single: LoopProviderResult, batch: VariationProviderResult) -> None:
