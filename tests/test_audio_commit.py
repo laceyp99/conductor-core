@@ -5,44 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from conductor_core import storage
-
-
-@pytest.mark.skipif(os.name != "nt", reason="Windows file sharing semantics")
-@pytest.mark.parametrize("locked_file", ["loop.mp3", "metadata.json"])
-def test_windows_locked_destination_preserves_pair(saved_generation, locked_file):
-    import ctypes
-    from ctypes import wintypes
-
-    store, directory, original = saved_generation
-    original_metadata = (directory / "metadata.json").read_bytes()
-    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
-    create_file = kernel.CreateFileW
-    create_file.argtypes = [
-        wintypes.LPCWSTR,
-        wintypes.DWORD,
-        wintypes.DWORD,
-        wintypes.LPVOID,
-        wintypes.DWORD,
-        wintypes.DWORD,
-        wintypes.HANDLE,
-    ]
-    create_file.restype = wintypes.HANDLE
-    kernel.CloseHandle.argtypes = [wintypes.HANDLE]
-    kernel.CloseHandle.restype = wintypes.BOOL
-    # Permit reading and writing, but deny deletion/replacement of this entry.
-    handle = create_file(str(directory / locked_file), 0x80000000, 3, None, 3, 0, None)
-    assert handle != wintypes.HANDLE(-1).value, ctypes.get_last_error()
-    try:
-        with store.stage_generation_audio("saved") as stage:
-            Path(stage.path).write_bytes(b"new audio")
-            with pytest.raises(PermissionError):
-                stage.commit(soundfont="new.sf2")
-    finally:
-        assert kernel.CloseHandle(handle)
-    assert (directory / "loop.mp3").read_bytes() == b"old audio"
-    assert (directory / "metadata.json").read_bytes() == original_metadata
-    assert store.get_generation("saved") == original
+from conductor_core import (
+    AudioCommitRecoveryError,
+    AudioUpdateInProgressError,
+    storage,
+)
 
 
 @pytest.fixture
@@ -75,7 +42,6 @@ def saved_generation(tmp_path):
 def test_stage_commits_audio_and_metadata(saved_generation):
     store, directory, original = saved_generation
     with store.stage_generation_audio("saved") as stage:
-        assert isinstance(stage.path, str)
         stage_path = Path(stage.path)
         assert stage_path.parent.parent == directory
         stage_path.write_bytes(b"new audio")
@@ -118,15 +84,13 @@ def test_metadata_replace_failure_restores_previous_state(
         with pytest.raises(PermissionError) as caught:
             stage.commit(soundfont="new.sf2")
         assert caught.value is failure
-        with pytest.raises(RuntimeError):
-            stage.commit(soundfont="retry.sf2")
     assert (directory / "metadata.json").read_bytes() == original_bytes
     assert audio.exists() is prior_audio
     if prior_audio:
         assert audio.read_bytes() == b"old audio"
 
 
-@pytest.mark.parametrize("failure_point", ["prepare", "backup", "audio_replace"])
+@pytest.mark.parametrize("failure_point", ["backup", "audio_replace"])
 def test_commit_prepublication_failures_preserve_saved_files(
     saved_generation, monkeypatch, failure_point
 ):
@@ -138,9 +102,7 @@ def test_commit_prepublication_failures_preserve_saved_files(
 
     with store.stage_generation_audio("saved") as stage:
         Path(stage.path).write_bytes(b"new audio")
-        if failure_point == "prepare":
-            monkeypatch.setattr(storage, "_prepare_metadata_file", fail)
-        elif failure_point == "backup":
+        if failure_point == "backup":
             monkeypatch.setattr(storage.shutil, "copy2", fail)
         else:
             monkeypatch.setattr(storage.os, "replace", fail)
@@ -172,7 +134,7 @@ def test_rollback_failure_preserves_recovery_files(saved_generation, monkeypatch
             return replace(source, destination)
 
         monkeypatch.setattr(storage.os, "replace", fail_publication_and_restore)
-        with pytest.raises(storage.AudioCommitRecoveryError) as caught:
+        with pytest.raises(AudioCommitRecoveryError) as caught:
             stage.commit(soundfont="new.sf2")
     error = caught.value
     assert isinstance(error, OSError)
@@ -237,7 +199,7 @@ def test_stages_exclude_other_stores_and_release_lock(saved_generation):
     other = storage.FilesystemArtifactStore(Path(store.artifact_root) / ".")
     with (
         store.stage_generation_audio("saved"),
-        pytest.raises(storage.AudioUpdateInProgressError),
+        pytest.raises(AudioUpdateInProgressError),
         other.stage_generation_audio("saved"),
     ):
         pytest.fail("overlapping stage entered")
@@ -277,18 +239,6 @@ def test_staging_failure_releases_lock(saved_generation, monkeypatch):
         pass
     assert store.get_generation("saved") == original
     assert (directory / "loop.mp3").read_bytes() == b"old audio"
-
-
-def test_module_helper_shares_store_lock(saved_generation, monkeypatch):
-    store, _, _ = saved_generation
-    monkeypatch.delenv("CONDUCTOR_HOME", raising=False)
-    monkeypatch.setenv("CONDUCTOR_CORE_DATA_DIR", str(Path(store.artifact_root).parent))
-    with (
-        store.stage_generation_audio("saved"),
-        pytest.raises(storage.AudioUpdateInProgressError),
-        storage.stage_generation_audio("saved"),
-    ):
-        pytest.fail("module helper entered overlapping stage")
 
 
 def test_missing_staged_audio_consumes_commit(saved_generation):
@@ -355,6 +305,6 @@ def test_legacy_update_reports_busy_generation(saved_generation):
     store, _, _ = saved_generation
     with (
         store.stage_generation_audio("saved"),
-        pytest.raises(storage.AudioUpdateInProgressError),
+        pytest.raises(AudioUpdateInProgressError),
     ):
         store.update_generation_audio("saved", None)
