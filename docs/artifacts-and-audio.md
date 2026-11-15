@@ -135,8 +135,8 @@ GenerationAudioStage.commit(*, soundfont: str | None) -> GenerationMetadata
 context. Render there instead of over the saved `loop.mp3`:
 
 ```python
-from conductor_core.playback import midi_to_mp3
 from conductor_core import AudioCommitRecoveryError
+from conductor_core.playback import midi_to_mp3
 
 try:
     with engine.store.stage_generation_audio(generation_id) as stage:
@@ -180,9 +180,9 @@ single-use, cannot be re-entered, and allows only one commit attempt. Missing
 generations raise `FileNotFoundError`; invalid metadata and artifact validation
 errors propagate. Missing or empty staged audio fails before promotion.
 
-Participating audio writers share a process-wide reservation keyed by canonical
+Audio stages share a process-wide reservation keyed by canonical
 root and generation ID, including across separate store instances and the
-module-level helpers. The reservation lasts for the entire context, including
+module-level helper. The reservation lasts for the entire context, including
 rendering. Overlapping updates raise `AudioUpdateInProgressError` immediately.
 Import it from `conductor_core`; it subclasses `RuntimeError`, so callers
 can distinguish a busy generation from stage misuse. This does not

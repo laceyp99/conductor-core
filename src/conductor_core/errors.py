@@ -8,7 +8,7 @@ class AudioRenderingError(RuntimeError):
 
 
 class AudioUpdateInProgressError(RuntimeError):
-    """Another participating audio writer owns this generation in this process."""
+    """Another audio stage owns this generation in this process."""
 
 
 class AudioCommitRecoveryError(OSError):
