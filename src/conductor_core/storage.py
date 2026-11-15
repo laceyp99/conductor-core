@@ -439,14 +439,25 @@ def _cleanup_temporary_file(path: str) -> None:
 
 
 def _prepare_metadata_file(path: str, metadata: GenerationMetadata) -> str:
-    """Serialize metadata beside its destination before promoting any artifacts."""
+    """Serialize metadata beside its destination before promoting any artifacts.
+
+    Artifact paths are stored as file names relative to the generation directory,
+    so records never contain the local artifact root. Loading rebinds them.
+    """
+    stored = metadata.model_copy(
+        update={
+            field: os.path.basename(value)
+            for field in ("midi_path", "audio_path", "messages_path")
+            if (value := getattr(metadata, field)) is not None
+        }
+    )
     directory = os.path.dirname(path)
     file_descriptor, temporary_path = tempfile.mkstemp(
         prefix=".metadata-", suffix=".tmp", dir=directory
     )
     try:
         with os.fdopen(file_descriptor, "w", encoding="utf-8") as metadata_file:
-            metadata_file.write(metadata.model_dump_json(indent=2))
+            metadata_file.write(stored.model_dump_json(indent=2))
     except BaseException:
         _cleanup_temporary_file(temporary_path)
         raise

@@ -93,6 +93,15 @@ lifetime and are not removed by generation retention; see
 Use `FilesystemArtifactStore` for custom roots, loading or deleting saved
 generations, and updating saved audio metadata.
 
+### Stored paths
+
+`metadata.json` stores `midi_path`, `audio_path`, and `messages_path` as file
+names relative to the generation directory, such as `loop.mid`. It never
+contains the artifact root or other local paths. Core rebinds them to absolute
+paths when loading, so `GenerationMetadata` objects are unchanged, and a copied
+history directory loads under its new root. Records written by older versions
+with absolute paths load the same way.
+
 ### Timestamps
 
 `GenerationMetadata.timestamp` is a timezone-aware UTC datetime. New metadata

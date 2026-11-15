@@ -53,6 +53,13 @@ def test_stage_commits_audio_and_metadata(saved_generation):
     assert updated.audio_path == str(directory / "loop.mp3")
     assert updated.soundfont == "new.sf2"
     assert updated.prompt == original.prompt
+    # The fixture record held absolute paths; the rewrite stores file names only.
+    stored_text = (directory / "metadata.json").read_text(encoding="utf-8")
+    stored = json.loads(stored_text)
+    assert stored["midi_path"] == "loop.mid"
+    assert stored["audio_path"] == "loop.mp3"
+    assert stored["messages_path"] is None
+    assert json.dumps(str(store.artifact_root))[1:-1] not in stored_text
 
 
 @pytest.mark.parametrize("prior_audio", [True, False])
