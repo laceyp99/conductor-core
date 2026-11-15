@@ -885,8 +885,8 @@ def finalize_generation(
         cost: API cost (optional).
         soundfont: SoundFont filename used to render the audio file (optional).
         audio_render_succeeded: Explicit audio render outcome. When False, any
-            partial audio artifact is removed. When omitted, audio is detected
-            for backwards compatibility.
+            partial audio artifact is removed. Otherwise audio is recorded if
+            the workspace audio file exists.
 
     Returns:
         GenerationMetadata: The persisted metadata.
