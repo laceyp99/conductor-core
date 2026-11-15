@@ -15,15 +15,21 @@ while its public API is still in initial development.
 - Store-bound and module-level `stage_generation_audio()` contexts let consumers
   render separately and commit MP3 bytes with their SoundFont metadata. Caught
   metadata promotion errors restore previous audio; `AudioCommitRecoveryError`
-  retains recovery artifacts when rollback also fails.
+  retains recovery artifacts when rollback also fails. Audio updates to the same
+  generation cannot overlap within one process and raise
+  `AudioUpdateInProgressError` when busy. Empty staged audio is rejected before
+  promotion.
+
+### Removed
+
+- **Breaking:** `update_generation_audio()` is removed from
+  `conductor_core.storage` and `FilesystemArtifactStore`. Render into
+  `stage_generation_audio(gen_id).path` and call `commit(soundfont=...)` instead.
+  A missing generation now raises `FileNotFoundError` instead of returning `None`.
 
 ### Fixed
 
-- Audio updates from a separate source file now roll back saved audio when
-  metadata promotion fails. Audio updates to the same generation cannot overlap
-  within one process and raise `AudioUpdateInProgressError` when busy. Empty
-  separate-source audio is rejected before promotion. Temporary-file cleanup
-  errors no longer mask a successful metadata write.
+- Temporary-file cleanup errors no longer mask a successful metadata write.
 
 ## [0.13.3] - 2026-11-14
 

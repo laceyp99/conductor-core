@@ -1,5 +1,4 @@
 import json
-import os
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -253,58 +252,11 @@ def test_missing_staged_audio_consumes_commit(saved_generation):
     assert store.get_generation("saved") == original
 
 
-def test_legacy_audio_update_rolls_back_metadata_failure(
-    saved_generation, tmp_path, monkeypatch
-):
+def test_empty_staged_audio_is_rejected_before_promotion(saved_generation):
     store, directory, original = saved_generation
-    source = tmp_path / "rendered.mp3"
-    source.write_bytes(b"new audio")
-    replace = storage.os.replace
-
-    def fail_metadata(source, destination):
-        if Path(destination) == directory / "metadata.json":
-            raise PermissionError("metadata locked")
-        return replace(source, destination)
-
-    monkeypatch.setattr(storage.os, "replace", fail_metadata)
-    with pytest.raises(PermissionError, match="metadata locked"):
-        store.update_generation_audio("saved", str(source), soundfont="new.sf2")
-    assert source.read_bytes() == b"new audio"
+    with store.stage_generation_audio("saved") as stage:
+        Path(stage.path).touch()
+        with pytest.raises(ValueError, match="must not be empty"):
+            stage.commit(soundfont="empty.sf2")
     assert (directory / "loop.mp3").read_bytes() == b"old audio"
     assert store.get_generation("saved") == original
-
-
-def test_legacy_update_accepts_hard_linked_source(saved_generation, tmp_path):
-    store, directory, _ = saved_generation
-    source = tmp_path / "rendered.mp3"
-    source.write_bytes(b"linked audio")
-    linked = tmp_path / "linked.mp3"
-    os.link(source, linked)
-    updated = store.update_generation_audio(
-        "saved", str(linked), soundfont="linked.sf2"
-    )
-    assert (directory / "loop.mp3").read_bytes() == b"linked audio"
-    assert source.read_bytes() == linked.read_bytes() == b"linked audio"
-    assert updated == store.get_generation("saved")
-    assert updated.soundfont == "linked.sf2"
-
-
-def test_legacy_update_rejects_empty_source_before_promotion(
-    saved_generation, tmp_path
-):
-    store, directory, original = saved_generation
-    source = tmp_path / "empty.mp3"
-    source.touch()
-    with pytest.raises(ValueError, match="must not be empty"):
-        store.update_generation_audio("saved", str(source), soundfont="empty.sf2")
-    assert (directory / "loop.mp3").read_bytes() == b"old audio"
-    assert store.get_generation("saved") == original
-
-
-def test_legacy_update_reports_busy_generation(saved_generation):
-    store, _, _ = saved_generation
-    with (
-        store.stage_generation_audio("saved"),
-        pytest.raises(AudioUpdateInProgressError),
-    ):
-        store.update_generation_audio("saved", None)

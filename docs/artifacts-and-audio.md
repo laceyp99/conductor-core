@@ -191,16 +191,6 @@ consumers must prevent those operations from racing an audio update. The guarant
 covers caught filesystem errors, not process crashes or atomic visibility across
 two files. Readers can briefly observe new audio with old metadata.
 
-Existing `update_generation_audio(gen_id, audio_path, soundfont=None)` signatures
-remain available and still return `None` for an unavailable generation. Updates
-from a separate existing source file use the staged commit path without consuming
-the caller's source. Same-path calls remain compatible but cannot restore bytes
-overwritten before the call. Use staging for the rollback guarantee. Legacy
-missing-source and `None`-source calls continue to preserve the SoundFont.
-Separate source files may be symbolic or hard links; Core copies their contents
-into its stage before validating the staged artifact. Empty separate-source audio
-now raises `ValueError` before promotion rather than saving an empty preview.
-
 ## Direct MIDI utilities
 
 Consumers can convert existing MIDI to Core's four-bar loop model and write it

@@ -105,16 +105,6 @@ class FilesystemArtifactStore:
     def cleanup_generation_workspace(self, workspace: "GenerationWorkspace") -> bool:
         return _cleanup_generation_workspace(self.artifact_root, workspace)
 
-    def update_generation_audio(
-        self,
-        gen_id: str,
-        audio_path: str | None,
-        soundfont: str | None = None,
-    ) -> Optional["GenerationMetadata"]:
-        return _update_generation_audio(
-            self.artifact_root, gen_id, audio_path, soundfont=soundfont
-        )
-
     def stage_generation_audio(self, gen_id: str) -> "GenerationAudioStage":
         """Own a separate render path and commit audio with rollback on failure."""
         return GenerationAudioStage(self.artifact_root, gen_id)
@@ -1150,52 +1140,6 @@ class GenerationAudioStage:
 def stage_generation_audio(gen_id: str) -> GenerationAudioStage:
     """Stage an audio update in the default artifact root; use as a context manager."""
     return GenerationAudioStage(_resolve_artifact_root(), gen_id)
-
-
-def update_generation_audio(
-    gen_id: str,
-    audio_path: str | None,
-    soundfont: str | None = None,
-) -> GenerationMetadata | None:
-    """Update the stored audio path and SoundFont for an existing generation.
-
-    Args:
-        gen_id: The generation ID.
-        audio_path: Path to the rendered audio file.
-        soundfont: SoundFont filename used to render the audio file.
-
-    Returns:
-        GenerationMetadata or None if the generation does not exist.
-    """
-    return _update_generation_audio(
-        _resolve_artifact_root(), gen_id, audio_path, soundfont=soundfont
-    )
-
-
-def _update_generation_audio(
-    artifact_root: str | Path,
-    gen_id: str,
-    audio_path: str | None,
-    soundfont: str | None = None,
-) -> GenerationMetadata | None:
-    """Update stored audio metadata under an explicit artifact root."""
-    metadata = _get_generation(artifact_root, gen_id)
-    if metadata is None:
-        return None
-
-    with GenerationAudioStage(artifact_root, gen_id) as stage:
-        workspace = _build_workspace(gen_id, artifact_root)
-        metadata = _load_generation_metadata(artifact_root, gen_id)
-        if audio_path and os.path.exists(audio_path):
-            if os.path.abspath(audio_path) != os.path.abspath(workspace.audio_path):
-                shutil.copy2(audio_path, stage.path)
-                return stage.commit(soundfont=soundfont)
-            # Legacy callers may already have overwritten the saved file. Its
-            # previous bytes cannot be recovered here; use staging for rollback.
-            metadata.audio_path = workspace.audio_path
-            metadata.soundfont = soundfont
-        _write_metadata_file(workspace.metadata_path, metadata)
-        return metadata
 
 
 def load_history() -> list[GenerationMetadata]:
