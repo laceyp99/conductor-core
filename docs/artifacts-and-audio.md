@@ -136,7 +136,7 @@ context. Render there instead of over the saved `loop.mp3`:
 
 ```python
 from conductor_core.playback import midi_to_mp3
-from conductor_core.storage import AudioCommitRecoveryError
+from conductor_core import AudioCommitRecoveryError
 
 try:
     with engine.store.stage_generation_audio(generation_id) as stage:
@@ -184,7 +184,7 @@ Participating audio writers share a process-wide reservation keyed by canonical
 root and generation ID, including across separate store instances and the
 module-level helpers. The reservation lasts for the entire context, including
 rendering. Overlapping updates raise `AudioUpdateInProgressError` immediately.
-Import it from `conductor_core.storage`; it subclasses `RuntimeError`, so callers
+Import it from `conductor_core`; it subclasses `RuntimeError`, so callers
 can distinguish a busy generation from stage misuse. This does not
 coordinate other processes, direct file writes, generation deletion, or retention;
 consumers must prevent those operations from racing an audio update. The guarantee

@@ -28,6 +28,7 @@ from typing import Annotated, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, PrivateAttr
 
+from conductor_core.errors import AudioCommitRecoveryError, AudioUpdateInProgressError
 from conductor_core.paths import resolve_default_artifact_root
 
 logger = logging.getLogger(__name__)
@@ -1036,28 +1037,6 @@ def _cleanup_generation_workspace(
 
 _AUDIO_COMMIT_GUARD = Lock()
 _ACTIVE_AUDIO_COMMITS: set[tuple[str, str]] = set()
-
-
-class AudioUpdateInProgressError(RuntimeError):
-    """Another participating audio writer owns this generation in this process."""
-
-
-class AudioCommitRecoveryError(OSError):
-    """Audio rollback failed; retain artifacts until the generation is reconciled."""
-
-    def __init__(
-        self,
-        commit_error: OSError,
-        rollback_error: OSError,
-        recovery_directory: str,
-    ) -> None:
-        self.commit_error = commit_error
-        self.rollback_error = rollback_error
-        self.recovery_directory = recovery_directory
-        super().__init__(
-            f"Audio commit failed: {commit_error}; rollback failed: {rollback_error}. "
-            f"Recovery artifacts retained at {recovery_directory}"
-        )
 
 
 class GenerationAudioStage:
