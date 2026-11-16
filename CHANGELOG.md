@@ -21,6 +21,9 @@ while its public API is still in initial development.
   they are rewritten in the new form the next time Core writes them. Code that
   reads `metadata.json` directly must join these names to the generation
   directory.
+- `finalize_generation()` and `GenerationAudioStage.commit()` now record
+  `soundfont` by file name. Passing a full SoundFont path stores and returns only
+  its file name, so the directory stays out of `metadata.json`.
 
 ## [0.14.0] - 2026-11-14
 

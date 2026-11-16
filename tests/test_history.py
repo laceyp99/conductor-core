@@ -690,7 +690,7 @@ def test_copied_history_reconstructs_artifact_paths_under_new_root(
         model="model",
         provider="OpenAI",
         temperature=0.0,
-        soundfont="soundfont.sf2",
+        soundfont=str(tmp_path / "fonts" / "soundfont.sf2"),
     )
     stored_text = (source_root / "gen_fixed_id" / "metadata.json").read_text(
         encoding="utf-8"

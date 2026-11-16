@@ -46,7 +46,8 @@ def test_stage_commits_audio_and_metadata(saved_generation):
         stage_path.write_bytes(b"new audio")
         assert (directory / "loop.mp3").read_bytes() == b"old audio"
         assert store.get_generation("saved") == original
-        updated = stage.commit(soundfont="new.sf2")
+        # A full SoundFont path is recorded by file name only.
+        updated = stage.commit(soundfont=str(directory.parent / "fonts" / "new.sf2"))
     assert not stage_path.parent.exists()
     assert (directory / "loop.mp3").read_bytes() == b"new audio"
     assert updated == store.get_generation("saved")

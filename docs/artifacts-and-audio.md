@@ -132,8 +132,8 @@ GenerationAudioStage.commit(*, soundfont: str | None) -> GenerationMetadata
 ```
 
 `GenerationAudioStage.path` is a string render destination available inside its
-context. Render there instead of over the saved `loop.mp3`. Core stores
-`soundfont` exactly as passed, so pass a file name to keep local paths out of
+context. Render there instead of over the saved `loop.mp3`. Core records
+`soundfont` by file name, so passing a full path keeps the directory out of
 `metadata.json`:
 
 ```python
