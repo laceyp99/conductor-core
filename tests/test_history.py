@@ -692,9 +692,11 @@ def test_copied_history_reconstructs_artifact_paths_under_new_root(
         temperature=0.0,
         soundfont="soundfont.sf2",
     )
-    stored = json.loads(
-        (source_root / "gen_fixed_id" / "metadata.json").read_text(encoding="utf-8")
+    stored_text = (source_root / "gen_fixed_id" / "metadata.json").read_text(
+        encoding="utf-8"
     )
+    assert json.dumps(str(source_root))[1:-1] not in stored_text
+    stored = json.loads(stored_text)
     assert stored["midi_path"] == "loop.mid"
     assert stored["audio_path"] == "loop.mp3"
     assert stored["messages_path"] == "messages.json"

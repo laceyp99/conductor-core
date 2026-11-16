@@ -12,7 +12,7 @@ Core stores durable history under one predictable Conductor suite root:
         loop.mid
         loop.mp3          # only when audio rendering succeeds
         messages.json     # when provider messages are available
-        metadata.json
+        metadata.json     # artifact paths stored as relative file names
       variations/
         batch_<id>.json  # shared request metadata and generation IDs
 ```
@@ -83,28 +83,15 @@ lifetime and are not removed by generation retention; see
 | --- | --- |
 | `generation_id` | Unique filesystem generation identifier. |
 | `loop` | Validated provider-independent loop object. |
-| `midi_path` | Persisted MIDI path. |
-| `audio_path` | Persisted MP3 path when rendering succeeds. |
+| `midi_path` | Absolute path to the persisted MIDI. |
+| `audio_path` | Absolute path to the persisted MP3 when rendering succeeds. |
 | `messages` | Provider conversation messages, each a dict with a `role` (`system`, `user`, or `assistant`) and string `content`. |
 | `cost` | Provider-reported estimated cost when available. |
-| `metadata` | Persisted generation metadata. |
+| `metadata` | Persisted generation metadata. On disk, its artifact paths are file names relative to the generation directory; Core rebinds them to absolute paths on load. |
 | `warnings` | Non-fatal issues such as skipped audio. |
 
 Use `FilesystemArtifactStore` for custom roots, loading or deleting saved
 generations, and updating saved audio metadata.
-
-### Stored paths
-
-`metadata.json` stores `midi_path`, `audio_path`, and `messages_path` as file
-names relative to the generation directory, such as `loop.mid`. These three
-fields never contain the artifact root or other local paths. Core rebinds them
-to absolute paths when loading, so `GenerationMetadata` objects are unchanged,
-and a copied history directory loads under its new root. Records written by
-older versions with absolute paths load the same way.
-
-`soundfont` is stored exactly as the caller passes it. The engine passes a file
-name; callers of `finalize_generation()` or `commit(soundfont=...)` should do
-the same to keep local paths out of the record.
 
 ### Timestamps
 
@@ -145,7 +132,9 @@ GenerationAudioStage.commit(*, soundfont: str | None) -> GenerationMetadata
 ```
 
 `GenerationAudioStage.path` is a string render destination available inside its
-context. Render there instead of over the saved `loop.mp3`:
+context. Render there instead of over the saved `loop.mp3`. Core stores
+`soundfont` exactly as passed, so pass a file name to keep local paths out of
+`metadata.json`:
 
 ```python
 from conductor_core import AudioCommitRecoveryError
