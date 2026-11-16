@@ -8,6 +8,23 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-11-15
+
+### Changed
+
+- `metadata.json` now stores `midi_path`, `audio_path`, and `messages_path` as
+  file names relative to the generation directory (`loop.mid`, `loop.mp3`,
+  `messages.json`) instead of absolute local paths. This applies to
+  `finalize_generation()` and staged audio commits, so records no longer contain
+  the user's home directory or artifact root. `GenerationMetadata` objects
+  returned by Core still carry absolute paths, and older records load unchanged;
+  they are rewritten in the new form the next time Core writes them. Code that
+  reads `metadata.json` directly must join these names to the generation
+  directory.
+- `finalize_generation()` and `GenerationAudioStage.commit()` now record
+  `soundfont` by file name. Passing a full SoundFont path stores and returns only
+  its file name, so the directory stays out of `metadata.json`.
+
 ## [0.14.0] - 2026-11-14
 
 ### Added

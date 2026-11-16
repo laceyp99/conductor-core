@@ -690,8 +690,16 @@ def test_copied_history_reconstructs_artifact_paths_under_new_root(
         model="model",
         provider="OpenAI",
         temperature=0.0,
-        soundfont="soundfont.sf2",
+        soundfont=str(tmp_path / "fonts" / "soundfont.sf2"),
     )
+    stored_text = (source_root / "gen_fixed_id" / "metadata.json").read_text(
+        encoding="utf-8"
+    )
+    assert json.dumps(str(source_root))[1:-1] not in stored_text
+    stored = json.loads(stored_text)
+    assert stored["midi_path"] == "loop.mid"
+    assert stored["audio_path"] == "loop.mp3"
+    assert stored["messages_path"] == "messages.json"
 
     destination_root = tmp_path / "destination"
     shutil.copytree(source_root, destination_root)

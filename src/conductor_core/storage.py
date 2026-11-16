@@ -438,15 +438,31 @@ def _cleanup_temporary_file(path: str) -> None:
         logger.warning("Could not clean up temporary file %s", path, exc_info=True)
 
 
+def _soundfont_name(soundfont: str | None) -> str | None:
+    """Record a SoundFont by file name so metadata never holds its local path."""
+    return os.path.basename(soundfont) if soundfont else soundfont
+
+
 def _prepare_metadata_file(path: str, metadata: GenerationMetadata) -> str:
-    """Serialize metadata beside its destination before promoting any artifacts."""
+    """Serialize metadata beside its destination before promoting any artifacts.
+
+    Artifact paths are stored as file names relative to the generation directory,
+    so records never contain the local artifact root. Loading rebinds them.
+    """
+    stored = metadata.model_copy(
+        update={
+            field: os.path.basename(value)
+            for field in ("midi_path", "audio_path", "messages_path")
+            if (value := getattr(metadata, field)) is not None
+        }
+    )
     directory = os.path.dirname(path)
     file_descriptor, temporary_path = tempfile.mkstemp(
         prefix=".metadata-", suffix=".tmp", dir=directory
     )
     try:
         with os.fdopen(file_descriptor, "w", encoding="utf-8") as metadata_file:
-            metadata_file.write(metadata.model_dump_json(indent=2))
+            metadata_file.write(stored.model_dump_json(indent=2))
     except BaseException:
         _cleanup_temporary_file(temporary_path)
         raise
@@ -978,7 +994,7 @@ def _finalize_generation(
         midi_path=workspace.midi_path,
         audio_path=audio_path,
         messages_path=messages_path,
-        soundfont=soundfont if audio_path else None,
+        soundfont=_soundfont_name(soundfont) if audio_path else None,
     )
 
     _write_metadata_file(workspace.metadata_path, metadata)
@@ -1109,7 +1125,10 @@ class GenerationAudioStage:
         metadata = _load_generation_metadata(self._root, self._workspace.id)
         previous_audio = metadata.audio_path
         updated = metadata.model_copy(
-            update={"audio_path": self._workspace.audio_path, "soundfont": soundfont}
+            update={
+                "audio_path": self._workspace.audio_path,
+                "soundfont": _soundfont_name(soundfont),
+            }
         )
         assert self._directory is not None
         # Keep preparation inside the stage so context cleanup owns every artifact.
