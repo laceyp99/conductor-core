@@ -8,6 +8,14 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-17
+
+### Added
+
+- Added OpenAI GPT-6.2 Sol and GPT-6.2 Astra for loop and variation generation.
+  Both expose reasoning effort from `low` through `max` and omit temperature
+  from requests.
+
 ## [0.14.1] - 2026-11-15
 
 ### Changed
