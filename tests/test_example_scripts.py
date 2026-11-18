@@ -165,12 +165,14 @@ def test_generate_midi_efforts_cancels_queued_work_on_interrupt(monkeypatch):
             if cancel_futures:
                 release.set()
 
-    def interrupt(_):
+    def interrupt(_, *, timeout, return_when):
+        assert 0 < timeout <= 0.5
+        assert return_when == script.FIRST_COMPLETED
         assert running.wait(timeout=5)
         raise KeyboardInterrupt
 
     monkeypatch.setattr(script, "ThreadPoolExecutor", Executor)
-    monkeypatch.setattr(script, "as_completed", interrupt)
+    monkeypatch.setattr(script, "wait", interrupt)
 
     with pytest.raises(KeyboardInterrupt):
         script.main(["gpt-6.2-astra", "--workers", "1"], engine=FakeEngine())

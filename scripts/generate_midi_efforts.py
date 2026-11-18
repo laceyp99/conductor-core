@@ -6,7 +6,7 @@ can vary by effort. The generation API has no per-request dollar cap.
 """
 
 import argparse
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 
 from generate_midi import (
     DESCRIPTION,
@@ -75,24 +75,32 @@ def main(argv=None, *, engine=None):
     with ThreadPoolExecutor(max_workers=workers) as executor:
         try:
             pending = {executor.submit(generate, effort): effort for effort in efforts}
-            for future in as_completed(pending):
-                effort = pending[future]
-                prefix = f"[{effort}]"
-                if (exc := future.exception()) is not None:
-                    failed += 1
-                    print(f"{prefix} Failed: {exc}")
-                    continue
-                result = future.result()
-                results[effort] = result
-                print(f"{prefix} MIDI: {result.midi_path}")
-                if result.audio_path is not None:
-                    print(f"{prefix} Audio: {result.audio_path}")
-                cost = (
-                    f"${result.cost:.6f}" if result.cost is not None else "unavailable"
+            unfinished = set(pending)
+            while unfinished:
+                # A bounded wait lets Windows deliver Ctrl+C while workers run.
+                done, unfinished = wait(
+                    unfinished, timeout=0.5, return_when=FIRST_COMPLETED
                 )
-                print(f"{prefix} Estimated provider cost: {cost}")
-                for warning in result.warnings:
-                    print(f"{prefix} Warning: {warning}")
+                for future in done:
+                    effort = pending[future]
+                    prefix = f"[{effort}]"
+                    if (exc := future.exception()) is not None:
+                        failed += 1
+                        print(f"{prefix} Failed: {exc}")
+                        continue
+                    result = future.result()
+                    results[effort] = result
+                    print(f"{prefix} MIDI: {result.midi_path}")
+                    if result.audio_path is not None:
+                        print(f"{prefix} Audio: {result.audio_path}")
+                    cost = (
+                        f"${result.cost:.6f}"
+                        if result.cost is not None
+                        else "unavailable"
+                    )
+                    print(f"{prefix} Estimated provider cost: {cost}")
+                    for warning in result.warnings:
+                        print(f"{prefix} Warning: {warning}")
         except KeyboardInterrupt:
             executor.shutdown(wait=False, cancel_futures=True)
             print(
