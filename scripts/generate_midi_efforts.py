@@ -1,13 +1,12 @@
 """Generate one MIDI loop per advertised reasoning effort for a model.
 
-Running this script makes one paid provider request per effort. Each request
+Running this script starts one paid generation per effort. Each generation
 uses the same musical prompt and model pricing. Token usage and actual cost
 can vary by effort. The generation API has no per-request dollar cap.
 """
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import replace
 
 from generate_midi import (
     DESCRIPTION,
@@ -16,7 +15,6 @@ from generate_midi import (
     SCALE,
     SOUNDFONT_PATH,
     TEMPERATURE,
-    provider_timing,
 )
 
 from conductor_core import EngineConfig, GenerationRequest, LoopGenerationEngine
@@ -49,8 +47,9 @@ def main(argv=None, *, engine=None):
 
     if engine is None:
         # Concurrent generations use separate workspaces. Skip history pruning
-        # so workers cannot race to delete the same older generation.
-        config = replace(EngineConfig.from_defaults(), max_generations=None)
+        # so workers cannot race to delete the same older generation. A later
+        # normal generation can prune the history back to its configured limit.
+        config = EngineConfig.from_defaults(max_generations=None)
         engine = LoopGenerationEngine(config)
 
     workers = min(args.workers or len(efforts), len(efforts))
@@ -63,35 +62,43 @@ def main(argv=None, *, engine=None):
             description=DESCRIPTION,
             model=args.model,
             temperature=TEMPERATURE,
-            use_thinking=effort != "none",
+            use_thinking=True,
             effort=effort,
             prompt_override=PROMPT_OVERRIDE,
             render_audio=args.render_audio,
             soundfont_path=SOUNDFONT_PATH,
         )
-        return engine.generate(
-            request, progress_callback=provider_timing(f"[{effort}] ")
-        )
+        return engine.generate(request)
 
     results = {}
     failed = 0
     with ThreadPoolExecutor(max_workers=workers) as executor:
-        pending = {executor.submit(generate, effort): effort for effort in efforts}
-        for future in as_completed(pending):
-            effort = pending[future]
-            if (exc := future.exception()) is not None:
-                failed += 1
-                print(f"\n[{effort}] Failed: {exc}")
-                continue
-            result = future.result()
-            results[effort] = result
-            print(f"\n[{effort}] MIDI: {result.midi_path}")
-            if result.audio_path is not None:
-                print(f"Audio: {result.audio_path}")
-            cost = f"${result.cost:.6f}" if result.cost is not None else "unavailable"
-            print(f"Estimated provider cost: {cost}")
-            for warning in result.warnings:
-                print(f"Warning: {warning}")
+        try:
+            pending = {executor.submit(generate, effort): effort for effort in efforts}
+            for future in as_completed(pending):
+                effort = pending[future]
+                prefix = f"[{effort}]"
+                if (exc := future.exception()) is not None:
+                    failed += 1
+                    print(f"{prefix} Failed: {exc}")
+                    continue
+                result = future.result()
+                results[effort] = result
+                print(f"{prefix} MIDI: {result.midi_path}")
+                if result.audio_path is not None:
+                    print(f"{prefix} Audio: {result.audio_path}")
+                cost = (
+                    f"${result.cost:.6f}" if result.cost is not None else "unavailable"
+                )
+                print(f"{prefix} Estimated provider cost: {cost}")
+                for warning in result.warnings:
+                    print(f"{prefix} Warning: {warning}")
+        except KeyboardInterrupt:
+            executor.shutdown(wait=False, cancel_futures=True)
+            print(
+                "Interrupted. Waiting for generations already in progress.", flush=True
+            )
+            raise
 
     if failed:
         parser.exit(1, f"{failed} of {len(efforts)} generations failed.\n")

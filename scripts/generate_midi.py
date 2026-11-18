@@ -11,7 +11,6 @@ to low. Importing this module does not make a provider call.
 """
 
 import argparse
-from time import perf_counter
 
 from conductor_core import EngineConfig, GenerationRequest, LoopGenerationEngine
 
@@ -24,7 +23,6 @@ DESCRIPTION = (
     "and a simple bass movement"
 )
 TEMPERATURE = 0.0
-USE_THINKING = True
 EFFORT = "low"
 RENDER_AUDIO = True
 
@@ -43,22 +41,6 @@ def report_progress(event):
     print(f"[{event.stage}] {event.message}{detail}")
 
 
-def provider_timing(prefix=""):
-    """Report the provider round trip before MIDI processing starts."""
-    started = None
-
-    def on_progress(event):
-        nonlocal started
-        if event.stage == "provider_call":
-            started = perf_counter()
-        elif event.stage == "midi" and started is not None:
-            print(
-                f"{prefix}Provider latency: {perf_counter() - started:.2f}s", flush=True
-            )
-
-    return on_progress
-
-
 def main(engine=None, *, model=MODEL, effort=EFFORT):
     """Run the configured generation and return its result."""
     if engine is None:
@@ -71,25 +53,16 @@ def main(engine=None, *, model=MODEL, effort=EFFORT):
         description=DESCRIPTION,
         model=model,
         temperature=TEMPERATURE,
-        use_thinking=USE_THINKING,
-        effort=effort,
+        use_thinking=effort != "off",
+        effort=None if effort == "off" else effort,
         prompt_override=PROMPT_OVERRIDE,
         render_audio=RENDER_AUDIO,
         soundfont_path=SOUNDFONT_PATH,
     )
-    report_timing = provider_timing()
-
-    def on_progress(event):
-        if event.stage == "provider_call":
-            report_progress(event)
-            report_timing(event)
-        else:
-            report_timing(event)
-            report_progress(event)
-
-    result = engine.generate(request, progress_callback=on_progress)
+    result = engine.generate(request, progress_callback=report_progress)
 
     print("\nGeneration complete")
+    print(f"Effort: {effort}")
     print(f"ID: {result.generation_id}")
     print(f"MIDI: {result.midi_path}")
     print(f"Audio: {result.audio_path or 'not rendered'}")
@@ -108,7 +81,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("model", nargs="?", default=MODEL, help="Provider model ID")
     parser.add_argument(
-        "--effort", default=EFFORT, help="Reasoning effort (default: low)"
+        "--effort",
+        default=EFFORT,
+        help="Model effort level, or off to turn thinking off (default: %(default)s)",
     )
     args = parser.parse_args()
     main(model=args.model, effort=args.effort)

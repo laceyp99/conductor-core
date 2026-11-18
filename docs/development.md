@@ -126,7 +126,12 @@ uv run --locked --group docs mkdocs build --strict
 ## Examples
 
 - [`scripts/generate_midi.py`](https://github.com/laceyp99/conductor-core/blob/main/scripts/generate_midi.py): complete online
-  generation workflow.
+  generation workflow. Use `--effort off` to ask Core to disable thinking
+  or fall back to the lowest effort, depending on the model.
+- [`scripts/generate_midi_efforts.py`](https://github.com/laceyp99/conductor-core/blob/main/scripts/generate_midi_efforts.py): generate one loop per advertised
+  effort concurrently and compare MIDI and estimated cost.
+  An advertised `none` is an effort value. Use `--workers` to limit
+  concurrency.
 - [`scripts/generate_variations.py`](https://github.com/laceyp99/conductor-core/blob/main/scripts/generate_variations.py): one-request online
   workflow for generating and inspecting several loop alternatives.
 - [`scripts/inspect_models.py`](https://github.com/laceyp99/conductor-core/blob/main/scripts/inspect_models.py): model and

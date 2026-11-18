@@ -17,7 +17,7 @@ while its public API is still in initial development.
   from requests.
 - Added a MIDI example that runs a model across its reasoning effort levels
   concurrently. The single-loop example also accepts model and effort
-  arguments, and both examples report provider latency.
+  arguments.
 
 ## [0.14.1] - 2026-11-15
 
