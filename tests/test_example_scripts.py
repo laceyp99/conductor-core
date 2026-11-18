@@ -1,5 +1,7 @@
 import importlib.util
 import json
+import runpy
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -206,6 +208,46 @@ def test_generate_variations_builds_expected_paid_batch_request(capsys):
     assert "Batch ID: batch-id" in output
     assert "generations/first/loop.mp3" in output
     assert "Audio rendering was skipped." in output
+
+
+@pytest.mark.parametrize(
+    ("effort", "audio_flag", "expected_effort", "thinking", "render_audio"),
+    [
+        ("off", "--no-render-audio", None, False, False),
+        ("none", "--render-audio", "none", True, True),
+    ],
+)
+def test_generate_variations_cli_passes_request_options(
+    monkeypatch, effort, audio_flag, expected_effort, thinking, render_audio
+):
+    requests = []
+
+    class FakeEngine:
+        def __init__(self, config):
+            pass
+
+        def generate_variations(self, request, progress_callback=None):
+            requests.append(request)
+            return SimpleNamespace(
+                status="complete",
+                metadata=SimpleNamespace(batch_id="test", cost=None),
+                diagnostic=None,
+                items=(),
+            )
+
+    script = SCRIPTS_ROOT / "generate_variations.py"
+    monkeypatch.setattr("conductor_core.LoopGenerationEngine", FakeEngine)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [str(script), "gpt-6-sol", "--effort", effort, "--count", "3", audio_flag],
+    )
+    runpy.run_path(str(script), run_name="__main__")
+
+    [request] = requests
+    assert (request.model, request.count) == ("gpt-6-sol", 3)
+    assert (request.effort, request.use_thinking) == (expected_effort, thinking)
+    assert request.render_audio is render_audio
 
 
 def test_midi_roundtrip_uses_sixteenth_note_integer_timing(

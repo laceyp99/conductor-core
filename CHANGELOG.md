@@ -18,6 +18,7 @@ while its public API is still in initial development.
 - Added a MIDI example that runs a model across its reasoning effort levels
   concurrently. The single-loop example also accepts model and effort
   arguments.
+- The variation example accepts model, effort, count, and audio rendering arguments.
 
 ## [0.14.1] - 2026-11-15
 

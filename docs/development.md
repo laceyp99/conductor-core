@@ -133,7 +133,8 @@ uv run --locked --group docs mkdocs build --strict
   An advertised `none` is an effort value. Use `--workers` to limit
   concurrency.
 - [`scripts/generate_variations.py`](https://github.com/laceyp99/conductor-core/blob/main/scripts/generate_variations.py): one-request online
-  workflow for generating and inspecting several loop alternatives.
+  workflow for generating several loop alternatives. Accepts a model ID,
+  `--effort`, `--count`, and `--render-audio` or `--no-render-audio`.
 - [`scripts/inspect_models.py`](https://github.com/laceyp99/conductor-core/blob/main/scripts/inspect_models.py): model and
   capability inspection without a provider call.
 - [`scripts/midi_loop_roundtrip.py`](https://github.com/laceyp99/conductor-core/blob/main/scripts/midi_loop_roundtrip.py): offline
