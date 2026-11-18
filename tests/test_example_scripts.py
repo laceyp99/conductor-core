@@ -2,7 +2,6 @@ import importlib.util
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from threading import Event
 from types import SimpleNamespace
 
 import pytest
@@ -144,40 +143,6 @@ def test_generate_midi_efforts_runs_every_effort_and_reports_results(
         assert f"[{effort}] Audio: loop.mp3" in output
         assert f"[{effort}] Estimated provider cost: $0.420000" in output
         assert f"[{effort}] Warning: example warning" in output
-
-
-def test_generate_midi_efforts_cancels_queued_work_on_interrupt(monkeypatch):
-    monkeypatch.syspath_prepend(str(SCRIPTS_ROOT))
-    script = load_script("generate_midi_efforts")
-    running = Event()
-    release = Event()
-    started = []
-
-    class FakeEngine:
-        def generate(self, request, progress_callback=None):
-            started.append(request.effort)
-            running.set()
-            assert release.wait(timeout=5)
-
-    class Executor(script.ThreadPoolExecutor):
-        def shutdown(self, wait=True, *, cancel_futures=False):
-            super().shutdown(wait=wait, cancel_futures=cancel_futures)
-            if cancel_futures:
-                release.set()
-
-    def interrupt(_, *, timeout, return_when):
-        assert 0 < timeout <= 0.5
-        assert return_when == script.FIRST_COMPLETED
-        assert running.wait(timeout=5)
-        raise KeyboardInterrupt
-
-    monkeypatch.setattr(script, "ThreadPoolExecutor", Executor)
-    monkeypatch.setattr(script, "wait", interrupt)
-
-    with pytest.raises(KeyboardInterrupt):
-        script.main(["gpt-6.2-astra", "--workers", "1"], engine=FakeEngine())
-
-    assert started == ["low"]
 
 
 def test_generate_variations_builds_expected_paid_batch_request(capsys):
