@@ -5,9 +5,13 @@ SDK and credentials, may send the musical description to that provider, and may
 incur usage charges. Audio rendering additionally requires FluidSynth and FFmpeg
 with MP3 encoding support on PATH.
 
-Edit the constants below, then run ``python scripts/generate_midi.py`` from the
-repository root. Importing this module does not make a provider call.
+Run ``python scripts/generate_midi.py MODEL --effort high`` from the repository
+root. The model defaults to the value below, and reasoning effort defaults
+to low. Importing this module does not make a provider call.
 """
+
+import argparse
+from time import perf_counter
 
 from conductor_core import EngineConfig, GenerationRequest, LoopGenerationEngine
 
@@ -39,7 +43,23 @@ def report_progress(event):
     print(f"[{event.stage}] {event.message}{detail}")
 
 
-def main(engine=None):
+def provider_timing(prefix=""):
+    """Report the provider round trip before MIDI processing starts."""
+    started = None
+
+    def on_progress(event):
+        nonlocal started
+        if event.stage == "provider_call":
+            started = perf_counter()
+        elif event.stage == "midi" and started is not None:
+            print(
+                f"{prefix}Provider latency: {perf_counter() - started:.2f}s", flush=True
+            )
+
+    return on_progress
+
+
+def main(engine=None, *, model=MODEL, effort=EFFORT):
     """Run the configured generation and return its result."""
     if engine is None:
         config = EngineConfig.from_defaults()
@@ -49,15 +69,25 @@ def main(engine=None):
         key=KEY,
         scale=SCALE,
         description=DESCRIPTION,
-        model=MODEL,
+        model=model,
         temperature=TEMPERATURE,
         use_thinking=USE_THINKING,
-        effort=EFFORT,
+        effort=effort,
         prompt_override=PROMPT_OVERRIDE,
         render_audio=RENDER_AUDIO,
         soundfont_path=SOUNDFONT_PATH,
     )
-    result = engine.generate(request, progress_callback=report_progress)
+    report_timing = provider_timing()
+
+    def on_progress(event):
+        if event.stage == "provider_call":
+            report_progress(event)
+            report_timing(event)
+        else:
+            report_timing(event)
+            report_progress(event)
+
+    result = engine.generate(request, progress_callback=on_progress)
 
     print("\nGeneration complete")
     print(f"ID: {result.generation_id}")
@@ -75,4 +105,10 @@ def main(engine=None):
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("model", nargs="?", default=MODEL, help="Provider model ID")
+    parser.add_argument(
+        "--effort", default=EFFORT, help="Reasoning effort (default: low)"
+    )
+    args = parser.parse_args()
+    main(model=args.model, effort=args.effort)
