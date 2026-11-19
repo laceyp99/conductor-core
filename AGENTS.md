@@ -73,6 +73,8 @@ checks unless the task or environment prevents it; report anything skipped.
 - Carry release metadata in the pull request: bump `pyproject.toml` above the
   version on `main` and add a matching user-facing `[x.y.z]` section to
   `CHANGELOG.md`. Merging to `main` tags and publishes the release.
+- Model support PRs (new models or metadata updates for an existing provider)
+  are patch bumps, since they add no breaking changes.
 - Skip release metadata only for `test`, `ci`, `docs`, `style`, or `chore`
   changes, or with the `skip-release` label. The `release-check` job validates
   these choices. See [`docs/development.md`](docs/development.md).

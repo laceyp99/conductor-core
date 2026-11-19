@@ -8,6 +8,20 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.14.3] - 2026-11-18
+
+### Added
+
+- Gemini 4 Neon (`gemini-4-neon`) with four thinking effort levels (`low`,
+  `medium`, `high`, `xhigh`), omitted temperature, a 65,536-token output
+  limit, and $3.00 input, $0.15 cached input, and $15.00 output per million
+  tokens. Rate limits are 1,000 RPM, 2,000,000 TPM, and 1,000 RPD.
+- Gemini 4 Carbon (`gemini-4-carbon`) with three thinking effort levels
+  (`low`, `medium`, `high`), omitted temperature, a 65,536-token output limit,
+  and introductory pricing of $2.00 input, $0.10 cached input, and $10.00
+  output per million tokens through November 30, 2026. Rate limits are
+  1,000 RPM, 2,000,000 TPM, and 1,000 RPD.
+
 ## [0.14.2] - 2026-11-17
 
 ### Added
