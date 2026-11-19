@@ -15,10 +15,11 @@ while its public API is still in initial development.
 - Added OpenAI GPT-6.2 Sol and GPT-6.2 Astra for loop and variation generation.
   Both expose reasoning effort from `low` through `max` and omit temperature
   from requests.
-- Added a MIDI example that runs a model across its reasoning effort levels
-  concurrently. The single-loop example also accepts model and effort
-  arguments.
-- The variation example accepts model, effort, count, and audio rendering arguments.
+- Added a MIDI example that runs one generation per advertised reasoning
+  effort concurrently and reports each result and its estimated cost.
+- The single-loop and variation examples accept model and effort arguments.
+  The variation example also accepts `--count`. All three examples accept
+  `--render-audio true` or `--render-audio false`, defaulting to `false`.
 
 ## [0.14.1] - 2026-11-15
 

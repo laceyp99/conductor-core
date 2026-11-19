@@ -49,10 +49,10 @@ print(result.cost)
 `generate()` is synchronous. It calls the selected provider, converts the
 validated loop to MIDI, and persists the artifacts before returning. See
 [`scripts/generate_midi.py`](https://github.com/laceyp99/conductor-core/blob/main/scripts/generate_midi.py)
-for an editable
-example with prompt customization, progress events, persisted result fields,
-and optional audio. That script makes a real provider call and may incur usage
-charges.
+for a command-line example with model, effort, and audio controls. It makes
+a real provider call and may incur usage charges. See the
+[generation examples](development.md#examples) for single loops, effort sweeps,
+and variation batches.
 
 ## Credentials
 

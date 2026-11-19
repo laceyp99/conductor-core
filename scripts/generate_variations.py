@@ -18,7 +18,7 @@ from conductor_core import (
 )
 
 # --- Edit these values before running the example. ---
-MODEL = "gpt-5.6-luna"
+MODEL = "gemini-4-hydrogen"
 KEY = "A"
 SCALE = "minor"
 DESCRIPTION = (
@@ -27,8 +27,8 @@ DESCRIPTION = (
 )
 COUNT = 4
 TEMPERATURE = 0.0
-EFFORT = "medium"
-RENDER_AUDIO = True
+EFFORT = "low"
+RENDER_AUDIO = False
 
 # None uses Conductor Core's packaged variation prompt. To customize the complete
 # system prompt for this request, replace None with text such as this example:
@@ -97,6 +97,8 @@ def main(
 
 
 if __name__ == "__main__":
+    from generate_midi import add_render_audio_argument
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("model", nargs="?", default=MODEL, help="Provider model ID")
     parser.add_argument(
@@ -110,10 +112,5 @@ if __name__ == "__main__":
         default=COUNT,
         help="Number of variations, from 2 to 8 (default: %(default)s)",
     )
-    parser.add_argument(
-        "--render-audio",
-        action=argparse.BooleanOptionalAction,
-        default=RENDER_AUDIO,
-        help="Render MP3s (enabled by default)",
-    )
+    add_render_audio_argument(parser, default=RENDER_AUDIO)
     main(**vars(parser.parse_args()))

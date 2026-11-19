@@ -11,10 +11,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from generate_midi import (
     DESCRIPTION,
     KEY,
+    MODEL,
     PROMPT_OVERRIDE,
     SCALE,
     SOUNDFONT_PATH,
     TEMPERATURE,
+    add_render_audio_argument,
 )
 
 from conductor_core import EngineConfig, GenerationRequest, LoopGenerationEngine
@@ -24,8 +26,13 @@ from conductor_core.music import get_model_info
 def main(argv=None, *, engine=None):
     """Run the same prompt once at each configured effort."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("model", help="A model ID from the packaged registry")
-    parser.add_argument("--render-audio", action="store_true", help="Also render MP3s")
+    parser.add_argument(
+        "model",
+        nargs="?",
+        default=MODEL,
+        help="Packaged model ID (default: %(default)s)",
+    )
+    add_render_audio_argument(parser)
     parser.add_argument("--workers", type=int, help="Limit concurrent requests")
     args = parser.parse_args(argv)
     if args.workers is not None and args.workers < 1:

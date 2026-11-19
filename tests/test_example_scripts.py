@@ -72,7 +72,7 @@ def test_generate_midi_builds_expected_paid_request(capsys):
     )
     assert request.effort == "low"
     assert request.prompt_override is None
-    assert request.render_audio is True
+    assert request.render_audio is False
     assert request.soundfont_path is None
     output = capsys.readouterr().out
     assert "[provider_call] Generating MIDI..." in output
@@ -125,7 +125,7 @@ def test_generate_midi_efforts_runs_every_effort_and_reports_results(
             )
 
     with pytest.raises(SystemExit) as error:
-        script.main(["gpt-6-sol", "--render-audio"], engine=FakeEngine())
+        script.main(["gpt-6-sol", "--render-audio", "true"], engine=FakeEngine())
 
     assert error.value.code == 1
     assert sorted(request.effort for request in requests) == [
@@ -193,15 +193,15 @@ def test_generate_variations_builds_expected_paid_batch_request(capsys):
     assert script.main(engine=FakeEngine()) is result
 
     request = captured["request"]
-    assert request.model == "gpt-5.6-luna"
+    assert request.model == "gemini-4-hydrogen"
     assert request.count == 4
     assert request.description == (
         "warm neo-soul electric piano chords with syncopated upper extensions "
         "and a simple bass movement"
     )
-    assert request.effort == "medium"
+    assert request.effort == "low"
     assert request.prompt_override is None
-    assert request.render_audio is True
+    assert request.render_audio is False
     assert request.soundfont_path is None
     output = capsys.readouterr().out
     assert "variation=1 status=persisting" in output
@@ -213,8 +213,8 @@ def test_generate_variations_builds_expected_paid_batch_request(capsys):
 @pytest.mark.parametrize(
     ("effort", "audio_flag", "expected_effort", "thinking", "render_audio"),
     [
-        ("off", "--no-render-audio", None, False, False),
-        ("none", "--render-audio", "none", True, True),
+        ("off", "false", None, False, False),
+        ("none", "true", "none", True, True),
     ],
 )
 def test_generate_variations_cli_passes_request_options(
@@ -236,11 +236,21 @@ def test_generate_variations_cli_passes_request_options(
             )
 
     script = SCRIPTS_ROOT / "generate_variations.py"
+    monkeypatch.syspath_prepend(str(SCRIPTS_ROOT))
     monkeypatch.setattr("conductor_core.LoopGenerationEngine", FakeEngine)
     monkeypatch.setattr(
         sys,
         "argv",
-        [str(script), "gpt-6-sol", "--effort", effort, "--count", "3", audio_flag],
+        [
+            str(script),
+            "gpt-6-sol",
+            "--effort",
+            effort,
+            "--count",
+            "3",
+            "--render-audio",
+            audio_flag,
+        ],
     )
     runpy.run_path(str(script), run_name="__main__")
 

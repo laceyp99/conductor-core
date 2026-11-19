@@ -125,16 +125,22 @@ uv run --locked --group docs mkdocs build --strict
 
 ## Examples
 
-- [`scripts/generate_midi.py`](https://github.com/laceyp99/conductor-core/blob/main/scripts/generate_midi.py): complete online
-  generation workflow. Use `--effort off` to ask Core to disable thinking
-  or fall back to the lowest effort, depending on the model.
-- [`scripts/generate_midi_efforts.py`](https://github.com/laceyp99/conductor-core/blob/main/scripts/generate_midi_efforts.py): generate one loop per advertised
-  effort concurrently and compare MIDI and estimated cost.
-  An advertised `none` is an effort value. Use `--workers` to limit
-  concurrency.
-- [`scripts/generate_variations.py`](https://github.com/laceyp99/conductor-core/blob/main/scripts/generate_variations.py): one-request online
-  workflow for generating several loop alternatives. Accepts a model ID,
-  `--effort`, `--count`, and `--render-audio` or `--no-render-audio`.
+Run these examples from the repository root. Each makes real provider calls
+and can incur charges.
+
+- [`generate_midi.py`](https://github.com/laceyp99/conductor-core/blob/main/scripts/generate_midi.py)
+  generates a single loop.
+- [`generate_midi_efforts.py`](https://github.com/laceyp99/conductor-core/blob/main/scripts/generate_midi_efforts.py)
+  runs one generation per advertised effort concurrently for the same prompt.
+- [`generate_variations.py`](https://github.com/laceyp99/conductor-core/blob/main/scripts/generate_variations.py)
+  requests 2–8 loop alternatives in a single provider call.
+
+All three default to `gemini-4-hydrogen`. The single-loop and variation scripts
+default to `low` effort. Use `--render-audio true` to add MP3 output when
+FluidSynth and FFmpeg are available on `PATH`.
+
+Offline utilities:
+
 - [`scripts/inspect_models.py`](https://github.com/laceyp99/conductor-core/blob/main/scripts/inspect_models.py): model and
   capability inspection without a provider call.
 - [`scripts/midi_loop_roundtrip.py`](https://github.com/laceyp99/conductor-core/blob/main/scripts/midi_loop_roundtrip.py): offline

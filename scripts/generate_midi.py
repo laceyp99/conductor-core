@@ -24,7 +24,7 @@ DESCRIPTION = (
 )
 TEMPERATURE = 0.0
 EFFORT = "low"
-RENDER_AUDIO = True
+RENDER_AUDIO = False
 
 # None uses Conductor Core's packaged default prompt. To customize the system
 # prompt for this request, replace None with text such as the commented example.
@@ -41,7 +41,25 @@ def report_progress(event):
     print(f"[{event.stage}] {event.message}{detail}")
 
 
-def main(engine=None, *, model=MODEL, effort=EFFORT):
+def add_render_audio_argument(parser, *, default=RENDER_AUDIO):
+    """Add the audio option shared by the generation examples."""
+
+    def parse_boolean(value):
+        value = value.lower()
+        if value not in ("true", "false"):
+            raise argparse.ArgumentTypeError("expected true or false")
+        return value == "true"
+
+    parser.add_argument(
+        "--render-audio",
+        type=parse_boolean,
+        default=default,
+        metavar="{true,false}",
+        help=f"Render MP3s (default: {str(default).lower()})",
+    )
+
+
+def main(engine=None, *, model=MODEL, effort=EFFORT, render_audio=RENDER_AUDIO):
     """Run the configured generation and return its result."""
     if engine is None:
         config = EngineConfig.from_defaults()
@@ -56,7 +74,7 @@ def main(engine=None, *, model=MODEL, effort=EFFORT):
         use_thinking=effort != "off",
         effort=None if effort == "off" else effort,
         prompt_override=PROMPT_OVERRIDE,
-        render_audio=RENDER_AUDIO,
+        render_audio=render_audio,
         soundfont_path=SOUNDFONT_PATH,
     )
     result = engine.generate(request, progress_callback=report_progress)
@@ -85,5 +103,5 @@ if __name__ == "__main__":
         default=EFFORT,
         help="Model effort level, or off to turn thinking off (default: %(default)s)",
     )
-    args = parser.parse_args()
-    main(model=args.model, effort=args.effort)
+    add_render_audio_argument(parser)
+    main(**vars(parser.parse_args()))
