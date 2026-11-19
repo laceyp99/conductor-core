@@ -1,5 +1,7 @@
 import importlib.util
 import json
+import runpy
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -21,6 +23,7 @@ def load_script(name):
     "name",
     [
         "generate_midi",
+        "generate_midi_efforts",
         "generate_variations",
         "midi_loop_roundtrip",
         "inspect_models",
@@ -29,6 +32,7 @@ def load_script(name):
     ],
 )
 def test_example_script_imports_without_running_main(name, monkeypatch):
+    monkeypatch.syspath_prepend(str(SCRIPTS_ROOT))
     monkeypatch.setattr(
         "conductor_core.engine.LoopGenerationEngine.generate", lambda *args: None
     )
@@ -68,11 +72,79 @@ def test_generate_midi_builds_expected_paid_request(capsys):
     )
     assert request.effort == "low"
     assert request.prompt_override is None
-    assert request.render_audio is True
+    assert request.render_audio is False
     assert request.soundfont_path is None
     output = capsys.readouterr().out
     assert "[provider_call] Generating MIDI..." in output
     assert "generations/example/loop.mp3" in output
+
+
+@pytest.mark.parametrize(
+    ("effort", "thinking", "request_effort"),
+    [
+        ("none", True, "none"),
+        ("off", False, None),
+    ],
+)
+def test_generate_midi_distinguishes_none_from_off(effort, thinking, request_effort):
+    script = load_script("generate_midi")
+
+    class FakeEngine:
+        def generate(self, request, progress_callback=None):
+            assert request.model == "gpt-6-sol"
+            assert request.use_thinking is thinking
+            assert request.effort == request_effort
+            return SimpleNamespace(
+                generation_id="test",
+                midi_path="loop.mid",
+                audio_path=None,
+                cost=None,
+                warnings=[],
+            )
+
+    script.main(engine=FakeEngine(), model="gpt-6-sol", effort=effort)
+
+
+def test_generate_midi_efforts_runs_every_effort_and_reports_results(
+    monkeypatch, capsys
+):
+    monkeypatch.syspath_prepend(str(SCRIPTS_ROOT))
+    script = load_script("generate_midi_efforts")
+    requests = []
+
+    class FakeEngine:
+        def generate(self, request):
+            requests.append(request)
+            if request.effort == "high":
+                raise RuntimeError("provider failure")
+            return SimpleNamespace(
+                midi_path="loop.mid",
+                audio_path="loop.mp3",
+                cost=0.42,
+                warnings=["example warning"],
+            )
+
+    with pytest.raises(SystemExit) as error:
+        script.main(["gpt-6-sol", "--render-audio", "true"], engine=FakeEngine())
+
+    assert error.value.code == 1
+    assert sorted(request.effort for request in requests) == [
+        "high",
+        "low",
+        "max",
+        "medium",
+        "none",
+        "xhigh",
+    ]
+    assert {request.description for request in requests} == {script.DESCRIPTION}
+    assert all(request.use_thinking and request.render_audio for request in requests)
+    output = capsys.readouterr().out
+    assert "[high] Failed: provider failure" in output
+    for effort in ("none", "low", "medium", "xhigh", "max"):
+        assert f"[{effort}] MIDI: loop.mid" in output
+        assert f"[{effort}] Audio: loop.mp3" in output
+        assert f"[{effort}] Estimated provider cost: $0.420000" in output
+        assert f"[{effort}] Warning: example warning" in output
 
 
 def test_generate_variations_builds_expected_paid_batch_request(capsys):
@@ -121,21 +193,71 @@ def test_generate_variations_builds_expected_paid_batch_request(capsys):
     assert script.main(engine=FakeEngine()) is result
 
     request = captured["request"]
-    assert request.model == "gpt-5.6-luna"
+    assert request.model == "gemini-4-hydrogen"
     assert request.count == 4
     assert request.description == (
         "warm neo-soul electric piano chords with syncopated upper extensions "
         "and a simple bass movement"
     )
-    assert request.effort == "medium"
+    assert request.effort == "low"
     assert request.prompt_override is None
-    assert request.render_audio is True
+    assert request.render_audio is False
     assert request.soundfont_path is None
     output = capsys.readouterr().out
     assert "variation=1 status=persisting" in output
     assert "Batch ID: batch-id" in output
     assert "generations/first/loop.mp3" in output
     assert "Audio rendering was skipped." in output
+
+
+@pytest.mark.parametrize(
+    ("effort", "audio_flag", "expected_effort", "thinking", "render_audio"),
+    [
+        ("off", "false", None, False, False),
+        ("none", "true", "none", True, True),
+    ],
+)
+def test_generate_variations_cli_passes_request_options(
+    monkeypatch, effort, audio_flag, expected_effort, thinking, render_audio
+):
+    requests = []
+
+    class FakeEngine:
+        def __init__(self, config):
+            pass
+
+        def generate_variations(self, request, progress_callback=None):
+            requests.append(request)
+            return SimpleNamespace(
+                status="complete",
+                metadata=SimpleNamespace(batch_id="test", cost=None),
+                diagnostic=None,
+                items=(),
+            )
+
+    script = SCRIPTS_ROOT / "generate_variations.py"
+    monkeypatch.syspath_prepend(str(SCRIPTS_ROOT))
+    monkeypatch.setattr("conductor_core.LoopGenerationEngine", FakeEngine)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            str(script),
+            "gpt-6-sol",
+            "--effort",
+            effort,
+            "--count",
+            "3",
+            "--render-audio",
+            audio_flag,
+        ],
+    )
+    runpy.run_path(str(script), run_name="__main__")
+
+    [request] = requests
+    assert (request.model, request.count) == ("gpt-6-sol", 3)
+    assert (request.effort, request.use_thinking) == (expected_effort, thinking)
+    assert request.render_audio is render_audio
 
 
 def test_midi_roundtrip_uses_sixteenth_note_integer_timing(
