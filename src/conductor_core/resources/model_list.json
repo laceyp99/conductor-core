@@ -745,18 +745,37 @@
             }
         },
         "Google": {
-            "gemini-4-hydrogen": {
+            "gemini-4-neon": {
                 "extended_thinking": true,
                 "thinking_off": "lowest_effort",
                 "effort_options": ["low", "medium", "high", "xhigh"],
                 "temperature_supported": false,
                 "max_tokens": 65536,
                 "cost": {
-                    "input": 1.50,
+                    "input": 3.00,
                     "cache": {
-                        "text": 0.075
+                        "text": 0.15
                     },
-                    "output": 7.50
+                    "output": 15.00
+                },
+                "rate_limits": {
+                    "RPM": 1000,
+                    "TPM": 2000000,
+                    "RPD": 1000
+                }
+            },
+            "gemini-4-carbon": {
+                "extended_thinking": true,
+                "thinking_off": "lowest_effort",
+                "effort_options": ["low", "medium", "high"],
+                "temperature_supported": false,
+                "max_tokens": 65536,
+                "cost": {
+                    "input": 2.00,
+                    "cache": {
+                        "text": 0.10
+                    },
+                    "output": 10.00
                 },
                 "rate_limits": {
                     "RPM": 1000,
@@ -781,6 +800,25 @@
                     "RPM": 1000,
                     "TPM": 2000000,
                     "RPD": null
+                }
+            },
+            "gemini-4-hydrogen": {
+                "extended_thinking": true,
+                "thinking_off": "lowest_effort",
+                "effort_options": ["low", "medium", "high", "xhigh"],
+                "temperature_supported": false,
+                "max_tokens": 65536,
+                "cost": {
+                    "input": 1.50,
+                    "cache": {
+                        "text": 0.075
+                    },
+                    "output": 7.50
+                },
+                "rate_limits": {
+                    "RPM": 1000,
+                    "TPM": 2000000,
+                    "RPD": 1000
                 }
             },
             "gemini-3.8-flash": {
