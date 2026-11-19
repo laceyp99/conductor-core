@@ -7,6 +7,8 @@ explicit.
 
 For an editable manual-testing example that can make a real provider request,
 see [`scripts/generate_variations.py`](https://github.com/laceyp99/conductor-core/blob/main/scripts/generate_variations.py).
+Pass a model ID, `--effort`, or `--count` to customize the batch.
+Use `--render-audio true` to add MP3 output.
 
 ```python
 from conductor_core import (

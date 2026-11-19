@@ -5,9 +5,12 @@ SDK and credentials, may send the musical description to that provider, and may
 incur usage charges. Audio rendering additionally requires FluidSynth and FFmpeg
 with MP3 encoding support on PATH.
 
-Edit the constants below, then run ``python scripts/generate_midi.py`` from the
-repository root. Importing this module does not make a provider call.
+Run ``python scripts/generate_midi.py MODEL --effort high`` from the repository
+root. The model defaults to the value below, and reasoning effort defaults
+to low. Importing this module does not make a provider call.
 """
+
+import argparse
 
 from conductor_core import EngineConfig, GenerationRequest, LoopGenerationEngine
 
@@ -20,9 +23,8 @@ DESCRIPTION = (
     "and a simple bass movement"
 )
 TEMPERATURE = 0.0
-USE_THINKING = True
 EFFORT = "low"
-RENDER_AUDIO = True
+RENDER_AUDIO = False
 
 # None uses Conductor Core's packaged default prompt. To customize the system
 # prompt for this request, replace None with text such as the commented example.
@@ -39,7 +41,25 @@ def report_progress(event):
     print(f"[{event.stage}] {event.message}{detail}")
 
 
-def main(engine=None):
+def add_render_audio_argument(parser, *, default=RENDER_AUDIO):
+    """Add the audio option shared by the generation examples."""
+
+    def parse_boolean(value):
+        value = value.lower()
+        if value not in ("true", "false"):
+            raise argparse.ArgumentTypeError("expected true or false")
+        return value == "true"
+
+    parser.add_argument(
+        "--render-audio",
+        type=parse_boolean,
+        default=default,
+        metavar="{true,false}",
+        help=f"Render MP3s (default: {str(default).lower()})",
+    )
+
+
+def main(engine=None, *, model=MODEL, effort=EFFORT, render_audio=RENDER_AUDIO):
     """Run the configured generation and return its result."""
     if engine is None:
         config = EngineConfig.from_defaults()
@@ -49,17 +69,18 @@ def main(engine=None):
         key=KEY,
         scale=SCALE,
         description=DESCRIPTION,
-        model=MODEL,
+        model=model,
         temperature=TEMPERATURE,
-        use_thinking=USE_THINKING,
-        effort=EFFORT,
+        use_thinking=effort != "off",
+        effort=None if effort == "off" else effort,
         prompt_override=PROMPT_OVERRIDE,
-        render_audio=RENDER_AUDIO,
+        render_audio=render_audio,
         soundfont_path=SOUNDFONT_PATH,
     )
     result = engine.generate(request, progress_callback=report_progress)
 
     print("\nGeneration complete")
+    print(f"Effort: {effort}")
     print(f"ID: {result.generation_id}")
     print(f"MIDI: {result.midi_path}")
     print(f"Audio: {result.audio_path or 'not rendered'}")
@@ -75,4 +96,12 @@ def main(engine=None):
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("model", nargs="?", default=MODEL, help="Provider model ID")
+    parser.add_argument(
+        "--effort",
+        default=EFFORT,
+        help="Model effort level, or off to turn thinking off (default: %(default)s)",
+    )
+    add_render_audio_argument(parser)
+    main(**vars(parser.parse_args()))
