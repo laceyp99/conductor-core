@@ -158,8 +158,8 @@ try:
 except AudioCommitRecoveryError as exc:
     # The saved audio and metadata are unchanged; keep the previous UI state.
     # exc.commit_error and exc.rollback_error describe both failures.
-    # exc.recovery_directory is the generation directory itself; do not delete it.
-    # The next successful commit removes the unreferenced new MP3.
+    # exc.rollback_error.filename names the unreferenced new MP3; the next
+    # successful commit removes it. exc.recovery_directory is safe to delete.
     raise
 else:
     # Publish UI state only after both saved files have been promoted.
@@ -183,16 +183,19 @@ If removing the new MP3 also raises `OSError`, `AudioCommitRecoveryError` (an
 `OSError` subclass) exposes `commit_error`, `rollback_error`, and
 `recovery_directory`. Its message includes both failures and its cause is the
 original commit error. The saved audio and metadata are still unchanged.
-`recovery_directory` is the generation directory itself, which also holds the
-unreferenced new MP3; do not delete it to clean up. The next successful commit
-removes the leftover MP3, and deleting the generation removes it too.
+`rollback_error.filename` names the unreferenced new MP3 left in the generation
+directory; the next successful commit removes it, and deleting the generation
+removes it too. `recovery_directory` is the retained stage directory, holding
+only the prepared metadata that was never promoted. It is safe to delete.
 
-When loading, Core follows the audio file named in `metadata.json`. A name Core
-does not write, such as a hand-edited `song.mp3`, is logged and ignored, so the
-generation loads without audio.
+When loading, metadata decides which audio file a generation has. Core follows
+the name in `audio_path`; `null` means no audio, even if a stray `loop.mp3` is on
+disk. A name Core does not write, such as a hand-edited `song.mp3`, is logged
+and ignored, so the generation loads without audio.
 
-Context exit always removes the stage directory. Cleanup errors are logged and
-never change a successful result or mask the original failure. A stage is
+Context exit cleans up after success, abandonment, or confirmed rollback. Cleanup
+errors are logged and never change a successful result or mask the original
+failure. Recovery-required contexts preserve their directory. A stage is
 single-use, cannot be re-entered, and allows only one commit attempt. Missing
 generations raise `FileNotFoundError`; invalid metadata and artifact validation
 errors propagate. Missing or empty staged audio fails before promotion.

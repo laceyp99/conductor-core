@@ -204,6 +204,12 @@ def test_generation_artifacts_still_reject_hard_links(tmp_path, monkeypatch, fil
     artifact_path = tmp_path / "generations" / "gen_one" / filename
     if not artifact_path.exists():
         artifact_path.write_bytes(b"artifact")
+    if filename == "loop.mp3":
+        # Audio is only validated when metadata references it.
+        metadata_path = artifact_path.parent / "metadata.json"
+        record = json.loads(metadata_path.read_text(encoding="utf-8"))
+        record["audio_path"] = filename
+        metadata_path.write_text(json.dumps(record), encoding="utf-8")
     os.link(artifact_path, tmp_path / "external")
 
     assert store.get_generation(generation.id) is None

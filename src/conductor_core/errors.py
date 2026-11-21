@@ -12,7 +12,11 @@ class AudioUpdateInProgressError(RuntimeError):
 
 
 class AudioCommitRecoveryError(OSError):
-    """Audio rollback failed; an unreferenced MP3 remains in the generation directory."""
+    """Audio rollback failed; the saved audio and metadata are unchanged.
+
+    ``recovery_directory`` is the retained, disposable stage directory.
+    ``rollback_error.filename`` names the unreferenced new MP3.
+    """
 
     def __init__(
         self,
@@ -25,7 +29,7 @@ class AudioCommitRecoveryError(OSError):
         self.recovery_directory = recovery_directory
         super().__init__(
             f"Audio commit failed: {commit_error}; rollback failed: {rollback_error}. "
-            f"An unreferenced MP3 remains in generation directory {recovery_directory}"
+            f"Recovery artifacts retained at {recovery_directory}"
         )
 
 

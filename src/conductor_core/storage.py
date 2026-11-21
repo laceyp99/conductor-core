@@ -795,14 +795,15 @@ _AUDIO_NAME = re.compile(r"loop(-\d{8}_\d{6}_\d{6})?\.mp3")
 
 
 def _stored_audio_name(stored_path: str | None) -> str | None:
-    """Return the audio file name a record points to, defaulting to ``loop.mp3``.
+    """Return the audio file name a record points to, or None for no audio.
 
-    Older records may hold an absolute path from another machine, so only the
-    final component is used. A name Core does not write is ignored, so the
-    generation loads without audio instead of pointing at another file.
+    Metadata is the source of truth: ``None`` means Core found no valid audio,
+    even if a stray file sits on disk. Older records may hold an absolute path
+    from another machine, so only the final component is used. A name Core does
+    not write is ignored, so the generation loads without audio.
     """
     if stored_path is None:
-        return "loop.mp3"
+        return None
     name = PureWindowsPath(stored_path).name
     if not _AUDIO_NAME.fullmatch(name):
         logger.warning("Ignoring unrecognized metadata audio_path %r", name)
@@ -1113,6 +1114,7 @@ class GenerationAudioStage:
         self._active = False
         self._entered = False
         self._used = False
+        self._recovery_required = False
 
     @property
     def path(self) -> str:
@@ -1154,7 +1156,7 @@ class GenerationAudioStage:
         traceback: TracebackType | None,
     ) -> None:
         try:
-            if self._directory is not None:
+            if self._directory is not None and not self._recovery_required:
                 try:
                     shutil.rmtree(self._directory)
                 except OSError:
@@ -1199,8 +1201,11 @@ class GenerationAudioStage:
             try:
                 os.unlink(audio_path)
             except OSError as rollback_error:
+                # Keep the disposable stage directory; rollback_error.filename
+                # names the unreferenced MP3, which the next commit sweeps.
+                self._recovery_required = True
                 raise AudioCommitRecoveryError(
-                    commit_error, rollback_error, self._workspace.directory
+                    commit_error, rollback_error, self._directory
                 ) from commit_error
             raise
         _remove_replaced_audio(self._workspace.directory, keep=audio_path)

@@ -79,8 +79,10 @@ def test_each_commit_uses_a_new_audio_file(saved_generation):
     assert store.get_generation("saved").audio_path == str(second)
 
 
-@pytest.mark.parametrize("audio_path", ["metadata.json", "../escape.mp3", "song.mp3"])
-def test_unrecognized_stored_audio_path_loads_without_audio(
+@pytest.mark.parametrize(
+    "audio_path", [None, "metadata.json", "../escape.mp3", "song.mp3"]
+)
+def test_stored_audio_path_without_core_name_loads_without_audio(
     saved_generation, audio_path
 ):
     store, directory, original = saved_generation
@@ -163,7 +165,7 @@ def test_rollback_failure_reports_orphaned_audio(saved_generation, monkeypatch):
     replace = storage.os.replace
     unlink = storage.os.unlink
     commit_error = PermissionError("metadata locked")
-    rollback_error = OSError("new audio locked")
+    rollback_errors = []
 
     def fail_metadata(source, destination):
         if Path(destination) == directory / "metadata.json":
@@ -172,7 +174,8 @@ def test_rollback_failure_reports_orphaned_audio(saved_generation, monkeypatch):
 
     def fail_new_audio(path, *args, **kwargs):
         if Path(path).name.startswith("loop-"):
-            raise rollback_error
+            rollback_errors.append(PermissionError(13, "new audio locked", path))
+            raise rollback_errors[-1]
         return unlink(path, *args, **kwargs)
 
     with store.stage_generation_audio("saved") as stage:
@@ -185,16 +188,26 @@ def test_rollback_failure_reports_orphaned_audio(saved_generation, monkeypatch):
     error = caught.value
     assert isinstance(error, OSError)
     assert error.commit_error is commit_error
-    assert error.rollback_error is rollback_error
+    assert error.rollback_error is rollback_errors[-1]
     assert error.__cause__ is commit_error
     assert str(commit_error) in str(error)
-    assert str(rollback_error) in str(error)
-    assert Path(error.recovery_directory) == directory
-    orphans = [path.read_bytes() for path in directory.glob("loop-*.mp3")]
-    assert orphans == [b"new audio"]
+    assert str(error.rollback_error) in str(error)
+    # The disposable stage is retained; the orphan is named by the rollback error.
+    assert Path(error.recovery_directory) == stage_directory
+    assert stage_directory.is_dir()
+    orphan = Path(error.rollback_error.filename)
+    assert orphan.parent == directory
+    assert orphan.read_bytes() == b"new audio"
     assert (directory / "loop.mp3").read_bytes() == b"old audio"
     assert store.get_generation("saved") == original
-    assert not stage_directory.exists()
+
+    monkeypatch.undo()
+    with store.stage_generation_audio("saved") as stage:
+        Path(stage.path).write_bytes(b"retry audio")
+        retried = stage.commit(soundfont="new.sf2")
+    assert [path.name for path in directory.glob("*.mp3")] == [
+        Path(retried.audio_path).name
+    ]
 
 
 def test_previous_audio_delete_failure_still_commits(

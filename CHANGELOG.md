@@ -23,9 +23,13 @@ while its public API is still in initial development.
   files, including leftovers from earlier commits, are deleted only after the
   metadata update succeeds; a file that cannot be deleted is logged and retried
   on the next commit. A failed metadata update no longer touches the saved
-  audio. `AudioCommitRecoveryError.recovery_directory` is now the generation
-  directory itself, which holds the unreferenced new MP3; do not delete it to
-  clean up. First renders still save `loop.mp3`.
+  audio, and the `previous.mp3` backup is gone. When `AudioCommitRecoveryError`
+  is raised, `rollback_error.filename` names the unreferenced new MP3, and
+  `recovery_directory` holds only the unpromoted metadata. First renders still
+  save `loop.mp3`.
+- Metadata now decides which audio file a generation has. `audio_path: null`
+  means no audio, even if a stray `loop.mp3` is on disk; Core no longer serves
+  partial audio that a failed render could not delete.
 
 ### Fixed
 
