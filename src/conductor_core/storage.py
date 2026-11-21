@@ -794,17 +794,19 @@ def _clear_variation_history(artifact_root: str | Path) -> int:
 _AUDIO_NAME = re.compile(r"loop(-\d{8}_\d{6}_\d{6})?\.mp3")
 
 
-def _stored_audio_name(stored_path: str | None) -> str:
+def _stored_audio_name(stored_path: str | None) -> str | None:
     """Return the audio file name a record points to, defaulting to ``loop.mp3``.
 
     Older records may hold an absolute path from another machine, so only the
-    final component is used, and it must be a name Core writes.
+    final component is used. A name Core does not write is ignored, so the
+    generation loads without audio instead of pointing at another file.
     """
     if stored_path is None:
         return "loop.mp3"
     name = PureWindowsPath(stored_path).name
     if not _AUDIO_NAME.fullmatch(name):
-        raise ValueError(f"metadata audio_path is not a Core audio file: {name!r}")
+        logger.warning("Ignoring unrecognized metadata audio_path %r", name)
+        return None
     return name
 
 
@@ -830,8 +832,12 @@ def _load_generation_metadata(
     midi_path = _validate_artifact_file(workspace.midi_path, required=True)
     assert midi_path is not None
     audio_name = _stored_audio_name(metadata.audio_path)
-    audio_path = _validate_artifact_file(
-        os.path.join(workspace.directory, audio_name), required=False
+    audio_path = (
+        _validate_artifact_file(
+            os.path.join(workspace.directory, audio_name), required=False
+        )
+        if audio_name is not None
+        else None
     )
     messages_path = _validate_artifact_file(workspace.messages_path, required=False)
     metadata.midi_path = midi_path
@@ -1067,6 +1073,28 @@ def _new_audio_path(directory: str) -> str:
             return path
 
 
+def _remove_replaced_audio(directory: str, *, keep: str) -> None:
+    """Delete Core audio files other than ``keep``, including earlier leftovers.
+
+    A file that cannot be deleted, such as one a player holds open on Windows,
+    is logged and retried on the next commit.
+    """
+    kept = os.path.basename(keep)
+    try:
+        names = os.listdir(directory)
+    except OSError:
+        logger.warning("Could not list replaced audio in %s", directory, exc_info=True)
+        return
+    for name in names:
+        if name == kept or not _AUDIO_NAME.fullmatch(name):
+            continue
+        path = os.path.join(directory, name)
+        try:
+            os.unlink(path)
+        except OSError:
+            logger.warning("Could not remove replaced audio %s", path, exc_info=True)
+
+
 _AUDIO_COMMIT_GUARD = Lock()
 _ACTIVE_AUDIO_COMMITS: set[tuple[str, str]] = set()
 
@@ -1152,7 +1180,6 @@ class GenerationAudioStage:
         if os.path.getsize(staged_audio) == 0:
             raise ValueError("staged audio must not be empty")
         metadata = _load_generation_metadata(self._root, self._workspace.id)
-        previous_audio = metadata.audio_path
         audio_path = _new_audio_path(self._workspace.directory)
         updated = metadata.model_copy(
             update={
@@ -1176,13 +1203,7 @@ class GenerationAudioStage:
                     commit_error, rollback_error, self._workspace.directory
                 ) from commit_error
             raise
-        if previous_audio is not None:
-            try:
-                os.unlink(previous_audio)
-            except OSError:
-                logger.warning(
-                    "Could not remove replaced audio %s", previous_audio, exc_info=True
-                )
+        _remove_replaced_audio(self._workspace.directory, keep=audio_path)
         return updated
 
 

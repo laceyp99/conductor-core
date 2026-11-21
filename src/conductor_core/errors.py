@@ -25,7 +25,7 @@ class AudioCommitRecoveryError(OSError):
         self.recovery_directory = recovery_directory
         super().__init__(
             f"Audio commit failed: {commit_error}; rollback failed: {rollback_error}. "
-            f"Recovery artifacts retained at {recovery_directory}"
+            f"An unreferenced MP3 remains in generation directory {recovery_directory}"
         )
 
 

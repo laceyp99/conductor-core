@@ -80,12 +80,17 @@ def test_each_commit_uses_a_new_audio_file(saved_generation):
 
 
 @pytest.mark.parametrize("audio_path", ["metadata.json", "../escape.mp3", "song.mp3"])
-def test_stored_audio_path_must_name_a_core_audio_file(saved_generation, audio_path):
+def test_unrecognized_stored_audio_path_loads_without_audio(
+    saved_generation, audio_path
+):
     store, directory, original = saved_generation
     record = json.loads(original.model_dump_json())
     record["audio_path"] = audio_path
     (directory / "metadata.json").write_text(json.dumps(record), encoding="utf-8")
-    assert store.get_generation("saved") is None
+    loaded = store.get_generation("saved")
+    assert loaded is not None
+    assert loaded.midi_path == original.midi_path
+    assert loaded.audio_path is None
 
 
 def test_repeated_timestamp_draws_a_new_name(saved_generation, monkeypatch):
@@ -98,7 +103,7 @@ def test_repeated_timestamp_draws_a_new_name(saved_generation, monkeypatch):
         Path(stage.path).write_bytes(b"new audio")
         updated = stage.commit(soundfont=None)
     assert Path(updated.audio_path).name == "loop-20261120_000000_000002.mp3"
-    assert taken.read_bytes() == b"taken"
+    assert Path(updated.audio_path).read_bytes() == b"new audio"
 
 
 @pytest.mark.parametrize("prior_audio", [True, False])
@@ -211,6 +216,14 @@ def test_previous_audio_delete_failure_still_commits(
     assert Path(updated.audio_path).read_bytes() == b"new audio"
     assert (directory / "loop.mp3").read_bytes() == b"old audio"
     assert "Could not remove replaced audio" in caplog.text
+
+    monkeypatch.setattr(storage.os, "unlink", unlink)
+    with store.stage_generation_audio("saved") as stage:
+        Path(stage.path).write_bytes(b"newer audio")
+        newest = stage.commit(soundfont="new.sf2")
+    assert [path.name for path in directory.glob("*.mp3")] == [
+        Path(newest.audio_path).name
+    ]
 
 
 def test_render_exception_cleans_stage_and_preserves_history(saved_generation):

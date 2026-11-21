@@ -158,7 +158,8 @@ try:
 except AudioCommitRecoveryError as exc:
     # The saved audio and metadata are unchanged; keep the previous UI state.
     # exc.commit_error and exc.rollback_error describe both failures.
-    # exc.recovery_directory holds the unreferenced new MP3 to remove later.
+    # exc.recovery_directory is the generation directory itself; do not delete it.
+    # The next successful commit removes the unreferenced new MP3.
     raise
 else:
     # Publish UI state only after both saved files have been promoted.
@@ -170,8 +171,10 @@ Core owns the stage directory inside the generation directory, its staged MP3,
 and prepared metadata. It validates the generation on entry and again at commit.
 Before promotion, it prepares metadata. It moves the staged MP3 to its new name
 beside the saved files, then replaces metadata. The previous MP3 is untouched
-until the metadata replacement succeeds; Core then deletes it. If that delete
-fails, Core logs a warning, keeps the unreferenced file, and the commit still
+until the metadata replacement succeeds; Core then deletes every other Core
+audio file in the generation directory, including leftovers from earlier
+commits. If a delete fails, such as for a file a player holds open, Core logs a
+warning, keeps that file for the next commit to retry, and the commit still
 succeeds. On a caught metadata promotion `OSError`, Core removes the new MP3,
 the original error propagates, and the caller can retain its previous UI state.
 Preparation and audio promotion failures leave the saved pair unchanged.
@@ -179,9 +182,14 @@ Preparation and audio promotion failures leave the saved pair unchanged.
 If removing the new MP3 also raises `OSError`, `AudioCommitRecoveryError` (an
 `OSError` subclass) exposes `commit_error`, `rollback_error`, and
 `recovery_directory`. Its message includes both failures and its cause is the
-original commit error. The saved audio and metadata are still unchanged; the
-generation directory in `recovery_directory` also holds the unreferenced new
-MP3. Core does not remove it automatically. Deleting the generation removes it.
+original commit error. The saved audio and metadata are still unchanged.
+`recovery_directory` is the generation directory itself, which also holds the
+unreferenced new MP3; do not delete it to clean up. The next successful commit
+removes the leftover MP3, and deleting the generation removes it too.
+
+When loading, Core follows the audio file named in `metadata.json`. A name Core
+does not write, such as a hand-edited `song.mp3`, is logged and ignored, so the
+generation loads without audio.
 
 Context exit always removes the stage directory. Cleanup errors are logged and
 never change a successful result or mask the original failure. A stage is

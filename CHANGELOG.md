@@ -19,17 +19,19 @@ while its public API is still in initial development.
   keep the previous behavior. `storage.MAX_GENERATIONS` is now `None`.
 - Each `GenerationAudioStage.commit()` saves audio under a new UTC timestamp
   name, such as `loop-20261120_153012_123456.mp3`, so apps that serve
-  generation folders directly get a new URL for every re-render. The previous
-  MP3 is deleted only after the metadata update succeeds; if that delete fails,
-  Core logs a warning and the commit still succeeds. A failed metadata update
-  no longer touches the saved audio, and `AudioCommitRecoveryError` now points
-  `recovery_directory` at the generation directory holding the unreferenced new
-  MP3. First renders still save `loop.mp3`.
+  generation folders directly get a new URL for every re-render. Older audio
+  files, including leftovers from earlier commits, are deleted only after the
+  metadata update succeeds; a file that cannot be deleted is logged and retried
+  on the next commit. A failed metadata update no longer touches the saved
+  audio. `AudioCommitRecoveryError.recovery_directory` is now the generation
+  directory itself, which holds the unreferenced new MP3; do not delete it to
+  clean up. First renders still save `loop.mp3`.
 
 ### Fixed
 
 - Loading a generation now follows the audio file named in its metadata instead
-  of always looking for `loop.mp3`, and rejects names Core does not write.
+  of always looking for `loop.mp3`. A name Core does not write is logged and
+  ignored, so the generation loads without audio.
 
 ## [0.14.3] - 2026-11-18
 
