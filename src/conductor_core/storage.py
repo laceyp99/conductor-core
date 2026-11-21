@@ -1066,12 +1066,14 @@ def _cleanup_generation_workspace(
 def _new_audio_path(directory: str) -> str:
     """Return an unused timestamped MP3 path, so each audio commit gets a new URL.
 
-    A coarse clock can repeat a timestamp; draw again until the name is free.
+    A coarse clock can repeat a timestamp, so draw again while the name is taken.
+    The cap stops a frozen clock, such as one patched in tests, from looping forever.
     """
-    while True:
+    for _ in range(10):
         path = os.path.join(directory, f"loop-{_generate_id()}.mp3")
         if not os.path.lexists(path):
             return path
+    raise RuntimeError("Unable to allocate a unique audio file name")
 
 
 def _remove_replaced_audio(directory: str, *, keep: str) -> None:

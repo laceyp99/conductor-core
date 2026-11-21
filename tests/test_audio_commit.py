@@ -108,6 +108,20 @@ def test_repeated_timestamp_draws_a_new_name(saved_generation, monkeypatch):
     assert Path(updated.audio_path).read_bytes() == b"new audio"
 
 
+def test_frozen_clock_fails_commit_without_touching_saved_files(
+    saved_generation, monkeypatch
+):
+    store, directory, original = saved_generation
+    (directory / "loop-20261120_000000_000001.mp3").write_bytes(b"taken")
+    monkeypatch.setattr(storage, "_generate_id", lambda: "20261120_000000_000001")
+    with store.stage_generation_audio("saved") as stage:
+        Path(stage.path).write_bytes(b"new audio")
+        with pytest.raises(RuntimeError, match="unique audio file name"):
+            stage.commit(soundfont=None)
+    assert (directory / "loop.mp3").read_bytes() == b"old audio"
+    assert store.get_generation("saved") == original
+
+
 @pytest.mark.parametrize("prior_audio", [True, False])
 def test_metadata_replace_failure_restores_previous_state(
     saved_generation, monkeypatch, prior_audio
