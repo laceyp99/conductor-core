@@ -165,10 +165,10 @@ def test_rollback_failure_reports_orphaned_audio(saved_generation, monkeypatch):
             raise commit_error
         return replace(source, destination)
 
-    def fail_new_audio(path):
+    def fail_new_audio(path, *args, **kwargs):
         if Path(path).name.startswith("loop-"):
             raise rollback_error
-        return unlink(path)
+        return unlink(path, *args, **kwargs)
 
     with store.stage_generation_audio("saved") as stage:
         stage_directory = Path(stage.path).parent
@@ -198,10 +198,10 @@ def test_previous_audio_delete_failure_still_commits(
     store, directory, _ = saved_generation
     unlink = storage.os.unlink
 
-    def fail_previous(path):
+    def fail_previous(path, *args, **kwargs):
         if Path(path) == directory / "loop.mp3":
             raise PermissionError("audio in use")
-        return unlink(path)
+        return unlink(path, *args, **kwargs)
 
     with store.stage_generation_audio("saved") as stage:
         Path(stage.path).write_bytes(b"new audio")
