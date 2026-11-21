@@ -49,18 +49,56 @@ def test_stage_commits_audio_and_metadata(saved_generation):
         # A full SoundFont path is recorded by file name only.
         updated = stage.commit(soundfont=str(directory.parent / "fonts" / "new.sf2"))
     assert not stage_path.parent.exists()
-    assert (directory / "loop.mp3").read_bytes() == b"new audio"
     assert updated == store.get_generation("saved")
-    assert updated.audio_path == str(directory / "loop.mp3")
+    assert Path(updated.audio_path).parent == directory
+    assert Path(updated.audio_path).read_bytes() == b"new audio"
+    assert not (directory / "loop.mp3").exists()
     assert updated.soundfont == "new.sf2"
     assert updated.prompt == original.prompt
     # The fixture record held absolute paths; the rewrite stores file names only.
     stored_text = (directory / "metadata.json").read_text(encoding="utf-8")
     stored = json.loads(stored_text)
     assert stored["midi_path"] == "loop.mid"
-    assert stored["audio_path"] == "loop.mp3"
+    assert stored["audio_path"] == Path(updated.audio_path).name
     assert stored["messages_path"] is None
     assert json.dumps(str(store.artifact_root))[1:-1] not in stored_text
+
+
+def test_each_commit_uses_a_new_audio_file(saved_generation):
+    store, directory, _ = saved_generation
+    paths = []
+    for audio in (b"first", b"second"):
+        with store.stage_generation_audio("saved") as stage:
+            Path(stage.path).write_bytes(audio)
+            paths.append(Path(stage.commit(soundfont=None).audio_path))
+    first, second = paths
+    assert first != second
+    assert not first.exists()
+    assert second.read_bytes() == b"second"
+    assert [path.name for path in directory.glob("*.mp3")] == [second.name]
+    assert store.get_generation("saved").audio_path == str(second)
+
+
+@pytest.mark.parametrize("audio_path", ["metadata.json", "../escape.mp3", "song.mp3"])
+def test_stored_audio_path_must_name_a_core_audio_file(saved_generation, audio_path):
+    store, directory, original = saved_generation
+    record = json.loads(original.model_dump_json())
+    record["audio_path"] = audio_path
+    (directory / "metadata.json").write_text(json.dumps(record), encoding="utf-8")
+    assert store.get_generation("saved") is None
+
+
+def test_repeated_timestamp_draws_a_new_name(saved_generation, monkeypatch):
+    store, directory, _ = saved_generation
+    taken = directory / "loop-20261120_000000_000001.mp3"
+    taken.write_bytes(b"taken")
+    ids = iter(["20261120_000000_000001", "20261120_000000_000002"])
+    monkeypatch.setattr(storage, "_generate_id", lambda: next(ids))
+    with store.stage_generation_audio("saved") as stage:
+        Path(stage.path).write_bytes(b"new audio")
+        updated = stage.commit(soundfont=None)
+    assert Path(updated.audio_path).name == "loop-20261120_000000_000002.mp3"
+    assert taken.read_bytes() == b"taken"
 
 
 @pytest.mark.parametrize("prior_audio", [True, False])
@@ -95,24 +133,19 @@ def test_metadata_replace_failure_restores_previous_state(
     assert audio.exists() is prior_audio
     if prior_audio:
         assert audio.read_bytes() == b"old audio"
+    assert not list(directory.glob("loop-*.mp3"))
 
 
-@pytest.mark.parametrize("failure_point", ["backup", "audio_replace"])
-def test_commit_prepublication_failures_preserve_saved_files(
-    saved_generation, monkeypatch, failure_point
-):
+def test_audio_promotion_failure_preserves_saved_files(saved_generation, monkeypatch):
     store, directory, original = saved_generation
-    failure = PermissionError(failure_point)
+    failure = PermissionError("audio locked")
 
     def fail(*args, **kwargs):
         raise failure
 
     with store.stage_generation_audio("saved") as stage:
         Path(stage.path).write_bytes(b"new audio")
-        if failure_point == "backup":
-            monkeypatch.setattr(storage.shutil, "copy2", fail)
-        else:
-            monkeypatch.setattr(storage.os, "replace", fail)
+        monkeypatch.setattr(storage.os, "replace", fail)
         with pytest.raises(PermissionError) as caught:
             stage.commit(soundfont="new.sf2")
         assert caught.value is failure
@@ -120,27 +153,28 @@ def test_commit_prepublication_failures_preserve_saved_files(
     assert store.get_generation("saved") == original
 
 
-def test_rollback_failure_preserves_recovery_files(saved_generation, monkeypatch):
+def test_rollback_failure_reports_orphaned_audio(saved_generation, monkeypatch):
     store, directory, original = saved_generation
     replace = storage.os.replace
+    unlink = storage.os.unlink
     commit_error = PermissionError("metadata locked")
-    rollback_error = OSError("audio restore failed")
+    rollback_error = OSError("new audio locked")
+
+    def fail_metadata(source, destination):
+        if Path(destination) == directory / "metadata.json":
+            raise commit_error
+        return replace(source, destination)
+
+    def fail_new_audio(path):
+        if Path(path).name.startswith("loop-"):
+            raise rollback_error
+        return unlink(path)
 
     with store.stage_generation_audio("saved") as stage:
-        staged_path = Path(stage.path)
-        staged_path.write_bytes(b"new audio")
-
-        def fail_publication_and_restore(source, destination):
-            if Path(destination) == directory / "metadata.json":
-                raise commit_error
-            if (
-                Path(destination) == directory / "loop.mp3"
-                and Path(source) != staged_path
-            ):
-                raise rollback_error
-            return replace(source, destination)
-
-        monkeypatch.setattr(storage.os, "replace", fail_publication_and_restore)
+        stage_directory = Path(stage.path).parent
+        Path(stage.path).write_bytes(b"new audio")
+        monkeypatch.setattr(storage.os, "replace", fail_metadata)
+        monkeypatch.setattr(storage.os, "unlink", fail_new_audio)
         with pytest.raises(AudioCommitRecoveryError) as caught:
             stage.commit(soundfont="new.sf2")
     error = caught.value
@@ -150,11 +184,33 @@ def test_rollback_failure_preserves_recovery_files(saved_generation, monkeypatch
     assert error.__cause__ is commit_error
     assert str(commit_error) in str(error)
     assert str(rollback_error) in str(error)
-    recovery = Path(error.recovery_directory)
-    assert recovery.is_dir()
-    assert any(path.read_bytes() == b"old audio" for path in recovery.iterdir())
-    assert (directory / "loop.mp3").read_bytes() == b"new audio"
+    assert Path(error.recovery_directory) == directory
+    orphans = [path.read_bytes() for path in directory.glob("loop-*.mp3")]
+    assert orphans == [b"new audio"]
+    assert (directory / "loop.mp3").read_bytes() == b"old audio"
     assert store.get_generation("saved") == original
+    assert not stage_directory.exists()
+
+
+def test_previous_audio_delete_failure_still_commits(
+    saved_generation, monkeypatch, caplog
+):
+    store, directory, _ = saved_generation
+    unlink = storage.os.unlink
+
+    def fail_previous(path):
+        if Path(path) == directory / "loop.mp3":
+            raise PermissionError("audio in use")
+        return unlink(path)
+
+    with store.stage_generation_audio("saved") as stage:
+        Path(stage.path).write_bytes(b"new audio")
+        monkeypatch.setattr(storage.os, "unlink", fail_previous)
+        updated = stage.commit(soundfont="new.sf2")
+    assert store.get_generation("saved") == updated
+    assert Path(updated.audio_path).read_bytes() == b"new audio"
+    assert (directory / "loop.mp3").read_bytes() == b"old audio"
+    assert "Could not remove replaced audio" in caplog.text
 
 
 def test_render_exception_cleans_stage_and_preserves_history(saved_generation):
@@ -175,7 +231,7 @@ def test_render_exception_cleans_stage_and_preserves_history(saved_generation):
 
 
 def test_cleanup_failure_does_not_mask_success(saved_generation, monkeypatch, caplog):
-    store, directory, _ = saved_generation
+    store, _, _ = saved_generation
 
     def fail_cleanup(*args, **kwargs):
         raise OSError("cleanup failed")
@@ -184,7 +240,7 @@ def test_cleanup_failure_does_not_mask_success(saved_generation, monkeypatch, ca
         Path(stage.path).write_bytes(b"new audio")
         monkeypatch.setattr(storage.shutil, "rmtree", fail_cleanup)
         updated = stage.commit(soundfont=None)
-    assert (directory / "loop.mp3").read_bytes() == b"new audio"
+    assert Path(updated.audio_path).read_bytes() == b"new audio"
     assert store.get_generation("saved") == updated
     assert "cleanup failed" in caplog.text
 
