@@ -8,6 +8,8 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-20
+
 ### Changed
 
 - **Behavior change:** generation retention is unlimited by default.
