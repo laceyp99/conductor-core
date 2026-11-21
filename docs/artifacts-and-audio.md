@@ -55,8 +55,7 @@ resources.
 
 Core keeps every generation by default (`max_generations=None`). MIDI, JSON,
 and especially MP3 files accumulate, so applications that do not manage disk
-use themselves should set a limit on the engine or store. Before 0.15.0, the
-default kept the newest 20 generations.
+use themselves should set a limit on the engine or store.
 
 ```python
 from conductor_core import EngineConfig
