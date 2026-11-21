@@ -526,6 +526,12 @@ def test_engine_config_passes_storage_limit_to_default_store(tmp_path, max_gener
     assert engine.store.max_generations == max_generations
 
 
+def test_engine_configs_default_to_unlimited_retention(tmp_path):
+    root = tmp_path / "generations"
+    for config in (EngineConfig(artifact_root=root), EngineConfig.from_defaults(root)):
+        assert LoopGenerationEngine(config).store.max_generations is None
+
+
 @pytest.mark.parametrize("max_generations", [0, -1])
 def test_engine_config_rejects_non_positive_storage_limit(max_generations):
     with pytest.raises(

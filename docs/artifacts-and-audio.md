@@ -10,7 +10,8 @@ Core stores durable history under one predictable Conductor suite root:
     generations/
       gen_<id>/
         loop.mid
-        loop.mp3          # only when audio rendering succeeds
+        loop.mp3          # only when audio rendering succeeds; a re-render
+                          # saves loop-<timestamp>.mp3 instead
         messages.json     # when provider messages are available
         metadata.json     # artifact paths stored as relative file names
       variations/
@@ -52,16 +53,16 @@ resources.
 
 ## Retention
 
-Core retains the newest 20 generations by default. MIDI, JSON, and especially
-MP3 files can still consume substantial space. Configure retention on the
-engine or store; use `None` only when the calling application owns disk policy.
+Core keeps every generation by default (`max_generations=None`). MIDI, JSON,
+and especially MP3 files accumulate, so applications that do not manage disk
+use themselves should set a limit on the engine or store.
 
 ```python
 from conductor_core import EngineConfig
 from conductor_core.storage import FilesystemArtifactStore
 
 config = EngineConfig.from_defaults(max_generations=100)
-unlimited_store = FilesystemArtifactStore("my-output", max_generations=None)
+capped_store = FilesystemArtifactStore("my-output", max_generations=20)
 ```
 
 The limit counts saved generations, not provider requests or disk bytes. Each
@@ -132,7 +133,12 @@ GenerationAudioStage.commit(*, soundfont: str | None) -> GenerationMetadata
 ```
 
 `GenerationAudioStage.path` is a string render destination available inside its
-context. Render there instead of over the saved `loop.mp3`. Core records
+context. Render there instead of over the saved MP3. Each commit saves the audio
+under a new UTC timestamp name, such as `loop-20261120_153012_123456.mp3`, so
+apps that serve generation folders directly get a new URL for every re-render
+and browsers do not replay cached audio. Always read the current file from the
+returned `audio_path`; generations that were never re-rendered keep `loop.mp3`.
+Core records
 `soundfont` by file name, so passing a full path keeps the directory out of
 `metadata.json`:
 
@@ -149,9 +155,10 @@ try:
         )
         updated = stage.commit(soundfont=selected_soundfont)
 except AudioCommitRecoveryError as exc:
-    # Disable playback and same-font shortcuts until this generation is reconciled.
+    # The saved audio and metadata are unchanged; keep the previous UI state.
     # exc.commit_error and exc.rollback_error describe both failures.
-    # exc.recovery_directory contains the retained recovery files.
+    # exc.rollback_error.filename names the unreferenced new MP3; the next
+    # successful commit removes it. exc.recovery_directory is safe to delete.
     raise
 else:
     # Publish UI state only after both saved files have been promoted.
@@ -160,20 +167,30 @@ else:
 ```
 
 Core owns the stage directory inside the generation directory, its staged MP3,
-prepared metadata, and backup of previous audio. It validates the generation on
-entry and again at commit. Before promotion, it prepares metadata and copies the
-existing MP3, if any. It replaces the saved MP3, then metadata. On a caught
-metadata promotion `OSError`, it restores the exact previous audio bytes or
-removes the newly promoted MP3 when none existed before. After confirmed rollback,
-the original error propagates and the caller can retain its previous UI state.
+and prepared metadata. It validates the generation on entry and again at commit.
+Before promotion, it prepares metadata. It moves the staged MP3 to its new name
+beside the saved files, then replaces metadata. The previous MP3 is untouched
+until the metadata replacement succeeds; Core then deletes every other Core
+audio file in the generation directory, including leftovers from earlier
+commits. If a delete fails, such as for a file a player holds open, Core logs a
+warning, keeps that file for the next commit to retry, and the commit still
+succeeds. On a caught metadata promotion `OSError`, Core removes the new MP3,
+the original error propagates, and the caller can retain its previous UI state.
 Preparation and audio promotion failures leave the saved pair unchanged.
 
-If rollback also raises `OSError`, `AudioCommitRecoveryError` (an `OSError`
-subclass) exposes `commit_error`, `rollback_error`, and `recovery_directory`.
-Its message includes both failures and its cause is the original commit error.
-The directory retains prepared metadata and any previous-audio backup; the
-promoted audio may remain at the saved path. Reconcile these files before
-re-enabling playback. Core does not automatically reconcile recovery artifacts.
+If removing the new MP3 also raises `OSError`, `AudioCommitRecoveryError` (an
+`OSError` subclass) exposes `commit_error`, `rollback_error`, and
+`recovery_directory`. Its message includes both failures and its cause is the
+original commit error. The saved audio and metadata are still unchanged.
+`rollback_error.filename` names the unreferenced new MP3 left in the generation
+directory; the next successful commit removes it, and deleting the generation
+removes it too. `recovery_directory` is the retained stage directory, holding
+only the prepared metadata that was never promoted. It is safe to delete.
+
+When loading, metadata decides which audio file a generation has. Core follows
+the name in `audio_path`; `null` means no audio, even if a stray `loop.mp3` is on
+disk. A name Core does not write, such as a hand-edited `song.mp3`, is logged
+and ignored, so the generation loads without audio.
 
 Context exit cleans up after success, abandonment, or confirmed rollback. Cleanup
 errors are logged and never change a successful result or mask the original
@@ -191,7 +208,8 @@ can distinguish a busy generation from stage misuse. This does not
 coordinate other processes, direct file writes, generation deletion, or retention;
 consumers must prevent those operations from racing an audio update. The guarantee
 covers caught filesystem errors, not process crashes or atomic visibility across
-two files. Readers can briefly observe new audio with old metadata.
+two files. A reader holding metadata from before a commit can briefly find its
+audio file already deleted.
 
 ## Direct MIDI utilities
 

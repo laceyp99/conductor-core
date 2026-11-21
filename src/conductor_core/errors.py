@@ -12,7 +12,11 @@ class AudioUpdateInProgressError(RuntimeError):
 
 
 class AudioCommitRecoveryError(OSError):
-    """Audio rollback failed; retain artifacts until the generation is reconciled."""
+    """Audio rollback failed; the saved audio and metadata are unchanged.
+
+    ``recovery_directory`` is the retained, disposable stage directory.
+    ``rollback_error.filename`` names the unreferenced new MP3.
+    """
 
     def __init__(
         self,

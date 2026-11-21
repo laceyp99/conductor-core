@@ -77,9 +77,11 @@ Every pull request must carry its own release metadata. The required
 `release-check` CI job fails a pull request unless it:
 
 - declares a valid Semantic Versioning version in `pyproject.toml`,
-- sets that version higher than the version on the base branch, and
+- sets that version higher than the version on the base branch,
 - adds a non-empty `## [x.y.z] - YYYY-MM-DD` section to `CHANGELOG.md`
-  matching the new version.
+  matching the new version, and
+- pins every `conductor-core.git@vX.Y.Z` install command in `README.md` and
+  `docs/` to the new version. The check lists each stale pin by file and line.
 
 The selected section must use a real calendar date in `YYYY-MM-DD` format.
 Both the PR check and release publication reject missing or invalid dates.

@@ -8,7 +8,8 @@ Storage structure:
     ~/.conductor/core/generations/
         gen_<timestamp>/
             loop.mid        # Generated MIDI file
-            loop.mp3        # Rendered audio (if available)
+            loop.mp3        # Rendered audio (if available); a re-render saves
+                            # it as loop-<timestamp>.mp3
             messages.json   # Provider message history (if available)
             metadata.json   # Generation parameters and info
 """
@@ -16,12 +17,13 @@ Storage structure:
 import json
 import logging
 import os
+import re
 import shutil
 import stat
 import tempfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from threading import Lock
 from types import TracebackType
 from typing import Annotated, Literal, Optional
@@ -33,15 +35,8 @@ from conductor_core.paths import resolve_default_artifact_root
 
 logger = logging.getLogger(__name__)
 
-# Default maximum number of generations retained by module-level helpers.
-MAX_GENERATIONS = 20
-
-
-class _DefaultMaxGenerations:
-    """Distinct sentinel type so retention values can be narrowed safely."""
-
-
-_DEFAULT_MAX_GENERATIONS = _DefaultMaxGenerations()
+# Default generation retention limit; None keeps every generation.
+MAX_GENERATIONS: int | None = None
 
 
 @dataclass(frozen=True)
@@ -796,6 +791,26 @@ def _clear_variation_history(artifact_root: str | Path) -> int:
     )
 
 
+_AUDIO_NAME = re.compile(r"loop(-\d{8}_\d{6}_\d{6})?\.mp3")
+
+
+def _stored_audio_name(stored_path: str | None) -> str | None:
+    """Return the audio file name a record points to, or None for no audio.
+
+    Metadata is the source of truth: ``None`` means Core found no valid audio,
+    even if a stray file sits on disk. Older records may hold an absolute path
+    from another machine, so only the final component is used. A name Core does
+    not write is ignored, so the generation loads without audio.
+    """
+    if stored_path is None:
+        return None
+    name = PureWindowsPath(stored_path).name
+    if not _AUDIO_NAME.fullmatch(name):
+        logger.warning("Ignoring unrecognized metadata audio_path %r", name)
+        return None
+    return name
+
+
 def _load_generation_metadata(
     artifact_root: str | Path, gen_id: str
 ) -> GenerationMetadata:
@@ -817,7 +832,14 @@ def _load_generation_metadata(
 
     midi_path = _validate_artifact_file(workspace.midi_path, required=True)
     assert midi_path is not None
-    audio_path = _validate_artifact_file(workspace.audio_path, required=False)
+    audio_name = _stored_audio_name(metadata.audio_path)
+    audio_path = (
+        _validate_artifact_file(
+            os.path.join(workspace.directory, audio_name), required=False
+        )
+        if audio_name is not None
+        else None
+    )
     messages_path = _validate_artifact_file(workspace.messages_path, required=False)
     metadata.midi_path = midi_path
     metadata.audio_path = audio_path
@@ -1041,6 +1063,41 @@ def _cleanup_generation_workspace(
     return True
 
 
+def _new_audio_path(directory: str) -> str:
+    """Return an unused timestamped MP3 path, so each audio commit gets a new URL.
+
+    A coarse clock can repeat a timestamp, so draw again while the name is taken.
+    The cap stops a frozen clock, such as one patched in tests, from looping forever.
+    """
+    for _ in range(10):
+        path = os.path.join(directory, f"loop-{_generate_id()}.mp3")
+        if not os.path.lexists(path):
+            return path
+    raise RuntimeError("Unable to allocate a unique audio file name")
+
+
+def _remove_replaced_audio(directory: str, *, keep: str) -> None:
+    """Delete Core audio files other than ``keep``, including earlier leftovers.
+
+    A file that cannot be deleted, such as one a player holds open on Windows,
+    is logged and retried on the next commit.
+    """
+    kept = os.path.basename(keep)
+    try:
+        names = os.listdir(directory)
+    except OSError:
+        logger.warning("Could not list replaced audio in %s", directory, exc_info=True)
+        return
+    for name in names:
+        if name == kept or not _AUDIO_NAME.fullmatch(name):
+            continue
+        path = os.path.join(directory, name)
+        try:
+            os.unlink(path)
+        except OSError:
+            logger.warning("Could not remove replaced audio %s", path, exc_info=True)
+
+
 _AUDIO_COMMIT_GUARD = Lock()
 _ACTIVE_AUDIO_COMMITS: set[tuple[str, str]] = set()
 
@@ -1114,7 +1171,11 @@ class GenerationAudioStage:
             self._release()
 
     def commit(self, *, soundfont: str | None) -> GenerationMetadata:
-        """Promote staged audio and metadata, restoring audio on caught OSError."""
+        """Promote staged audio under a new file name, then replace metadata.
+
+        The previous audio file is removed only after the metadata replacement
+        succeeds, so a failed commit never touches the saved audio.
+        """
         if not self._active or self._used:
             raise RuntimeError("audio stage must be active and may commit only once")
         self._used = True
@@ -1123,10 +1184,10 @@ class GenerationAudioStage:
         if os.path.getsize(staged_audio) == 0:
             raise ValueError("staged audio must not be empty")
         metadata = _load_generation_metadata(self._root, self._workspace.id)
-        previous_audio = metadata.audio_path
+        audio_path = _new_audio_path(self._workspace.directory)
         updated = metadata.model_copy(
             update={
-                "audio_path": self._workspace.audio_path,
+                "audio_path": audio_path,
                 "soundfont": _soundfont_name(soundfont),
             }
         )
@@ -1135,24 +1196,21 @@ class GenerationAudioStage:
         prepared_metadata = _prepare_metadata_file(
             os.path.join(self._directory, "metadata.json"), updated
         )
-        backup = os.path.join(self._directory, "previous.mp3")
-        if previous_audio is not None:
-            shutil.copy2(previous_audio, backup)
-        os.replace(staged_audio, self._workspace.audio_path)
+        os.replace(staged_audio, audio_path)
         try:
             os.replace(prepared_metadata, self._workspace.metadata_path)
         except OSError as commit_error:
             try:
-                if previous_audio is None:
-                    os.unlink(self._workspace.audio_path)
-                else:
-                    os.replace(backup, self._workspace.audio_path)
+                os.unlink(audio_path)
             except OSError as rollback_error:
+                # Keep the disposable stage directory; rollback_error.filename
+                # names the unreferenced MP3, which the next commit sweeps.
                 self._recovery_required = True
                 raise AudioCommitRecoveryError(
                     commit_error, rollback_error, self._directory
                 ) from commit_error
             raise
+        _remove_replaced_audio(self._workspace.directory, keep=audio_path)
         return updated
 
 
@@ -1271,13 +1329,11 @@ def _delete_generation(artifact_root: str | Path, gen_id: str) -> bool:
 
 def _enforce_limit(
     artifact_root: str | Path | None = None,
-    max_generations: int | _DefaultMaxGenerations | None = _DEFAULT_MAX_GENERATIONS,
+    max_generations: int | None = MAX_GENERATIONS,
     *,
     protected_generation_ids: tuple[str, ...] = (),
 ) -> None:
     """Retain protected generations first, then newest remaining history."""
-    if isinstance(max_generations, _DefaultMaxGenerations):
-        max_generations = MAX_GENERATIONS
     max_generations = _validate_max_generations(max_generations)
     if max_generations is None:
         return

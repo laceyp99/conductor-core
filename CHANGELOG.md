@@ -8,6 +8,41 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-20
+
+### Changed
+
+- **Behavior change:** generation retention is unlimited by default.
+  `FilesystemArtifactStore`, `EngineConfig`, `EngineConfig.from_defaults()`,
+  and the module-level save helpers no longer prune history to the newest 20
+  generations unless you pass `max_generations`. Pass `max_generations=20` to
+  keep the previous behavior. The module-level `finalize_generation()` takes no
+  limit, so callers who want a cap should use
+  `FilesystemArtifactStore(..., max_generations=20)` instead.
+  `storage.MAX_GENERATIONS` is now `None`.
+- Each `GenerationAudioStage.commit()` saves audio under a new UTC timestamp
+  name, such as `loop-20261120_153012_123456.mp3`, so apps that serve
+  generation folders directly get a new URL for every re-render. Older audio
+  files, including leftovers from earlier commits, are deleted only after the
+  metadata update succeeds; a file that cannot be deleted is logged and retried
+  on the next commit. A failed metadata update no longer touches the saved
+  audio, and the `previous.mp3` backup is gone. When `AudioCommitRecoveryError`
+  is raised, `rollback_error.filename` names the unreferenced new MP3, and
+  `recovery_directory` holds only the unpromoted metadata. First renders still
+  save `loop.mp3`.
+- Metadata now decides which audio file a generation has. `audio_path: null`
+  means no audio, even if a stray `loop.mp3` is on disk; Core no longer serves
+  partial audio that a failed render could not delete.
+
+### Fixed
+
+- Loading a generation now follows the audio file named in its metadata instead
+  of always looking for `loop.mp3`. A name Core does not write is logged and
+  ignored, so the generation loads without audio.
+- The README and Getting Started install commands now pin `v0.15.0` instead of
+  the stale `v0.13.2`. Release checks now fail when an install pin does not
+  match the new version.
+
 ## [0.14.3] - 2026-11-18
 
 ### Added

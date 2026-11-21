@@ -7,6 +7,8 @@ A non-skip pull request must:
 2. bump that version above the version on the base branch, and
 3. add a non-empty ``[x.y.z] - YYYY-MM-DD`` section to ``CHANGELOG.md`` matching
    the new version. The release workflow publishes that section as release notes.
+4. pin every ``conductor-core.git@vX.Y.Z`` install command in the README and
+   ``docs/`` to the new version, so merged docs install the release they describe.
 
 Pull requests are skipped when they carry the ``skip-release`` label or use a
 Conventional Commit title whose type is test, ci, docs, style, or chore. The
@@ -27,6 +29,10 @@ from typing import NoReturn
 
 CHANGELOG_PATH = "CHANGELOG.md"
 PYPROJECT_PATH = "pyproject.toml"
+# Markdown files, or directories searched recursively, that hold install pins.
+INSTALL_DOC_PATHS = ("README.md", "docs")
+# Numeric versions only, so placeholders such as ``@vX.Y.Z`` in prose are ignored.
+INSTALL_PIN = re.compile(r"conductor-core\.git@v(?P<version>\d+\.\d+\.\d+[^\s\"'`]*)")
 
 SKIP_LABEL = "skip-release"
 SKIP_TYPES = {"test", "ci", "docs", "style", "chore"}
@@ -184,6 +190,29 @@ def changelog_was_handled(new_version: str) -> None:
     )
 
 
+def install_pins_match(new_version: str) -> None:
+    files = []
+    for name in INSTALL_DOC_PATHS:
+        path = Path(name)
+        files.extend(sorted(path.rglob("*.md")) if path.is_dir() else [path])
+
+    stale = []
+    for path in files:
+        if not path.is_file():
+            continue
+        lines = path.read_text(encoding="utf-8").splitlines()
+        stale.extend(
+            f"{path}:{number} pins v{match.group('version')}"
+            for number, line in enumerate(lines, start=1)
+            for match in INSTALL_PIN.finditer(line)
+            if match.group("version") != new_version
+        )
+    if stale:
+        details = "\n  ".join(stale)
+        fail(f"install commands must pin v{new_version}:\n  {details}")
+    print(f"release-check: install commands pin v{new_version}.")
+
+
 def main() -> None:
     skipped_reason = is_skipped()
     if skipped_reason is not None:
@@ -215,6 +244,7 @@ def main() -> None:
         )
 
     changelog_was_handled(new_version)
+    install_pins_match(new_version)
     print(
         f"release-check: version {base_version} -> {new_version} and "
         f"{CHANGELOG_PATH} are consistent."

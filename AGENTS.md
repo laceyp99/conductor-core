@@ -20,7 +20,8 @@ contracts.
 Core is consumed by other pre-release Conductor applications, scripts, and
 notebooks with a small user base. Prefer sound architecture and correct logic
 over preserving every early API shape. When practical, deprecate behavior for
-one release before removing it in the next.
+one release before removing it in the next. Emit deprecations with
+`FutureWarning`, not `DeprecationWarning`, so callers see them at runtime.
 
 Import failures and corrupted or deleted generation history are severe.
 Optional MP3 rendering failure is intentionally non-fatal when MIDI generation
