@@ -36,6 +36,9 @@ while its public API is still in initial development.
 - Loading a generation now follows the audio file named in its metadata instead
   of always looking for `loop.mp3`. A name Core does not write is logged and
   ignored, so the generation loads without audio.
+- The README and Getting Started install commands now pin `v0.15.0` instead of
+  the stale `v0.13.2`. Release checks now fail when an install pin does not
+  match the new version.
 
 ## [0.14.3] - 2026-11-18
 
