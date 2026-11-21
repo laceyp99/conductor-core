@@ -53,16 +53,17 @@ resources.
 
 ## Retention
 
-Core retains the newest 20 generations by default. MIDI, JSON, and especially
-MP3 files can still consume substantial space. Configure retention on the
-engine or store; use `None` only when the calling application owns disk policy.
+Core keeps every generation by default (`max_generations=None`). MIDI, JSON,
+and especially MP3 files accumulate, so applications that do not manage disk
+use themselves should set a limit on the engine or store. Before 0.15.0, the
+default kept the newest 20 generations.
 
 ```python
 from conductor_core import EngineConfig
 from conductor_core.storage import FilesystemArtifactStore
 
 config = EngineConfig.from_defaults(max_generations=100)
-unlimited_store = FilesystemArtifactStore("my-output", max_generations=None)
+capped_store = FilesystemArtifactStore("my-output", max_generations=20)
 ```
 
 The limit counts saved generations, not provider requests or disk bytes. Each

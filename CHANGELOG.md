@@ -10,6 +10,11 @@ while its public API is still in initial development.
 
 ### Changed
 
+- **Behavior change:** generation retention is unlimited by default.
+  `FilesystemArtifactStore`, `EngineConfig`, `EngineConfig.from_defaults()`,
+  and the module-level save helpers no longer prune history to the newest 20
+  generations unless you pass `max_generations`. Pass `max_generations=20` to
+  keep the previous behavior. `storage.MAX_GENERATIONS` is now `None`.
 - Each `GenerationAudioStage.commit()` saves audio under a new UTC timestamp
   name, such as `loop-20261120_153012_123456.mp3`, so apps that serve
   generation folders directly get a new URL for every re-render. The previous

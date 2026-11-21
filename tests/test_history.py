@@ -828,8 +828,7 @@ def test_store_rejects_generation_symlink_that_escapes_root(tmp_path):
     assert (victim / "keep.txt").read_text(encoding="utf-8") == "keep"
 
 
-def test_enforce_limit_removes_oldest_generations(isolated_history_dir, monkeypatch):
-    monkeypatch.setattr(history, "MAX_GENERATIONS", 2)
+def test_enforce_limit_removes_oldest_generations(isolated_history_dir):
     now = datetime.now(UTC)
     _write_generation_metadata(
         isolated_history_dir, gen_id="oldest", timestamp=now - timedelta(days=2)
@@ -839,11 +838,30 @@ def test_enforce_limit_removes_oldest_generations(isolated_history_dir, monkeypa
     )
     _write_generation_metadata(isolated_history_dir, gen_id="newest", timestamp=now)
 
-    history._enforce_limit()
+    history._enforce_limit(isolated_history_dir)
+    assert len(list(isolated_history_dir.iterdir())) == 3
+
+    history._enforce_limit(isolated_history_dir, max_generations=2)
 
     remaining = {path.name for path in isolated_history_dir.iterdir()}
 
     assert remaining == {"gen_middle", "gen_newest"}
+
+
+def test_default_store_keeps_every_generation(tmp_path):
+    root = tmp_path / "generations"
+    now = datetime.now(UTC)
+    for index in range(25):
+        _write_generation_metadata(
+            root, gen_id=f"old_{index:02}", timestamp=now - timedelta(days=index + 1)
+        )
+    store = history.FilesystemArtifactStore(root)
+    workspace = store.create_generation_workspace()
+    Path(workspace.midi_path).write_bytes(b"midi")
+
+    store.finalize_generation(workspace, "prompt", "C", "major", "model", "OpenAI", 0.0)
+
+    assert len(store.load_history()) == 26
 
 
 def test_enforce_limit_counts_generation_missing_midi(isolated_history_dir):

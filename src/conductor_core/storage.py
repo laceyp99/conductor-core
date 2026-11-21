@@ -35,15 +35,8 @@ from conductor_core.paths import resolve_default_artifact_root
 
 logger = logging.getLogger(__name__)
 
-# Default maximum number of generations retained by module-level helpers.
-MAX_GENERATIONS = 20
-
-
-class _DefaultMaxGenerations:
-    """Distinct sentinel type so retention values can be narrowed safely."""
-
-
-_DEFAULT_MAX_GENERATIONS = _DefaultMaxGenerations()
+# Default generation retention limit; None keeps every generation.
+MAX_GENERATIONS: int | None = None
 
 
 @dataclass(frozen=True)
@@ -1308,13 +1301,11 @@ def _delete_generation(artifact_root: str | Path, gen_id: str) -> bool:
 
 def _enforce_limit(
     artifact_root: str | Path | None = None,
-    max_generations: int | _DefaultMaxGenerations | None = _DEFAULT_MAX_GENERATIONS,
+    max_generations: int | None = MAX_GENERATIONS,
     *,
     protected_generation_ids: tuple[str, ...] = (),
 ) -> None:
     """Retain protected generations first, then newest remaining history."""
-    if isinstance(max_generations, _DefaultMaxGenerations):
-        max_generations = MAX_GENERATIONS
     max_generations = _validate_max_generations(max_generations)
     if max_generations is None:
         return

@@ -43,8 +43,8 @@ earlier output context. Provider SDK objects never enter the public result.
 Each variation is one saved generation. If the actual artifact store has a
 finite `max_generations` below `count`, `generate_variations()` raises
 `ValueError` before contacting the provider or creating a generation workspace.
-For example, four variations require `max_generations >= 4` or `None` for
-unlimited retention:
+The default, `None`, keeps every generation and never rejects a batch. For
+example, four variations with a finite limit require `max_generations >= 4`:
 
 ```python
 from conductor_core import EngineConfig, LoopGenerationEngine
