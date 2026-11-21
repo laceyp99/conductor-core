@@ -118,3 +118,36 @@ def test_greater_than_follows_semver_prerelease_precedence(
 ):
     assert release_check.greater_than(higher, lower)
     assert not release_check.greater_than(lower, higher)
+
+
+def _write_install_docs(tmp_path, version):
+    pin = f"git+https://github.com/laceyp99/conductor-core.git@v{version}"
+    (tmp_path / "README.md").write_text(f'uv add "conductor-core @ {pin}"\n')
+    guides = tmp_path / "docs" / "guides"
+    guides.mkdir(parents=True)
+    (guides / "install.md").write_text(f'    pip install "conductor-core @ {pin}"\n')
+    return tmp_path / "docs"
+
+
+def test_install_pins_accept_the_new_version(release_check, tmp_path, monkeypatch):
+    docs = _write_install_docs(tmp_path, "0.15.0")
+    monkeypatch.setattr(
+        release_check, "INSTALL_DOC_PATHS", (str(tmp_path / "README.md"), str(docs))
+    )
+
+    release_check.install_pins_match("0.15.0")
+
+
+def test_install_pins_report_every_stale_pin(
+    release_check, tmp_path, monkeypatch, capsys
+):
+    docs = _write_install_docs(tmp_path, "0.13.2")
+    monkeypatch.setattr(
+        release_check, "INSTALL_DOC_PATHS", (str(tmp_path / "README.md"), str(docs))
+    )
+
+    with pytest.raises(SystemExit, match="1"):
+        release_check.install_pins_match("0.15.0")
+    error = capsys.readouterr().err
+    assert "README.md:1 pins v0.13.2" in error
+    assert "install.md:1 pins v0.13.2" in error

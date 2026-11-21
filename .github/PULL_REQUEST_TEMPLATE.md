@@ -23,6 +23,7 @@ test/ci/docs/style/chore or with the skip-release label. -->
 
 - [ ] `pyproject.toml` version bumped above `main` (`patch`, `minor`, or `major`)
 - [ ] `CHANGELOG.md` has a matching `[x.y.z]` section with user-facing entries
+- [ ] Install commands in `README.md` and `docs/` pin the new `vX.Y.Z` tag
 
 # Notes
 
