@@ -27,7 +27,7 @@ all hosted and local model providers, a provider name such as `google` for one
 provider. Audio previews need FluidSynth and FFmpeg installed separately.
 
 ```powershell
-uv add "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.15.0"
+uv add "conductor-core[providers] @ git+https://github.com/laceyp99/conductor-core.git@v0.15.1"
 ```
 
 ## Generate a loop

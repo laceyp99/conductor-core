@@ -1,3 +1,4 @@
+import threading
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -387,3 +388,136 @@ def test_variation_audio_renders_with_config_default_soundfont(
         assert item.warnings == ()
         assert Path(item.generation.audio_path).read_bytes() == b"audio"
         assert item.generation.soundfont == "house.sf2"
+
+
+def test_variation_audio_renders_overlap_and_finalize_in_provider_order(
+    monkeypatch, tmp_path, sample_loop
+):
+    second_rendered = threading.Event()
+    events = []
+
+    def fake_midi_to_mp3(midi_path, output_path=None, soundfont_name=None):
+        # The first variation finishes rendering only after the second, so a
+        # sequential engine would time out here and record an audio warning.
+        if "gen_first" in midi_path and not second_rendered.wait(timeout=5):
+            raise engine_module.AudioRenderingError("renders did not overlap")
+        Path(output_path).write_bytes(b"audio")
+        if "gen_second" in midi_path:
+            second_rendered.set()
+        return output_path
+
+    generation_ids = iter(("first", "second"))
+    monkeypatch.setattr(storage, "_generate_id", lambda: next(generation_ids))
+    monkeypatch.setattr(engine_module.os, "cpu_count", lambda: 4)
+    monkeypatch.setattr(
+        engine_module.routing,
+        "generate_variations",
+        lambda **kwargs: provider_result((sample_loop, sample_loop)),
+    )
+    monkeypatch.setattr(
+        engine_module.playback, "resolve_soundfont", lambda name: "piano.sf2"
+    )
+    monkeypatch.setattr(engine_module.playback, "midi_to_mp3", fake_midi_to_mp3)
+    engine = LoopGenerationEngine(
+        EngineConfig.from_defaults(artifact_root=tmp_path / "generations")
+    )
+
+    result = engine.generate_variations(
+        request(render_audio=True), progress_callback=events.append
+    )
+
+    assert result.status == "complete"
+    assert [item.warnings for item in result.items] == [(), ()]
+    assert all(
+        Path(item.generation.audio_path).read_bytes() == b"audio"
+        for item in result.items
+    )
+    assert [(event.variation_index, event.status) for event in events] == [
+        (None, "started"),
+        (0, "persisting"),
+        (0, "complete"),
+        (1, "persisting"),
+        (1, "complete"),
+        (None, "complete"),
+    ]
+    record = engine.store.get_variation_history(result.metadata.batch_id).record
+    assert record.manifest.generation_ids == ("first", "second")
+
+
+@pytest.mark.parametrize(
+    ("count", "cpus", "expected"),
+    [(2, 8, 2), (8, 8, 4), (8, 2, 2), (4, None, 1)],
+)
+def test_variation_audio_worker_count_is_capped(
+    monkeypatch, tmp_path, sample_loop, count, cpus, expected
+):
+    workers = []
+    real_executor = engine_module.ThreadPoolExecutor
+
+    def recording_executor(*, max_workers, **kwargs):
+        workers.append(max_workers)
+        return real_executor(max_workers=max_workers, **kwargs)
+
+    def fake_midi_to_mp3(midi_path, output_path=None, soundfont_name=None):
+        Path(output_path).write_bytes(b"audio")
+        return output_path
+
+    monkeypatch.setattr(engine_module.os, "cpu_count", lambda: cpus)
+    monkeypatch.setattr(engine_module, "ThreadPoolExecutor", recording_executor)
+    monkeypatch.setattr(
+        engine_module.routing,
+        "generate_variations",
+        lambda **kwargs: provider_result((sample_loop,) * count),
+    )
+    monkeypatch.setattr(
+        engine_module.playback, "resolve_soundfont", lambda name: "piano.sf2"
+    )
+    monkeypatch.setattr(engine_module.playback, "midi_to_mp3", fake_midi_to_mp3)
+    engine = LoopGenerationEngine(
+        EngineConfig.from_defaults(artifact_root=tmp_path / "generations")
+    )
+
+    engine.generate_variations(request(count=count, render_audio=True))
+
+    assert workers == [expected]
+
+
+def test_finalize_failure_waits_for_renders_and_cleans_unfinalized_workspaces(
+    monkeypatch, tmp_path, sample_loop
+):
+    def fake_midi_to_mp3(midi_path, output_path=None, soundfont_name=None):
+        Path(output_path).write_bytes(b"audio")
+        return output_path
+
+    monkeypatch.setattr(engine_module.os, "cpu_count", lambda: 4)
+    monkeypatch.setattr(
+        engine_module.routing,
+        "generate_variations",
+        lambda **kwargs: provider_result((sample_loop,) * 3),
+    )
+    monkeypatch.setattr(
+        engine_module.playback, "resolve_soundfont", lambda name: "piano.sf2"
+    )
+    monkeypatch.setattr(engine_module.playback, "midi_to_mp3", fake_midi_to_mp3)
+    engine = LoopGenerationEngine(
+        EngineConfig.from_defaults(artifact_root=tmp_path / "generations")
+    )
+    finalize = engine.store.finalize_generation
+    calls = 0
+
+    def fail_second(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("disk full")
+        return finalize(*args, **kwargs)
+
+    monkeypatch.setattr(engine.store, "finalize_generation", fail_second)
+
+    with pytest.raises(OSError, match="disk full"):
+        engine.generate_variations(request(count=3, render_audio=True))
+
+    generation_dirs = list((tmp_path / "generations").glob("gen_*"))
+    assert len(generation_dirs) == 1
+    assert (generation_dirs[0] / "metadata.json").exists()
+    assert not (tmp_path / "generations" / "variations").exists()

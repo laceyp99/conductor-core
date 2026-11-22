@@ -8,6 +8,19 @@ while its public API is still in initial development.
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-11-22
+
+### Changed
+
+- `generate_variations(render_audio=True)` renders variation audio in
+  parallel, using up to 4 workers and no more than the machine's CPU count. On
+  a 4-core machine an 8-variation batch spends about 0.5 s on audio instead of
+  1.5 s. Each FluidSynth process loads its own SoundFont, so peak memory rises
+  while renders overlap. Progress events, finalization, and retention still run
+  in provider order on the calling thread.
+- A variation batch now writes every MIDI file before finalizing any
+  variation, so a MIDI conversion error leaves no finalized variations behind.
+
 ## [0.15.0] - 2026-11-20
 
 ### Changed
