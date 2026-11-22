@@ -1,4 +1,5 @@
 import threading
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -482,13 +483,26 @@ def test_variation_audio_worker_count_is_capped(
     assert workers == [expected]
 
 
-def test_finalize_failure_waits_for_renders_and_cleans_unfinalized_workspaces(
+def test_finalize_failure_waits_for_running_render_before_cleanup(
     monkeypatch, tmp_path, sample_loop
 ):
+    finalize_failed = threading.Event()
+    third_render_finished = threading.Event()
+
     def fake_midi_to_mp3(midi_path, output_path=None, soundfont_name=None):
+        if "gen_third" in midi_path:
+            # Still rendering when finalize fails; cleanup must wait for it,
+            # or this write lands in a deleted workspace and raises.
+            assert finalize_failed.wait(timeout=5)
+            time.sleep(0.1)
+            Path(output_path).write_bytes(b"audio")
+            third_render_finished.set()
+            return output_path
         Path(output_path).write_bytes(b"audio")
         return output_path
 
+    generation_ids = iter(("first", "second", "third"))
+    monkeypatch.setattr(storage, "_generate_id", lambda: next(generation_ids))
     monkeypatch.setattr(engine_module.os, "cpu_count", lambda: 4)
     monkeypatch.setattr(
         engine_module.routing,
@@ -509,6 +523,7 @@ def test_finalize_failure_waits_for_renders_and_cleans_unfinalized_workspaces(
         nonlocal calls
         calls += 1
         if calls == 2:
+            finalize_failed.set()
             raise OSError("disk full")
         return finalize(*args, **kwargs)
 
@@ -517,7 +532,36 @@ def test_finalize_failure_waits_for_renders_and_cleans_unfinalized_workspaces(
     with pytest.raises(OSError, match="disk full"):
         engine.generate_variations(request(count=3, render_audio=True))
 
+    assert third_render_finished.is_set()
     generation_dirs = list((tmp_path / "generations").glob("gen_*"))
-    assert len(generation_dirs) == 1
+    assert [directory.name for directory in generation_dirs] == ["gen_first"]
     assert (generation_dirs[0] / "metadata.json").exists()
+    assert not (tmp_path / "generations" / "variations").exists()
+
+
+def test_midi_failure_finalizes_no_variation(monkeypatch, tmp_path, sample_loop):
+    convert = engine_module.loop_to_midi
+    calls = 0
+
+    def fail_second(midi, loop):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise ValueError("bad loop")
+        return convert(midi, loop)
+
+    monkeypatch.setattr(engine_module, "loop_to_midi", fail_second)
+    monkeypatch.setattr(
+        engine_module.routing,
+        "generate_variations",
+        lambda **kwargs: provider_result((sample_loop,) * 3),
+    )
+    engine = LoopGenerationEngine(
+        EngineConfig.from_defaults(artifact_root=tmp_path / "generations")
+    )
+
+    with pytest.raises(ValueError, match="bad loop"):
+        engine.generate_variations(request(count=3))
+
+    assert list((tmp_path / "generations").glob("gen_*")) == []
     assert not (tmp_path / "generations" / "variations").exists()

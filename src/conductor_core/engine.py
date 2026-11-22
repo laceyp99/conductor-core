@@ -37,8 +37,8 @@ ProgressCallback = Callable[[ProgressEvent], object]
 # (audio_path, soundfont file name, warning) from one optional audio render.
 _AudioOutcome = tuple[str | None, str | None, str | None]
 
-# Renders are FluidSynth/FFmpeg subprocesses; more than 4 at once gained
-# little in benchmarks and multiplies SoundFont memory.
+# Renders are FluidSynth/FFmpeg subprocesses. Each loads its own copy of the
+# SoundFont, so cap concurrency to bound peak memory.
 _MAX_AUDIO_RENDER_WORKERS = 4
 
 
