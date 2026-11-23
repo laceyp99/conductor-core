@@ -20,6 +20,11 @@ while its public API is still in initial development.
   in provider order on the calling thread.
 - A variation batch now writes every MIDI file before finalizing any
   variation, so a MIDI conversion error leaves no finalized variations behind.
+- Audio rendering gives up sooner on a stuck process. FluidSynth now times out
+  after 3 s instead of 5 s, and FFmpeg after 2 s instead of 5 s. A fully stuck
+  8-variation batch waits about 10 s for audio instead of 20 s. Normal renders
+  take well under 1 s, even with SoundFonts near 1 GB. As before, a timeout
+  keeps the MIDI and adds an audio warning.
 
 ## [0.15.0] - 2026-11-20
 

@@ -111,7 +111,8 @@ instant. Compare returned timestamps with other timezone-aware datetimes.
 Set `render_audio=True` to render an MP3 after MIDI generation. Place FluidSynth
 and FFmpeg with MP3 encoding support on `PATH`.
 Core invokes FluidSynth to synthesize WAV audio, then FFmpeg directly to trim and
-encode it as a 192 kbps MP3. Each process has a 5-second timeout. With no
+encode it as a 192 kbps MP3. FluidSynth has a 3-second timeout and FFmpeg a
+2-second timeout. With no
 `soundfont_path`, Core uses its packaged SoundFont; set the request path or
 `EngineConfig.default_soundfont_path` to choose another.
 

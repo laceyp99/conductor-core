@@ -360,14 +360,15 @@ def test_encode_wav_to_mp3_reports_process_failure(monkeypatch, output_stream):
 def test_encode_wav_to_mp3_reports_timeout(monkeypatch):
     def fake_run(command, **kwargs):
         assert command[0] == "ffmpeg"
-        assert kwargs["timeout"] == 5
+        assert kwargs["timeout"] == audio._FFMPEG_TIMEOUT_SECONDS
         assert command[command.index("-t") + 1] == "1.234"
         raise subprocess.TimeoutExpired(command, kwargs["timeout"])
 
     monkeypatch.setattr(audio.subprocess, "run", fake_run)
 
     with pytest.raises(
-        AudioRenderingError, match="FFmpeg timed out after 5 seconds"
+        AudioRenderingError,
+        match=f"FFmpeg timed out after {audio._FFMPEG_TIMEOUT_SECONDS} seconds",
     ) as raised:
         audio._encode_wav_to_mp3("input.wav", "output.mp3", 1234)
 
