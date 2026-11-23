@@ -35,8 +35,6 @@ _EXTRA_SOUNDFONT_DIRS: list[str] = []
 _PACKAGED_SOUNDFONT_PATHS: dict[str, str] = {}
 _PACKAGED_SOUNDFONT_STACK = ExitStack()
 _PACKAGED_SOUNDFONT_LOCK = Lock()
-# Hang guards, not speed targets. FluidSynth loads the whole SoundFont on every
-# call, so it gets more room for large user SoundFonts.
 _FLUIDSYNTH_TIMEOUT_SECONDS = 3
 _FFMPEG_TIMEOUT_SECONDS = 2
 _DEFAULT_MIDI_TEMPO = 500_000

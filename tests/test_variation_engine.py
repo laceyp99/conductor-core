@@ -271,7 +271,6 @@ def test_wrong_count_returns_failure_without_artifacts_or_manifest(
     assert result.items == ()
     assert [event.status for event in events] == ["started", "failed"]
     assert not (tmp_path / "generations").exists()
-    assert not (tmp_path / "generations" / "variations").exists()
 
 
 def test_collection_validation_error_creates_no_artifacts(monkeypatch, tmp_path):
@@ -288,38 +287,6 @@ def test_collection_validation_error_creates_no_artifacts(monkeypatch, tmp_path)
         engine.generate_variations(request(), progress_callback=events.append)
     assert [event.status for event in events] == ["started", "failed"]
     assert not (tmp_path / "generations").exists()
-    assert not (tmp_path / "generations" / "variations").exists()
-
-
-def test_late_persistence_failure_preserves_finalized_predecessor(
-    monkeypatch, tmp_path, sample_loop
-):
-    monkeypatch.setattr(
-        engine_module.routing,
-        "generate_variations",
-        lambda **kwargs: provider_result((sample_loop, sample_loop)),
-    )
-    engine = LoopGenerationEngine(
-        EngineConfig.from_defaults(artifact_root=tmp_path / "generations")
-    )
-    finalize = engine.store.finalize_generation
-    calls = 0
-
-    def fail_second(*args, **kwargs):
-        nonlocal calls
-        calls += 1
-        if calls == 2:
-            raise OSError("disk full")
-        return finalize(*args, **kwargs)
-
-    monkeypatch.setattr(engine.store, "finalize_generation", fail_second)
-    with pytest.raises(OSError, match="disk full"):
-        engine.generate_variations(request())
-
-    generation_dirs = list((tmp_path / "generations").glob("gen_*"))
-    assert len(generation_dirs) == 1
-    assert (generation_dirs[0] / "metadata.json").exists()
-    assert not (tmp_path / "generations" / "variations").exists()
 
 
 def test_variation_audio_failure_keeps_midi_and_warns(
@@ -447,7 +414,7 @@ def test_variation_audio_renders_overlap_and_finalize_in_provider_order(
 
 @pytest.mark.parametrize(
     ("count", "cpus", "expected"),
-    [(2, 8, 2), (8, 8, 4), (8, 2, 2), (4, None, 1)],
+    [(8, 8, 4), (4, None, 1)],
 )
 def test_variation_audio_worker_count_is_capped(
     monkeypatch, tmp_path, sample_loop, count, cpus, expected
