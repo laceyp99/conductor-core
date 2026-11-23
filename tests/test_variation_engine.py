@@ -487,12 +487,14 @@ def test_finalize_failure_waits_for_running_render_before_cleanup(
     monkeypatch, tmp_path, sample_loop
 ):
     finalize_failed = threading.Event()
+    third_render_started = threading.Event()
     third_render_finished = threading.Event()
 
     def fake_midi_to_mp3(midi_path, output_path=None, soundfont_name=None):
         if "gen_third" in midi_path:
             # Still rendering when finalize fails; cleanup must wait for it,
             # or this write lands in a deleted workspace and raises.
+            third_render_started.set()
             assert finalize_failed.wait(timeout=5)
             time.sleep(0.1)
             Path(output_path).write_bytes(b"audio")
@@ -523,6 +525,8 @@ def test_finalize_failure_waits_for_running_render_before_cleanup(
         nonlocal calls
         calls += 1
         if calls == 2:
+            # Fail only once the third render is running, not still queued.
+            assert third_render_started.wait(timeout=5)
             finalize_failed.set()
             raise OSError("disk full")
         return finalize(*args, **kwargs)
