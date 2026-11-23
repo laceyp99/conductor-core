@@ -537,6 +537,12 @@ def test_finalize_failure_waits_for_running_render_before_cleanup(
         engine.generate_variations(request(count=3, render_audio=True))
 
     assert third_render_finished.is_set()
+    # The traceback keeps the pool alive, so only shutdown ends its threads.
+    assert not [
+        thread
+        for thread in threading.enumerate()
+        if thread.name.startswith("conductor-audio")
+    ]
     generation_dirs = list((tmp_path / "generations").glob("gen_*"))
     assert [directory.name for directory in generation_dirs] == ["gen_first"]
     assert (generation_dirs[0] / "metadata.json").exists()
