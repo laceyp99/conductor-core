@@ -3,6 +3,7 @@
 import json
 import os
 from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
 from uuid import uuid4
 
 from mido import MidiFile
@@ -20,7 +21,6 @@ from conductor_core.midi import loop_to_midi
 from conductor_core.models import Loop
 from conductor_core.storage import (
     FilesystemArtifactStore,
-    GenerationMetadata,
     GenerationWorkspace,
 )
 from conductor_core.variations import (
@@ -33,6 +33,13 @@ from conductor_core.variations import (
 
 # Synchronous progress listener. Core ignores whatever it returns.
 ProgressCallback = Callable[[ProgressEvent], object]
+
+# (audio_path, soundfont file name, warning) from one optional audio render.
+_AudioOutcome = tuple[str | None, str | None, str | None]
+
+# Renders are FluidSynth/FFmpeg subprocesses. Each loads its own copy of the
+# SoundFont, so cap concurrency to bound peak memory.
+_MAX_AUDIO_RENDER_WORKERS = 4
 
 
 class LoopGenerationEngine:
@@ -234,41 +241,12 @@ class LoopGenerationEngine:
                 )
                 return result
 
-            items = []
-            for index, loop in enumerate(provider_result.variations):
-                self._emit(
-                    progress_callback,
-                    "variations",
-                    f"Persisting variation {index + 1} of {request.count}...",
-                    batch_id=batch_id,
-                    variation_index=index,
-                    status="persisting",
-                )
-                generation, warnings = self._persist_variation(
-                    loop,
-                    request,
-                    metadata,
-                    protected_generation_ids=tuple(
-                        item.generation.id for item in items
-                    ),
-                )
-                items.append(
-                    VariationResult(
-                        index=index,
-                        loop=loop,
-                        generation=generation,
-                        warnings=warnings,
-                    )
-                )
-                self._emit(
-                    progress_callback,
-                    "variations",
-                    f"Completed variation {index + 1} of {request.count}.",
-                    batch_id=batch_id,
-                    variation_index=index,
-                    status="complete",
-                )
-
+            items = self._persist_variations(
+                provider_result.variations,
+                request,
+                metadata,
+                progress_callback,
+            )
             result = VariationBatchResult(metadata=metadata, items=tuple(items))
             self.store.save_variation_history(
                 metadata,
@@ -292,58 +270,119 @@ class LoopGenerationEngine:
             )
             raise
 
-    def _persist_variation(
+    def _persist_variations(
         self,
-        loop: Loop,
+        loops: tuple[Loop, ...],
         request: VariationGenerationRequest,
         metadata: VariationBatchMetadata,
-        *,
-        protected_generation_ids: tuple[str, ...] = (),
-    ) -> tuple[GenerationMetadata, tuple[str, ...]]:
-        """Persist one already-validated variation in an ordinary workspace."""
-        workspace = None
-        finalized = False
-        warnings = []
-        try:
-            workspace = self.store.create_generation_workspace()
-            midi = MidiFile()
-            warnings.extend(loop_to_midi(midi, loop))
-            midi.save(workspace.midi_path)
+        progress_callback: ProgressCallback | None,
+    ) -> list[VariationResult]:
+        """Persist already-validated variations as ordinary generations.
 
-            audio_path = soundfont = None
-            if request.render_audio:
-                audio_path, soundfont, audio_warning = self._render_optional_audio(
-                    workspace, request.soundfont_path
-                )
-                if audio_warning:
-                    warnings.append(audio_warning)
-
-            generation = self.store.finalize_generation(
-                workspace=workspace,
-                prompt=request.description,
-                key=request.key,
-                scale=request.scale,
-                model=request.model,
-                provider=metadata.provider,
-                temperature=request.temperature,
-                use_thinking=request.use_thinking,
-                effort=request.effort,
-                cost=None,
-                soundfont=soundfont,
-                audio_render_succeeded=audio_path is not None,
-                protected_generation_ids=(*protected_generation_ids, workspace.id),
+        Every MIDI file is written first so audio renders can run on worker
+        threads. Finalization, retention, and progress events stay on this
+        thread in provider order, so each finalize protects exactly the
+        variations finalized before it.
+        """
+        workspaces: list[GenerationWorkspace] = []
+        items: list[VariationResult] = []
+        pool = (
+            ThreadPoolExecutor(
+                max_workers=min(
+                    len(loops), os.cpu_count() or 1, _MAX_AUDIO_RENDER_WORKERS
+                ),
+                thread_name_prefix="conductor-audio",
             )
-            finalized = True
-            return generation, tuple(warnings)
+            if request.render_audio
+            else None
+        )
+        try:
+            prepared: list[
+                tuple[
+                    GenerationWorkspace, tuple[str, ...], Future[_AudioOutcome] | None
+                ]
+            ] = []
+            for loop in loops:
+                workspace = self.store.create_generation_workspace()
+                workspaces.append(workspace)
+                midi = MidiFile()
+                midi_warnings = tuple(loop_to_midi(midi, loop))
+                midi.save(workspace.midi_path)
+                render = (
+                    pool.submit(
+                        self._render_optional_audio, workspace, request.soundfont_path
+                    )
+                    if pool is not None
+                    else None
+                )
+                prepared.append((workspace, midi_warnings, render))
+
+            for index, (loop, (workspace, midi_warnings, render)) in enumerate(
+                zip(loops, prepared, strict=True)
+            ):
+                self._emit(
+                    progress_callback,
+                    "variations",
+                    f"Persisting variation {index + 1} of {request.count}...",
+                    batch_id=metadata.batch_id,
+                    variation_index=index,
+                    status="persisting",
+                )
+                audio_path, soundfont, audio_warning = (
+                    render.result() if render is not None else (None, None, None)
+                )
+                generation = self.store.finalize_generation(
+                    workspace=workspace,
+                    prompt=request.description,
+                    key=request.key,
+                    scale=request.scale,
+                    model=request.model,
+                    provider=metadata.provider,
+                    temperature=request.temperature,
+                    use_thinking=request.use_thinking,
+                    effort=request.effort,
+                    cost=None,
+                    soundfont=soundfont,
+                    audio_render_succeeded=audio_path is not None,
+                    protected_generation_ids=(
+                        *(item.generation.id for item in items),
+                        workspace.id,
+                    ),
+                )
+                items.append(
+                    VariationResult(
+                        index=index,
+                        loop=loop,
+                        generation=generation,
+                        warnings=(
+                            *midi_warnings,
+                            *((audio_warning,) if audio_warning else ()),
+                        ),
+                    )
+                )
+                self._emit(
+                    progress_callback,
+                    "variations",
+                    f"Completed variation {index + 1} of {request.count}.",
+                    batch_id=metadata.batch_id,
+                    variation_index=index,
+                    status="complete",
+                )
+            return items
         finally:
-            if workspace is not None and not finalized:
-                self.store.cleanup_generation_workspace(workspace)
+            # Renders write into the workspaces, so stop them before cleanup.
+            if pool is not None:
+                pool.shutdown(wait=True, cancel_futures=True)
+            finalized_ids = {item.generation.id for item in items}
+            for workspace in workspaces:
+                if workspace.id not in finalized_ids:
+                    self.store.cleanup_generation_workspace(workspace)
 
     def _render_optional_audio(
         self,
         workspace: GenerationWorkspace,
         soundfont_path: str | os.PathLike | None,
-    ) -> tuple[str | None, str | None, str | None]:
+    ) -> _AudioOutcome:
         """Render the workspace MIDI to MP3 without letting failures escape.
 
         Returns ``(audio_path, soundfont, warning)``. ``soundfont`` is the

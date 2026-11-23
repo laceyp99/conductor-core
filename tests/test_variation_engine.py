@@ -1,3 +1,5 @@
+import threading
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -269,7 +271,6 @@ def test_wrong_count_returns_failure_without_artifacts_or_manifest(
     assert result.items == ()
     assert [event.status for event in events] == ["started", "failed"]
     assert not (tmp_path / "generations").exists()
-    assert not (tmp_path / "generations" / "variations").exists()
 
 
 def test_collection_validation_error_creates_no_artifacts(monkeypatch, tmp_path):
@@ -286,38 +287,6 @@ def test_collection_validation_error_creates_no_artifacts(monkeypatch, tmp_path)
         engine.generate_variations(request(), progress_callback=events.append)
     assert [event.status for event in events] == ["started", "failed"]
     assert not (tmp_path / "generations").exists()
-    assert not (tmp_path / "generations" / "variations").exists()
-
-
-def test_late_persistence_failure_preserves_finalized_predecessor(
-    monkeypatch, tmp_path, sample_loop
-):
-    monkeypatch.setattr(
-        engine_module.routing,
-        "generate_variations",
-        lambda **kwargs: provider_result((sample_loop, sample_loop)),
-    )
-    engine = LoopGenerationEngine(
-        EngineConfig.from_defaults(artifact_root=tmp_path / "generations")
-    )
-    finalize = engine.store.finalize_generation
-    calls = 0
-
-    def fail_second(*args, **kwargs):
-        nonlocal calls
-        calls += 1
-        if calls == 2:
-            raise OSError("disk full")
-        return finalize(*args, **kwargs)
-
-    monkeypatch.setattr(engine.store, "finalize_generation", fail_second)
-    with pytest.raises(OSError, match="disk full"):
-        engine.generate_variations(request())
-
-    generation_dirs = list((tmp_path / "generations").glob("gen_*"))
-    assert len(generation_dirs) == 1
-    assert (generation_dirs[0] / "metadata.json").exists()
-    assert not (tmp_path / "generations" / "variations").exists()
 
 
 def test_variation_audio_failure_keeps_midi_and_warns(
@@ -387,3 +356,189 @@ def test_variation_audio_renders_with_config_default_soundfont(
         assert item.warnings == ()
         assert Path(item.generation.audio_path).read_bytes() == b"audio"
         assert item.generation.soundfont == "house.sf2"
+
+
+def test_variation_audio_renders_overlap_and_finalize_in_provider_order(
+    monkeypatch, tmp_path, sample_loop
+):
+    second_rendered = threading.Event()
+    events = []
+
+    def fake_midi_to_mp3(midi_path, output_path=None, soundfont_name=None):
+        # The first variation finishes rendering only after the second, so a
+        # sequential engine would time out here and record an audio warning.
+        if "gen_first" in midi_path and not second_rendered.wait(timeout=5):
+            raise engine_module.AudioRenderingError("renders did not overlap")
+        Path(output_path).write_bytes(b"audio")
+        if "gen_second" in midi_path:
+            second_rendered.set()
+        return output_path
+
+    generation_ids = iter(("first", "second"))
+    monkeypatch.setattr(storage, "_generate_id", lambda: next(generation_ids))
+    monkeypatch.setattr(engine_module.os, "cpu_count", lambda: 4)
+    monkeypatch.setattr(
+        engine_module.routing,
+        "generate_variations",
+        lambda **kwargs: provider_result((sample_loop, sample_loop)),
+    )
+    monkeypatch.setattr(
+        engine_module.playback, "resolve_soundfont", lambda name: "piano.sf2"
+    )
+    monkeypatch.setattr(engine_module.playback, "midi_to_mp3", fake_midi_to_mp3)
+    engine = LoopGenerationEngine(
+        EngineConfig.from_defaults(artifact_root=tmp_path / "generations")
+    )
+
+    result = engine.generate_variations(
+        request(render_audio=True), progress_callback=events.append
+    )
+
+    assert result.status == "complete"
+    assert [item.warnings for item in result.items] == [(), ()]
+    assert all(
+        Path(item.generation.audio_path).read_bytes() == b"audio"
+        for item in result.items
+    )
+    assert [(event.variation_index, event.status) for event in events] == [
+        (None, "started"),
+        (0, "persisting"),
+        (0, "complete"),
+        (1, "persisting"),
+        (1, "complete"),
+        (None, "complete"),
+    ]
+    record = engine.store.get_variation_history(result.metadata.batch_id).record
+    assert record.manifest.generation_ids == ("first", "second")
+
+
+@pytest.mark.parametrize(
+    ("count", "cpus", "expected"),
+    [(8, 8, 4), (4, None, 1)],
+)
+def test_variation_audio_worker_count_is_capped(
+    monkeypatch, tmp_path, sample_loop, count, cpus, expected
+):
+    workers = []
+    real_executor = engine_module.ThreadPoolExecutor
+
+    def recording_executor(*, max_workers, **kwargs):
+        workers.append(max_workers)
+        return real_executor(max_workers=max_workers, **kwargs)
+
+    def fake_midi_to_mp3(midi_path, output_path=None, soundfont_name=None):
+        Path(output_path).write_bytes(b"audio")
+        return output_path
+
+    monkeypatch.setattr(engine_module.os, "cpu_count", lambda: cpus)
+    monkeypatch.setattr(engine_module, "ThreadPoolExecutor", recording_executor)
+    monkeypatch.setattr(
+        engine_module.routing,
+        "generate_variations",
+        lambda **kwargs: provider_result((sample_loop,) * count),
+    )
+    monkeypatch.setattr(
+        engine_module.playback, "resolve_soundfont", lambda name: "piano.sf2"
+    )
+    monkeypatch.setattr(engine_module.playback, "midi_to_mp3", fake_midi_to_mp3)
+    engine = LoopGenerationEngine(
+        EngineConfig.from_defaults(artifact_root=tmp_path / "generations")
+    )
+
+    engine.generate_variations(request(count=count, render_audio=True))
+
+    assert workers == [expected]
+
+
+def test_finalize_failure_waits_for_running_render_before_cleanup(
+    monkeypatch, tmp_path, sample_loop
+):
+    finalize_failed = threading.Event()
+    third_render_started = threading.Event()
+    third_render_finished = threading.Event()
+
+    def fake_midi_to_mp3(midi_path, output_path=None, soundfont_name=None):
+        if "gen_third" in midi_path:
+            # Still rendering when finalize fails; cleanup must wait for it,
+            # or this write lands in a deleted workspace and raises.
+            third_render_started.set()
+            assert finalize_failed.wait(timeout=5)
+            time.sleep(0.1)
+            Path(output_path).write_bytes(b"audio")
+            third_render_finished.set()
+            return output_path
+        Path(output_path).write_bytes(b"audio")
+        return output_path
+
+    generation_ids = iter(("first", "second", "third"))
+    monkeypatch.setattr(storage, "_generate_id", lambda: next(generation_ids))
+    monkeypatch.setattr(engine_module.os, "cpu_count", lambda: 4)
+    monkeypatch.setattr(
+        engine_module.routing,
+        "generate_variations",
+        lambda **kwargs: provider_result((sample_loop,) * 3),
+    )
+    monkeypatch.setattr(
+        engine_module.playback, "resolve_soundfont", lambda name: "piano.sf2"
+    )
+    monkeypatch.setattr(engine_module.playback, "midi_to_mp3", fake_midi_to_mp3)
+    engine = LoopGenerationEngine(
+        EngineConfig.from_defaults(artifact_root=tmp_path / "generations")
+    )
+    finalize = engine.store.finalize_generation
+    calls = 0
+
+    def fail_second(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            # Fail only once the third render is running, not still queued.
+            assert third_render_started.wait(timeout=5)
+            finalize_failed.set()
+            raise OSError("disk full")
+        return finalize(*args, **kwargs)
+
+    monkeypatch.setattr(engine.store, "finalize_generation", fail_second)
+
+    with pytest.raises(OSError, match="disk full"):
+        engine.generate_variations(request(count=3, render_audio=True))
+
+    assert third_render_finished.is_set()
+    # The traceback keeps the pool alive, so only shutdown ends its threads.
+    assert not [
+        thread
+        for thread in threading.enumerate()
+        if thread.name.startswith("conductor-audio")
+    ]
+    generation_dirs = list((tmp_path / "generations").glob("gen_*"))
+    assert [directory.name for directory in generation_dirs] == ["gen_first"]
+    assert (generation_dirs[0] / "metadata.json").exists()
+    assert not (tmp_path / "generations" / "variations").exists()
+
+
+def test_midi_failure_finalizes_no_variation(monkeypatch, tmp_path, sample_loop):
+    convert = engine_module.loop_to_midi
+    calls = 0
+
+    def fail_second(midi, loop):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise ValueError("bad loop")
+        return convert(midi, loop)
+
+    monkeypatch.setattr(engine_module, "loop_to_midi", fail_second)
+    monkeypatch.setattr(
+        engine_module.routing,
+        "generate_variations",
+        lambda **kwargs: provider_result((sample_loop,) * 3),
+    )
+    engine = LoopGenerationEngine(
+        EngineConfig.from_defaults(artifact_root=tmp_path / "generations")
+    )
+
+    with pytest.raises(ValueError, match="bad loop"):
+        engine.generate_variations(request(count=3))
+
+    assert list((tmp_path / "generations").glob("gen_*")) == []
+    assert not (tmp_path / "generations" / "variations").exists()

@@ -104,6 +104,14 @@ Pass `progress_callback` to `generate_variations()` to receive correlated
 `complete`. A failure emits batch `failed` before Core returns or raises. Batch
 events have no variation index, while item events use zero-based indexes.
 
+With `render_audio=True`, Core writes every variation's MIDI first, then
+renders audio on up to `min(count, CPU count, 4)` worker threads. Each item is
+finalized and reported as soon as its own render and all earlier items are
+done, so a slow render delays later items' events but not the batch total.
+Finalization and retention never run concurrently. Each FluidSynth process
+loads its own copy of the SoundFont, so peak memory grows with the worker
+count.
+
 ## Variation history
 
 Successful children remain ordinary generations under the configured artifact
